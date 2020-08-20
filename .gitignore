@@ -1,0 +1,5 @@
+madigan/synth/cpp/build/CMakeFiles/*
+madigan/synth/cpp/build/*
+**/__pycache__/
+*.so
+build/
