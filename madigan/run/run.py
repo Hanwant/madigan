@@ -1,11 +1,11 @@
-from madigan.synth import Synth, sine_generator
+from madigan import synth
 
 
 
 
 def main():
-    gen = sine_generator
-    synth = Synth(gen)
+    gen = synth.sine_generator
+    synth = synth.Synth(gen)
     for i in range(10):
         print(next(synth))
 
