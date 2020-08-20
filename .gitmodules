@@ -1,0 +1,3 @@
+[submodule "madigan/arena"]
+	path = madigan/arena
+	url = git@github.com:MadiganTech/arena.git
