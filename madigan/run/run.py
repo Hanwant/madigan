@@ -5,6 +5,5 @@ def main():
     for i in range(10):
         print(env.render())
 
-
 if __name__ == "__main__":
     main()

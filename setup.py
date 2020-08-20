@@ -7,6 +7,7 @@ from setuptools import setup, find_packages
 # Options.annotate = True
 
 # python setup.py develop build_ext --inplace for sym-linking local directory to site-packages
+# OR pip install -e . # inplace using pip
 # python setup.py install build_ext --inplace for proper installation
 
 
