@@ -4,11 +4,11 @@ from setuptools import setup, find_packages
 # from Cython.Build import cythonize
 # from Cython.Compiler import Options
 # import numpy
+# Options.annotate = True
 
 # python setup.py develop build_ext --inplace for sym-linking local directory to site-packages
 # python setup.py install build_ext --inplace for proper installation
 
-# Options.annotate = True
 
 with open("README.org", 'r') as f:
     long_description = f.read()
@@ -28,6 +28,7 @@ setup(
     # include_dirs=[numpy.get_include()]
 )
 
+# FOR CYTHON EXTENSIONS
 # EXT_MODULES=None
 # if platform == "win32":
 #     EXT_MODULES = [Extension("preprocessing.sampling_cy", ["preprocessing/sampling_cy.pyx"],# language='c++',

@@ -1,13 +1,9 @@
-from madigan import synth
-
-
-
+from madigan.environments import Synth
 
 def main():
-    gen = synth.sine_generator
-    synth = synth.Synth(gen)
+    env = Synth()
     for i in range(10):
-        print(next(synth))
+        print(env.render())
 
 
 if __name__ == "__main__":
