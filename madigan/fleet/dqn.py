@@ -1,43 +1,48 @@
 from pathlib import Path
 import torch
+import torch.nn.functional as F
 from .agent import Agent
-from .conv_model import ConvModel, MLPModel
+from .conv_model import ConvModel
+from .mlp_model import MLPModel
+from ..utils import get_model_class
+
+# p = type('params', (object, ), params)
 
 class DQN(Agent):
-    def __init__(self, params):
-        agent_params = params['agent_params']
-        self.params = agent_params
-        self.model_params = agent_params['model_params']
-        self.savepath = agent_params['savepath']
+    """
+    Implements a base DQN agent from/to which extensions can inherit/extend
+    The instance obj can be called directly to get an action based on state:
+        action = dqn(state)
+    The method for training is self.train_step(sarsd) where sarsd is a class with array members (I.e (bs, time, feats))
+    """
+    def __init__(self, config, name=None, device=None):
+        device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        self.config = config
+        agent_config = config['agent_config']
+        m_config = agent_config['model_config']
+        self.savepath = agent_config['savepath']
 
         if Path(self.savepath).is_file():
             config = torch.load(self.savepath)
-            self.model_class = config['model_class']
-            self.n_layers = config['n_layers']
-            self.d_model = config['d_model']
+            self.model_class = get_model_class(m_config['model_class'])
         else:
-            self.model_class = self.model_params['model_class']
-            self.n_layers = self.model_params['n_layers']
-            self.d_model = self.model_params['d_model']
+            self.model_class = get_model_class(m_config['model_class'])
 
-        if self.model_class == "ConvModel":
-            self.model_b = ConvModel(d_model=self.d_model, n_layers=self.n_layers)
-            self.model_t = ConvModel(d_model=self.d_model, n_layers=self.n_layers)
-        elif self.model_class == "MLPModel":
-            self.model_b = ConvModel(d_model=self.d_model, n_layers=self.n_layers)
-            self.model_t = ConvModel(d_model=self.d_model, n_layers=self.n_layers)
-        else:
-            raise NotImplementedError(f"model_class: {self.model_class} is not Implemented")
+        # import ipdb; ipdb.set_trace()
+        self.model_b = self.model_class(**m_config).to(device)
+        self.model_t = self.model_class(**m_config).to(device)
 
         if Path(self.savepath).is_file():
             self.load_state()
         else:
-            self.save_state()
-
+            # self.save_state()
+            self.training_steps = 0
+            self.total_steps = 0
+        super().__init__(name)
 
     def save_state(self):
-        config = {'state_dict': self.model_t.state_dict(), 'model_class': self.model_class,
-                  'd_model': self.d_model, 'training_steps': self.training_steps,
+        config = {'state_dict': self.model_t.state_dict(),
+                  'training_steps': self.training_steps,
                   'total_steps': self.total_steps}
         torch.save(config, self.savepath)
 
@@ -50,3 +55,19 @@ class DQN(Agent):
 
     def train_step(self, sarsd):
         pass
+
+    def __call__(self, state, target=True, raw_qvals=False, max_qvals=False):
+        with torch.no_grad():
+            qvals = self.get_qvals(state, target=target)
+            if raw_qvals:
+                return qvals
+            # max_qvals = qvals.max(-1)[0]
+            actions = qvals.max(-1)[1]
+        return actions
+
+    def get_qvals(self, state, target=True, device=None):
+        device = device or 'cuda' if torch.cuda.is_available() else 'cpu'
+        state = torch.tensor(state, dtype=torch.float32)
+        if target:
+            return self.model_t(state.to(device))
+        return self.model_b(state.to(device))
