@@ -121,7 +121,7 @@
           - [X] Lecture 5
           - [X] Lecture 6
         - [X] Skim updated DeepMind course
-****** DONE Practice RL [0/1] [0%]
+****** DONE Practice RL 
        CLOSED: [2020-08-19 Wed 10:52] DEADLINE: <2020-08-13 Thu 23:59> SCHEDULED: <2020-08-09 Sun>
        :LOGBOOK:
        CLOCK: [2020-08-13 Thu 19:23]--[2020-08-13 Thu 23:33] =>  4:10
@@ -145,8 +145,21 @@
          - [ ] Noisy Nets
 
 
-***** TODO Establish Trading RL environment [0/5] [0%]
-      DEADLINE: <2020-08-31 Mon>
+***** TODO Establish Trading RL environment [2/8] [25%]
+      SCHEDULED: <2020-08-22 Sat> DEADLINE: <2020-09-28 Mon>
+      :LOGBOOK:
+      CLOCK: [2020-08-31 Mon 20:26]
+      CLOCK: [2020-08-31 Mon 13:03]--[2020-08-31 Mon 17:12] =>  4:09
+      CLOCK: [2020-08-30 Sun 16:35]--[2020-08-30 Sun 22:32] =>  5:57
+      CLOCK: [2020-08-30 Sun 11:24]--[2020-08-30 Sun 12:04] =>  0:40
+      CLOCK: [2020-08-29 Sat 13:52]--[2020-08-29 Sat 21:27] =>  7:35
+      CLOCK: [2020-08-27 Thu 17:02]--[2020-08-27 Thu 20:02] =>  3:00
+      CLOCK: [2020-08-27 Thu 15:28]--[2020-08-27 Thu 16:30] =>  1:02
+      CLOCK: [2020-08-26 Wed 18:34]--[2020-08-26 Wed 23:13] =>  4:39
+      CLOCK: [2020-08-26 Wed 13:30]--[2020-08-26 Wed 16:34] =>  3:04
+      CLOCK: [2020-08-25 Tue 20:30]--[2020-08-25 Tue 23:30] =>  3:00
+      CLOCK: [2020-08-25 Tue 16:21]--[2020-08-25 Tue 19:30] =>  3:09
+      :END:
 
        ALL Trading stategies fit into the RL framework. 
        env state -> model -> action -> env  reward + new state 
@@ -154,6 +167,7 @@
 
        Objectives
        Rewrite trading environment from the ground up (+ integrate arena into RL setup.)
+       As with arena, generalize to multi-dimensional inputs I.e Multiple assets
        Make visualizing + monitoring tools in Qt (I.e pyQt and pyqtgrah)
        Enable distributed computation and networking (I.e data feeds) early.
        Don't plan in advance too much, just keep these things in mind.
@@ -161,22 +175,31 @@
        Work end-to-end now, instead of over-compartmentalising the components
        Work on the direct task of executing profitable trading stategies.
 
-       - [ ] Setup Synth environments  [0/5]
-         - [ ] Data-Generating Processes
-         - [ ] mean-reversion I.e sine
-         - [ ] trends
-         - [ ] noise
-         - [ ] reward function = profit - commissions
+       - [X] Setup Synth environments  [5/5]
+         # - [ ] Rewrite main logic components of arena in c++ -for env use in RL
+         - [X] Formalize principled action space
+         - [X] Data-Generating Processes
+         - [X] mean-reversion I.e sine
+         - [X] Make base viz tools - Qt
+         - [X] Accounting
+       - [X] Basic pre-processing 
        - [ ] Make and train agents to play the synth [0/4] [0%]
-         - [ ] Simple decision Trees
-         - [ ] PG with NN
+         - [ ] Extend Control Panel for training
+         - [ ] DQN
+         - [ ] PG
+         - [ ] Make Scalable [0/3] [0%]
+           - [ ] multiprocessing
+           - [ ] zmq 
+           - [ ] ray
+       - [ ] Robust pre-processing
+       - [ ] Implement some Sota and validate on data generating processes [0/6] [0%]
          - [ ] Extensions I.e Actor-Critic, PPO
-         - [ ] Model-Based
-       - [ ] Estabish procedure to approximate stylized facts using data generation models [0/4] [0%]
-         - [ ] Analytical I.e Ornstein-Uhlenbeck
+         - [ ] Model-Based I.e VAE/GAN
+         - [ ] Analytical processes I.e Ornstein-Uhlenbeck
          - [ ] ad-hoc - I.e trended
          - [ ] ad-hoc - Multi-Asset relationships - statistical arbitrage
          - [ ] Experimental - I.e via representations from from VAE/GAN (I.e as in world model)
+       - [ ] Robust pre-processing
        - [ ] Train on idealized data 
        - [ ] Train/Test on real data
 
@@ -369,7 +392,6 @@
     have been implemented, swarm learning can be implemented.
    
     
-    
 ** Timeline
 *** August - Setup
     *Modelling and Feature Engineering*
@@ -382,13 +404,13 @@
     - Market Data Segmentation 
     - Feature Construction I.e Wavelets/Fourier, matrix profile
     - Exploratory Analysis
-    - Establish Swarm learning environment
-    - Optimize arena for speed - cythonize + mp + mt(nogil)
-    - Run Swarm
+    - Establish SWARN techniques
+    - Run SWARM with distributed + parallel deployment
     - Identify successful patterns of features + models
     - Establish training edge
 *** October - Deploy
     *Production System*
+    - ReImplement Arena (some in C++) and validate training environments
     - Validate edge
     - Arena broker integration - start with crypto exchanges
     - Develop arena to be production ready I.e run in server with Logs + dashboard UI
@@ -407,4 +429,15 @@
     - Business proposal for VC investors
     - Find collaborators
     - Funding
+
+** Tasks
+
+*** Daily
+
+
+
+*** Weekly
+
+
+*** Monthly
 
