@@ -39,6 +39,7 @@ class Env:
                  slippage_pct=0.001,
                  transaction_cost=0.01,
                  assets = None,
+                 maintenance_margin=0.1,
                  **params):
         assert discrete_action_atoms % 2 != 0, "action_atoms must be an odd number - to allow for the action of hold"
         assert action_mode in ("trade", "target")
@@ -50,6 +51,7 @@ class Env:
         self.initial_margin = initial_margin
         self.slippage_pct = slippage_pct
         self.transaction_cost = transaction_cost
+        self._maintenance_margin = maintenance_margin
         self.state = []
 
         # self.portfolio.= Portfolio(deposit=init_cash, denom="NZD", assets=self.assets,
@@ -60,7 +62,7 @@ class Env:
         prices = next(self.test_stream)['prices']
         self._current_prices = prices
         self.nassets = prices.shape[0]
-        self.assets = assets or (f'asset_{i}' for i in range(self.nassets))
+        self.assets = assets or [f'asset_{i}' for i in range(self.nassets)]
         self._portfolio = np.zeros(self.nassets, np.float64)
 
         self.current_order_id = 0
@@ -69,13 +71,13 @@ class Env:
         if self.discrete_actions:
             self.continuous_actions = not discrete_actions
             self.discrete_action_atoms = discrete_action_atoms
-            self.action_space = DiscreteActionSpace((0, discrete_action_atoms), self.nassets)
+            self._action_space = DiscreteActionSpace((0, discrete_action_atoms), self.nassets)
             self.action_mode = action_mode
             self.lot_unit_value = lot_unit_value
         else:
             raise NotImplementedError("Continuous Actions are not Implemented yet")
         # Doing this at the end as preprocessing should require self.portfolio (as input to model)
-        self._obs_shape = self.preprocess(prices).shape
+        # self._obs_shape = self.preprocess(prices).shape
 
     def render(self):
         raise NotImplementedError
@@ -84,6 +86,14 @@ class Env:
         # self._current_prices = next(self._data_stream)
         # return self.get_state()
         raise NotImplementedError
+
+    @property
+    def observation_shape(self):
+        return None
+
+    @property
+    def action_space(self):
+        return self._action_space
 
     @property
     def current_prices(self):
@@ -110,6 +120,11 @@ class Env:
     @property
     def portfolio(self):
         """ Human Readable """
+        return self._portfolio.copy()
+
+    @property
+    def portfolio_h(self):
+        """ Human Readable """
         return dict(zip(self.assets, self._portfolio))
 
     @property
@@ -118,14 +133,19 @@ class Env:
         return self._cash + (self._current_prices * self._portfolio).sum()
 
     @property
+    def maintenance_margin(self):
+        return self._maintenance_margin
+
+    @property
     def available_margin(self):
         return self._cash + np.sum((self._portfolio * self._current_prices)[self._portfolio < 0])
 
     @property
     def portfolio_norm(self):
         """ Portfolio normalized by total equity value"""
-        eq_values = np.concatenate([[self._cash], self._current_prices * self._portfolio])
-        return eq_values / eq_values.sum()
+        # eq_values = np.concatenate([[self._cash], self._current_prices * self._portfolio])
+        eq_values = self._current_prices * self._portfolio
+        return eq_values / (eq_values.sum() + 1e-8) # addition to prevent div by 0 at beginning
 
     @property
     def holdings(self):
@@ -136,9 +156,21 @@ class Env:
         self.current_order_id += 1
         return self.current_order_id
 
-    @property
-    def observation_shape(self):
-        return self._obs_shape
+    def check_risk(self, asset_id: int, amount):
+        """
+        Returns True if the transaction can be made
+        """
+        if amount == 0.:
+            return False
+        if amount > 0.:
+            if self._portfolio[asset_id] < 0.:
+                return True
+            if amount < self.available_margin:
+                return True
+        if self._portfolio[asset_id] > 0.:
+            return True
+        if abs(amount) < self.available_margin:
+            return True
 
     def step(self, actions):
         """
@@ -148,12 +180,18 @@ class Env:
         action is vector (nassets) of either change in positions or target portfolio
         """
         assert len(actions) == self.nassets
+        if isinstance(actions, list):
+            actions = np.array(actions)
 
         if self.equity <= 0.:
             data = next(self._data_stream)
             self._current_prices = data['prices']
-            equity_next_state = self.equity
-            return self.current_state, 0., True, {'transaction_price': None, 'transaction_cost': None}
+            return self.preprocess(self._current_prices), 0., True, {'Event': "BLOWOUT", 'transaction_price': None, 'transaction_cost': None}
+
+        if self.available_margin < self.maintenance_margin:
+            data = next(self._data_stream)
+            self._current_prices = data['prices']
+            return self.preprocess(self._current_prices), 0., True, {"Event": "MARGINCALL", 'transaction_price': None, 'transaction_cost': None}
 
         info = {}
         done = False
@@ -172,7 +210,7 @@ class Env:
         equity_next_state = self.equity
         immediate_return = (equity_next_state / equity_current_state) - 1
 
-        return self.current_state, immediate_return, done, info
+        return self.preprocess(self._current_prices), immediate_return, done, info
 
     def step_discrete(self, actions):
         """
@@ -190,9 +228,8 @@ class Env:
         # transaction_prices = []
         # transaction_costs = []
         for i, amount in enumerate(amounts):
-            if 0. < abs(amount) < self.available_margin: # if not enough margin, earlier orders have precedence
+            if self.check_risk(i, amount):
                 self.transaction(i, amount, transaction_prices[i], transaction_costs[i])
-                # import ipdb; ipdb.set_trace()
             else:
                 transaction_prices[i] = None
                 transaction_costs[i] = None

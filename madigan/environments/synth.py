@@ -2,9 +2,9 @@ import itertools as it
 from collections import deque
 from random import random
 import numpy as np
-from madigan.synth import multi_sine_gen
-from madigan.utils import load_json, save_json
-from madigan.environments.env import Env
+from ..synth import multi_sine_gen
+from ..utils import load_json, save_json, State, SARSD
+from .env import Env
 
 
 
@@ -25,15 +25,16 @@ class Synth(Env):
         self._current_state = deque(maxlen=min_tf)
         super().__init__(self._generator(state_space, dx=0.01), **params)
 
-    def _generator(self, state_space, dx=0.01):
+    @staticmethod
+    def _generator(state_space, dx=0.01):
         gen = multi_sine_gen(state_space, dx=dx)
         while True:
             yield {'prices': next(gen), 'timestamps': None}
 
     def reset(self):
         for i in range(self.min_tf):
-            self._current_state = self.preprocess(next(self._data_stream)['prices'])
-        return self.current_state
+            current_state = self.preprocess(next(self._data_stream)['prices'])
+        return current_state
 
     def get_next_state(self):
         state = self.preprocess(next(self._data_stream)['prices'])
@@ -41,11 +42,12 @@ class Synth(Env):
 
     @property
     def current_state(self):
-        return np.array(self._current_state)
+        return State(price=np.array(self._current_state), port=self.portfolio_norm)
 
     def preprocess(self, prices):
-        self._current_state.append(np.concatenate([prices, self.portfolio_norm]))
-        return np.array(self._current_state)
+        normed_prices = prices
+        self._current_state.append(normed_prices)
+        return State(price=np.array(self._current_state), port=self.portfolio_norm)
 
 
 
@@ -63,26 +65,33 @@ def plot_metrics(data):
     plt.show()
 
 
-def test_env(params, agent, eps=1.):
-    env = Synth(**params)
+def test_env(exp_config, agent, eps=1.):
+    env = Synth(**exp_config)
     state = env.reset()
     eq = []
     returns = []
     prices = []
-    for i in range(params['nsteps']):
+    positions = []
+    cash = []
+    margin = []
+    for i in range(exp_config['nsteps']):
         if random() < eps:
             action = env.action_space.sample()
         else:
             action = agent(state)
         state, reward, done, info = env.step(action)
         if done:
-            print('Blown Out')
+            print(info['Event'])
             break
         # print('eq:', env.equity, 'reward:', reward)
         eq.append(env.equity)
         returns.append(reward)
         prices.append(env.current_prices)
-    return {'eq': eq, 'returns': returns, 'prices': np.array(prices)}
+        positions.append(env.portfolio)
+        cash.append(env.cash)
+        margin.append(env.available_margin)
+    return {'eq': eq, 'returns': returns, 'prices': np.array(prices), 'positions': positions,
+            'assets': env.assets, 'cash': cash, 'margin': margin}
 
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
@@ -94,14 +103,24 @@ if __name__ == "__main__":
     mu=[2., 3, 4., 5.] # (mu == offset) Keeps negative prices from ocurring
     amp=[1., 2., 3., 4.]
     phase=[0., 1., 2., 0.]
-    generator_params = np.stack([freq, mu, amp, phase], axis=1)
+    gen_state_space = np.stack([freq, mu, amp, phase], axis=1) # (n_assets, nparameters)
 
+    generator_params = {'type': 'multisine',
+                          'state_space': gen_state_space.tolist()}
+    # Params
+    n_assets = generator_params['state_space'].shape[0]
+    nfeats = (2 * n_assets)
+    min_tf = 1
+    in_shape = (min_tf, nfeats)
+    discrete_actions = True
+    discrete_action_atoms = 11
+    nsteps = 100
 
     model_config = {
         'model_class': 'conv',
         'd_model': 256,
         'n_layers': 4,
-        'in_shape': 4,
+        'in_shape': in_shape,
         'out_shape': (4, 11),
     }
     agent_config = {
@@ -109,22 +128,20 @@ if __name__ == "__main__":
         'savepath': '/home/hemu/madigan/farm/',
         'model_params': model_config
     }
-
     exp_config = dict(
         name='test',
-        generator_params={'type': 'multisine',
-                          'state_space': generator_params.tolist()},
-        discrete_actions=True,
-        discrete_action_atoms=11,
-        nsteps=100,
-        lot_unit_value=10_000,
-        agent_params=agent_config,
+        generator_params=generator_params,
+        discrete_actions=discrete_actions,
+        discrete_action_atoms=discrete_action_atoms,
+        nsteps=nsteps,
+        lot_unit_value=1_000,
+        min_tf = min_tf,
+        agent_config=agent_config,
     )
 
     param_path = Path('/home/hemu/madigan/madigan/environments')/'test.json'
     save_json(exp_config, param_path)
     data = test_env(exp_config, agent=None, eps=1.)
-    # import ipdb; ipdb.set_trace()
     # plot_metrics(data)
     run_dash(data)
 
