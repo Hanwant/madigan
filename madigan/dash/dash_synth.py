@@ -67,7 +67,6 @@ class Main(QWidget):
                 self.subplots[option].plot(self.data[option], pen=self.colours[option])
             else:
                 print(f'removing {option}')
-    
 
 
 def run_dash(data):
