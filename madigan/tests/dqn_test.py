@@ -5,7 +5,7 @@ from madigan.environments import Synth
 from madigan.fleet.dqn import DQN
 from madigan.utils import make_config, State, SARSD, batchify_sarsd
 
-@pytest.mark.skip("mlp not implemented yet")
+@pytest.mark.skip("mlp not implemented atm")
 def test_forward_pass_mlp():
     config = make_config(model_class="MLPModel", nassets=4, discrete_actions=True,
                          discrete_action_atoms=11)
@@ -73,12 +73,11 @@ def train_step(self, sarsd, device):
                         torch.tensor(sarsd.state.port, dtype=torch.float32).to(device))
     qvals = self.model_b(states)
     Q_t = (qvals * actions_mask).sum(-1)
-    loss = ((G_t - Q_t)**2).mean()
+    td_error = (G_t - Q_t)
+    loss = (td_error**2).mean()
     loss.backward()
     self.opt.step()
-    return {'loss': loss.detach().item(), 'td_error': 0., 'G_t': G_t, 'Q_t': Q_t}
-
-
+    return {'loss': loss.detach().item(), 'td_error': td_error, 'G_t': G_t, 'Q_t': Q_t}
 
 
 @pytest.mark.skip()
