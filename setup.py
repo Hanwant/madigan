@@ -1,5 +1,5 @@
-# from sys import platform
 from setuptools import setup, find_packages
+# from sys import platform
 # from setuptools import Extension
 # from Cython.Build import cythonize
 # from Cython.Compiler import Options
@@ -15,8 +15,9 @@ with open("README.org", 'r') as f:
     long_description = f.read()
 
 
-packages = find_packages()
+packages = find_packages(exclude=['arena'])
 print('Packages: ', packages)
+
 setup(
     name = 'madigan',
     version = '0.0.1',
@@ -28,6 +29,16 @@ setup(
     # ext_modules = cythonize(EXT_MODULES, compiler_directives={'language_level' : "3"}, emit_linenums=True),
     # include_dirs=[numpy.get_include()]
 )
+
+
+
+
+
+
+
+
+
+
 
 # FOR CYTHON EXTENSIONS
 # EXT_MODULES=None
