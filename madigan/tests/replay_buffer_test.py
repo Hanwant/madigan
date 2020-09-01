@@ -3,6 +3,7 @@ from collections import deque
 from random import sample
 import numpy as np
 from madigan.utils import SARSD, time_profile
+from madigan.utils import replay_buffer
 
 def test_basic_buffers():
     # _list = list(range(1000000))
