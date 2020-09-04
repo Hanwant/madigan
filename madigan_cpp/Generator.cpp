@@ -5,8 +5,8 @@
 
 class Generator{
 public:
-  Generator();
-  std::vector<float> next();
+  virtual std::vector<float> next()=0;
+  virtual ~Generator(){}
 };
 
 
@@ -39,7 +39,7 @@ public:
     nEle = freq.size();
   }
 
-  std::vector<float> next(){
+  std::vector<float> next() override {
     std::vector<float> out;
     for(int i=0; i!=nEle; i++){
       out.push_back(m_mu[i]+m_amp[i]*std::sin(2*PI*m_x*m_freq[i]));

@@ -33,7 +33,6 @@ Info(std::vector<float> transPrices, std::vector<float> transCosts):
 typedef _State<std::vector<float>> State;
 typedef std::tuple<State, float, bool, Info> envOutput;
 
-
 class Synth{
 public:
   int nAssets;
@@ -73,7 +72,7 @@ public:
  private:
   std::vector<float> generate();
   State preprocess(std::vector<float>);
-  bool checkRisk(int assetId, int amount);
+  bool checkRisk(int assetId, float amount);
   Info stepDiscrete(std::vector<int> actions);
   Info stepContinuous(std::vector<int> actions);
   void transaction(int assetId, float amount, float transPrice, float transCost);
@@ -86,5 +85,6 @@ private:
   std::vector<float> _portfolio;
   std::vector<float> _currentPrices;
   float _maintenanceMargin = 0.1;
-  Generator generator = SineGenerator();
+  std::unique_ptr<Generator> generator = std::make_unique<SineGenerator>();
 };
+

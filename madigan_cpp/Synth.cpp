@@ -2,7 +2,50 @@
 
 
 std::vector<float> Synth::generate(){
-  return generator.next();
+  return generator->next();
+}
+
+State Synth::preprocess(std::vector<float> prices){
+  std::vector<float> normedPortfolio = portfolioNorm();
+
+  return State(prices, normedPortfolio);
+}
+
+float Synth::equity(){
+  float _sum(0.);
+  for (int i=0; i != nAssets; i++){
+    _sum += (_currentPrices[i] * _portfolio[i]);
+  }
+  return _cash + _sum;
+}
+
+float Synth::availableMargin(){
+  float _sum(0.);
+  for (int i=0; i != nAssets; i++){
+    float port = _portfolio[i];
+    if(port < 0.){
+      _sum += (_currentPrices[i] * port);
+    }
+  }
+  return _cash + _sum;
+}
+
+bool Synth::checkRisk(int assetId, float amount){
+  if (amount == 0.) return false;
+  if (amount > 0.){
+    if (_portfolio[assetId] < 0.) return true;
+    if(amount < availableMargin()) return true;
+  }
+  else{
+    if (_portfolio[assetId] > 0.)return true;
+    if (abs(amount) < availableMargin()) return true;
+  }
+}
+
+void Synth::transaction(int assetId, float amount, float transPrice, float transCost){
+  float unitsToExchange = amount / transPrice;
+  _cash -= (amount + transCost);
+  _portfolio[assetId] += unitsToExchange;
 }
 
 envOutput Synth::step(std::vector<int> actions){
@@ -79,27 +122,3 @@ Info Synth::stepDiscrete(std::vector<int> actions){
   return info;
 }
 
-void Synth::transaction(int assetId, float amount, float transPrice, float transCost){
-  float unitsToExchange = amount / transPrice;
-  _cash -= (amount + transCost);
-  _portfolio[assetId] += unitsToExchange;
-}
-
-float Synth::equity(){
-  float _sum(0.);
-  for (int i=0; i != nAssets; i++){
-    _sum += (_currentPrices[i] * _portfolio[i]);
-  }
-  return _cash + _sum;
-}
-
-float Synth::availableMargin(){
-  float _sum(0.);
-  for (int i=0; i != nAssets; i++){
-    float port = _portfolio[i];
-    if(port < 0.){
-      _sum += (_currentPrices[i] * port);
-    }
-  }
-  return _cash + _sum;
-}
