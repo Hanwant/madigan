@@ -1,10 +1,13 @@
 from pathlib import Path
+import numpy as np
 import torch
 import torch.nn.functional as F
 from .agent import Agent
 from .conv_model import ConvModel
 from .mlp_model import MLPModel
-from ..utils import default_device, Config, State
+from ..utils.utils import default_device
+from ..utils.config import Config
+from ..utils.data import State
 
 def get_model_class(name):
     if name == "ConvModel":
@@ -32,7 +35,6 @@ class DQN(Agent):
         self.savepath = a_config.savepath
         self.double_dqn = a_config['double_dqn']
         self.discount = a_config.discount
-        self.nstep = a_config.nstep
         self.action_atoms = a_config.action_atoms
 
         if Path(self.savepath).is_file():
@@ -93,14 +95,16 @@ class DQN(Agent):
         External interface - for inference
         takes in numpy arrays and returns greedy actions
         """
-        qvals = self.get_qvals(state, target=target)
+        if len(state.price.shape) == 2:
+            price = state.price[None, ...]
+            port = state.port[None, ...]
+        qvals = self.get_qvals(State(price, port), target=target)
         if raw_qvals:
             return qvals
         # max_qvals = qvals.max(-1)[0]
         actions = qvals.max(-1)[1]
-        return actions
+        return np.array(actions[0].detach().cpu())
 
-    @torch.no_grad()
     def get_qvals(self, state, target=True, device=None):
         """
         External interface - for inference
@@ -109,9 +113,10 @@ class DQN(Agent):
         """
         device = device or default_device()
         state = self.make_state_tensor(state, device=device)
-        if target:
-            return self.model_t(state)
-        return self.model_b(state)
+        with torch.no_grad():
+            if target:
+                return self.model_t(state)
+            return self.model_b(state)
 
     def loss(self, Q_t, G_t):
         return F.smooth_l1_loss(Q_t, G_t)
@@ -130,7 +135,7 @@ class DQN(Agent):
             G_t = rewards[..., None] + (done_mask[..., None] * self.discount * greedy_qvals_next)
         actions_mask = F.one_hot(actions, self.action_atoms).to(actions.device)
         qvals = self.model_b(states)
-        Q_t = (qvals * actions_mask.unsqueeze(1)).sum(-1)
+        Q_t = (qvals * actions_mask).sum(-1)
         td_error = (G_t - Q_t).mean().detach().item()
         loss = self.loss(Q_t, G_t)
         loss.backward()

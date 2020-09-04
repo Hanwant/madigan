@@ -3,7 +3,8 @@ from collections import deque
 from random import random
 import numpy as np
 from ..synth import multi_sine_gen
-from ..utils import load_json, save_json, State, SARSD
+from ..utils.utils import load_json, save_json
+from ..utils.data import State, SARSD
 from .env import Env
 
 
@@ -32,6 +33,8 @@ class Synth(Env):
             yield {'prices': next(gen), 'timestamps': None}
 
     def reset(self):
+        self._portfolio = np.zeros(self.nassets)
+        self._cash = self.init_cash
         for i in range(self.min_tf):
             current_state = self.preprocess(next(self._data_stream)['prices'])
         return current_state
@@ -48,7 +51,6 @@ class Synth(Env):
         normed_prices = prices
         self._current_state.append(normed_prices)
         return State(price=np.array(self._current_state), port=self.portfolio_norm)
-
 
 
 def plot_metrics(data):

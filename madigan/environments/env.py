@@ -1,6 +1,7 @@
 import itertools as it
 import numpy as np
 
+
 class DiscreteActionSpace:
     def __init__(self, ranges: tuple, n: int):
         assert len(ranges) == 2
@@ -34,7 +35,7 @@ class Env:
                  discrete_actions=False,
                  discrete_action_atoms=11,
                  action_mode="trade",
-                 lot_unit_value=100_000,
+                 lot_unit_value=1_000,
                  initial_margin=1.,
                  slippage_pct=0.001,
                  transaction_cost=0.01,
@@ -44,7 +45,7 @@ class Env:
         assert discrete_action_atoms % 2 != 0, "action_atoms must be an odd number - to allow for the action of hold"
         assert action_mode in ("trade", "target")
 
-        self._data_stream, self.test_stream = it.tee(data_stream)
+        self.init_cash = init_cash
         self._cash = init_cash
         self.levarage = levarage
         self._borrowed_for_short = 0.
@@ -59,6 +60,7 @@ class Env:
         # self.broker = Broker(porfolios=(self.portfolio. ))
 
         # Getting number of assets and state observation shape after preprocessing
+        self._data_stream, self.test_stream = it.tee(data_stream)
         prices = next(self.test_stream)['prices']
         self._current_prices = prices
         self.nassets = prices.shape[0]
@@ -83,8 +85,13 @@ class Env:
         raise NotImplementedError
 
     def reset(self):
-        # self._current_prices = next(self._data_stream)
-        # return self.get_state()
+        """
+        Example implementation:
+        self._portfolio = np.zeros(self.nassets)
+        self.cash = self.init_cash
+        self._current_prices = next(self._data_stream)
+        return self.get_state()
+        """
         raise NotImplementedError
 
     @property
@@ -167,10 +174,11 @@ class Env:
                 return True
             if amount < self.available_margin:
                 return True
-        if self._portfolio[asset_id] > 0.:
-            return True
-        if abs(amount) < self.available_margin:
-            return True
+        else:
+            if self._portfolio[asset_id] > 0.:
+                return True
+            if abs(amount) < self.available_margin:
+                return True
 
     def step(self, actions):
         """
@@ -184,14 +192,16 @@ class Env:
             actions = np.array(actions)
 
         if self.equity <= 0.:
+            done = True
             data = next(self._data_stream)
             self._current_prices = data['prices']
-            return self.preprocess(self._current_prices), 0., True, {'Event': "BLOWOUT", 'transaction_price': None, 'transaction_cost': None}
+            return self.preprocess(self._current_prices), 0., done, {'Event': "BLOWOUT", 'transaction_price': None, 'transaction_cost': None}
 
         if self.available_margin < self.maintenance_margin:
+            done = True
             data = next(self._data_stream)
             self._current_prices = data['prices']
-            return self.preprocess(self._current_prices), 0., True, {"Event": "MARGINCALL", 'transaction_price': None, 'transaction_cost': None}
+            return self.preprocess(self._current_prices), 0., done, {"Event": "MARGINCALL", 'transaction_price': None, 'transaction_cost': None}
 
         info = {}
         done = False
