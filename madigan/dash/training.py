@@ -6,10 +6,11 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 from PyQt5.QtGui import QPen, QColor
 from PyQt5.QtWidgets import QApplication, QLabel, QWidget, QPushButton, QVBoxLayout
 import pyqtgraph as pg
-from .dash_synth_base import Ui_MainWindow
+from .training_base import Ui_MainWindow
 from .utils import make_dark_palette
-from madigan.environments.synth import test_env
-from madigan.utils import load_json, save_json
+from ..environments.synth import test_env
+from ..run.test import test
+from ..utils import load_json, save_json
 
 
 
@@ -19,6 +20,33 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.setupUi(self)
         self.data = data
         self.colours = {'eq': (218, 112, 214), 'returns': (255, 228, 181)}
+
+        # SERVER COMMUINICATION ###############################################
+        default_server = {'name': 'local',
+                          'address': 'self',
+                          'port': None,
+                          'pid': str(os.getpid()),
+                          'status': 'Live',
+                          'keyPath': None,
+                          'pass': None,
+                          }
+        self.servers = [default_server]
+        self.ServerInfo.setColumnCount(4)
+        self.ServerInfo.setRowCount(len(self.servers))
+        # self.ServerInfo.setData()
+        self.LocalRadio.toggled.connect(self.compSourceToggle)
+        self.ServerRadio.toggled.connect(self.compSourceToggle)
+        self.serverInfoCols = ['name', 'pid', 'location', 'status']
+        self.ServerInfo.setHorizontalHeaderLabels(self.serverInfoCols)
+        for row, server in enumerate(self.servers):
+            for col, name in enumerate(self.serverInfoCols):
+                if name == 'location':
+                    item = QtGui.QTableWidgetItem(f"{server['address']}:{server['port']}")
+                else:
+                    item = QtGui.QTableWidgetItem(server[name])
+                self.ServerInfo.setItem(row, col, item)
+        self.update_server_status()
+
 
         # CONTROL SIGNALS/SLOTS #########################################
         # Config from file
@@ -33,7 +61,8 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.ParamsEdit.textChanged.connect(self.update_config)
 
         # Run exp based on config
-        self.RunCommand.clicked.connect(self.run_exp)
+        self.TestCommand.clicked.connect(partial(self.run_job, 'test'))
+        self.TrainCommand.clicked.connect(partial(self.run_job, 'train'))
 
         # PLOTS ########################################################
         self.plot_layout = QtGui.QGridLayout()
@@ -86,6 +115,17 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.current_pos_line.setValue(len(self.data['positions'])-1)
         self.update_portfolio()
 
+    def update_server_status(self):
+        for row in range(self.ServerInfo.rowCount()):
+            status = self.ServerInfo.item(row, 3).text()
+            if status == 'Live':
+                for col in range(self.ServerInfo.columnCount()):
+                    self.ServerInfo.item(row, col).setBackground(QColor('#0a290a'))
+            elif status == "Not Responding":
+                for col in range(self.ServerInfo.columnCount()):
+                    self.ServerInfo.item(row, col).setBackground(QColor('#999999'))
+        # self.ServerInfo.item()
+
     def update_data(self, data):
         self.clear_data()
         self.add_data(data)
@@ -109,11 +149,32 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                 pos = self.data['positions'][current_timepoint][i]
                 self.PositionsTable.setItem(i, 1, QtGui.QTableWidgetItem(str(pos)))
             except IndexError:
+                import traceback
+                traceback.print_exc()
                 continue
 
-    def run_exp(self):
-        data = test_env(self.exp_config, agent=None, eps=1.)
-        self.update_data(data)
+    def run_job(self, action):
+        assert action in ('train', 'test')
+        if self.compSource == "Local":
+            if action == 'test':
+                test()
+            elif action == 'train':
+                train()
+        elif self.compSource == "Server":
+            # if action == 'test':
+                # self.socket.send_pyobj({'signal': 'job', 'action': 'test',
+                #                         'config': self.config})
+            # elif action == 'train':
+                # self.socket.send_pyobj({'signal': 'job', 'action': 'train',
+                #                         'config': self.config})
+            raise NotImplementedError
+
+
+    def compSourceToggle(self):
+        if self.LocalRadio.isChecked():
+            self.compSource = "Local"
+        elif self.ServerRadio.isChecked():
+            self.compSource = "Server"
 
     def update_config(self):
         self.exp_config = ast.literal_eval(self.ParamsEdit.toPlainText())
@@ -137,20 +198,14 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             fname = QtGui.QFileDialog.getSaveFileName(self, 'Choose config file', '/home/hemu/madigan/')[0]
         return fname
 
-
-
-def run_dash(data):
+def run_dash():
 
     app = QApplication([])
 
     app.setStyle('Fusion')
     palette = make_dark_palette()
     app.setPalette(palette)
-    # main = Main(data)
-    # main = QtWidgets.QMainWindow()
-    # ui = Ui_MainWindow()
-    # ui.setupUi(main)
-    main = MainWindow(data=data, exp_name='test')
+    main = MainWindow(exp_name='test')
     main.show()
 
     app.exec_()
