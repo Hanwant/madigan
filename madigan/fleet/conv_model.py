@@ -1,3 +1,4 @@
+from functools import reduce
 from collections.abc import Iterable
 import torch
 import torch.nn as nn
@@ -97,6 +98,7 @@ class ConvModel(Model):
                  strides=[1, 1, 1], act=nn.ReLU, **params):
         super().__init__()
         assert len(kernels) == len(strides) == len(channels)
+        assert min_tf >= reduce(lambda x, y: x+y, kernels), "min_tf should be at least as long as sum of kernels"
         self.action_atoms = action_atoms
         self.d_model = d_model
         self.act = act()
@@ -105,7 +107,7 @@ class ConvModel(Model):
         for i in range(len(kernels)):
             conv = nn.Conv1d(channels[i], channels[i+1], kernels[i], stride=strides[i])
             conv_layers.append(conv)
-            arb_input = (64)
+            arb_input = (min_tf)
             causal_pad = calc_pad_to_conserve(arb_input, conv, causal_dim=0) # CAUSAL_DIM=0 assumes 0 is time dimension
             conv_layers.append(nn.ConstantPad1d(causal_pad, value=0.))
             conv_layers.append(self.act)

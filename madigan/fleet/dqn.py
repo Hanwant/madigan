@@ -141,7 +141,8 @@ class DQN(Agent):
         loss.backward()
         self.opt.step()
         self.lr_sched.step()
-        return {'loss': loss.detach().item(), 'td_error': td_error, 'G_t': G_t, 'Q_t': Q_t}
+        return {'loss': loss.detach().item(), 'td_error': td_error, 'G_t': G_t.detach(), 'Q_t': Q_t.detach()}
+        # return loss.detach().item(), td_error, G_t.detach(), Q_t.detach()
 
     def save_state(self):
         config = {'state_dict': self.model_t.state_dict(),

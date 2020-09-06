@@ -3,7 +3,7 @@ from collections import deque
 from random import random
 import numpy as np
 from ..synth import multi_sine_gen
-from ..utils.utils import load_json, save_json
+from ..utils.config import load_config, save_config
 from ..utils.data import State, SARSD
 from .env import Env
 
@@ -142,7 +142,7 @@ if __name__ == "__main__":
     )
 
     param_path = Path('/home/hemu/madigan/madigan/environments')/'test.json'
-    save_json(exp_config, param_path)
+    save_config(exp_config, param_path)
     data = test_env(exp_config, agent=None, eps=1.)
     # plot_metrics(data)
     run_dash(data)

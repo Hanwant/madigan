@@ -148,7 +148,8 @@
 ***** TODO Establish Trading RL environment [2/8] [25%]
       SCHEDULED: <2020-08-22 Sat> DEADLINE: <2020-09-28 Mon>
       :LOGBOOK:
-      CLOCK: [2020-08-31 Mon 20:26]
+      CLOCK: [2020-09-02 Wed 17:29]--[2020-09-02 Wed 20:41] =>  3:12
+      CLOCK: [2020-08-31 Mon 20:26]--[2020-08-31 Mon 22:55] =>  2:29
       CLOCK: [2020-08-31 Mon 13:03]--[2020-08-31 Mon 17:12] =>  4:09
       CLOCK: [2020-08-30 Sun 16:35]--[2020-08-30 Sun 22:32] =>  5:57
       CLOCK: [2020-08-30 Sun 11:24]--[2020-08-30 Sun 12:04] =>  0:40
@@ -183,22 +184,22 @@
          - [X] Make base viz tools - Qt
          - [X] Accounting
        - [X] Basic pre-processing 
-       - [ ] Make and train agents to play the synth [0/4] [0%]
-         - [ ] Extend Control Panel for training
-         - [ ] DQN
+       - [-] Make and train agents to play the synth [2/4] [50%]
+         - [X] Extend Control Panel for training
+         - [X] DQN
          - [ ] PG
          - [ ] Make Scalable [0/3] [0%]
            - [ ] multiprocessing
            - [ ] zmq 
            - [ ] ray
        - [ ] Robust pre-processing
-       - [ ] Implement some Sota and validate on data generating processes [0/6] [0%]
-         - [ ] Extensions I.e Actor-Critic, PPO
-         - [ ] Model-Based I.e VAE/GAN
-         - [ ] Analytical processes I.e Ornstein-Uhlenbeck
+       - [ ] Test on more data generating processes and implement some Sota [0/6] [0%]
          - [ ] ad-hoc - I.e trended
          - [ ] ad-hoc - Multi-Asset relationships - statistical arbitrage
          - [ ] Experimental - I.e via representations from from VAE/GAN (I.e as in world model)
+         - [ ] Extensions I.e Actor-Critic, PPO
+         - [ ] Model-Based I.e VAE/GAN
+         - [ ] Analytical processes I.e Ornstein-Uhlenbeck
        - [ ] Robust pre-processing
        - [ ] Train on idealized data 
        - [ ] Train/Test on real data

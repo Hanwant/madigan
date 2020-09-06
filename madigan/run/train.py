@@ -1,4 +1,5 @@
 from random import random
+import logging
 from tqdm import tqdm
 import numpy as np
 from ..utils import SARSD, State, ReplayBuffer
@@ -7,7 +8,7 @@ from ..environments import make_env, Synth
 from .test import test
 
 
-def train_loop(agent, env, config):
+def train_loop(agent, env, config, print_progress=True):
 
     rb = ReplayBuffer(config.rb_size)
 
@@ -16,17 +17,19 @@ def train_loop(agent, env, config):
     eps_decay = config.expl_eps_decay
 
     state = env.reset()
-    i = agent.total_steps
-    tq = tqdm(total=config.nsteps)
-    nsteps = i + config.nsteps
-    eps *= (1-eps_decay)**i
+    I = agent.total_steps
+    nsteps = I + config.nsteps
+    eps *= (1-eps_decay)**I
     local_steps = 0
     steps_since_target_update = 0
     steps_since_train = 0
 
-    import time
-    for i in range(i, nsteps):
-        tq.update(1)
+    if print_progress:
+        iterator = tqdm(range(I, nsteps))
+    else:
+        iterator = range(I, nsteps)
+
+    for i in iterator:
 
         if random() < eps:
             action = env.action_space.sample()
@@ -49,15 +52,15 @@ def train_loop(agent, env, config):
         if len(rb) >= config.min_rb_size:
             if steps_since_train > config.train_freq:
                 data = rb.sample(config.batch_size)
-                res = agent.train_step(data)
-                returns = res['G_t'].mean()
-                loss = np.mean(res['loss'])
-                train_metric = {'returns': returns, 'loss': loss}
+                train_metric = agent.train_step(data)
+                train_metric['rewards'] = data.reward
+                # returns = res['G_t'].mean().item()
+                # train_metric = {'returns': returns, 'loss': res['loss']}
                 steps_since_train = 0
             if steps_since_target_update > config.test_freq:
-                res = test(agent, env, 1000)
-                returns = sum(res['returns'])
-                test_metric = {'returns': returns}
+                test_metric = test(agent, env, config.test_steps)
+                # returns = sum(res['returns'])
+                # test_metric = {'returns': returns}
                 agent.model_t.load_state_dict(agent.model_b.state_dict())
                 steps_since_target_update = 0
             steps_since_train += 1
@@ -65,7 +68,7 @@ def train_loop(agent, env, config):
         local_steps += 1
         yield train_metric, test_metric
 
-def train_gen(agent, env, config):
+def train(agent, env, config):
     loop = iter(train_loop(agent, env, config))
     train_metrics = []
     test_metrics = []
@@ -91,20 +94,21 @@ def train_gen(agent, env, config):
 
 
 class Trainer:
-    def __init__(self, agent, env, config):
+    def __init__(self, agent, env, config, print_progress=True):
         self.agent = agent
         self.env = env
         self.config = config
-        self.train_loop = iter(train_loop(agent, env, config))
+        self.print_progress = print_progress
+        self = iter(self)
 
     @classmethod
-    def from_config(cls, config):
+    def from_config(cls, config, print_progress=True):
         agent = make_agent(config)
-        env = make_env(env)
-        return cls(agent, env, config)
-
+        env = make_env(config)
+        return cls(agent, env, config, print_progress=print_progress)
 
     def __iter__(self):
+        self.train_loop = iter(train_loop(self.agent, self.env, self.config, print_progress=self.print_progress))
         return self
 
     def __next__(self):
@@ -115,7 +119,7 @@ class Trainer:
         """
         return next(self.train_loop)
 
-    def train(self):
+    def train(self, print_progress=True):
         train_metrics = []
         test_metrics = []
         try:
@@ -137,7 +141,14 @@ class Trainer:
             traceback.print_exc()
             import ipdb; ipdb.set_trace()
 
-        return train_metrics, test_metrics
+        finally:
+            if len(train_metrics) > 0:
+                train_metrics = {k: [train_metric[k] for train_metric in train_metrics] for k in train_metrics[0].keys()}
+            if len(test_metrics) > 0:
+                test_metrics = {k: [test_metric[k] for test_metric in test_metrics] for k in test_metrics[0].keys()}
+            else:
+                test_metrics = test(self.agent, self.env, nsteps=self.config.test_steps)
+            return train_metrics, test_metrics
 
 
 

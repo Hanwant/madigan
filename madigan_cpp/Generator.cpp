@@ -5,29 +5,29 @@
 
 class Generator{
 public:
-  virtual std::vector<float> next()=0;
+  virtual std::vector<double> next()=0;
   virtual ~Generator(){}
 };
 
 
 class SineGenerator: public Generator{
 public:
-  std::vector<float> m_freq;
-  std::vector<float> m_mu;
-  std::vector<float> m_amp;
-  std::vector<float> m_phase;
-  float dx;
+  std::vector<double> m_freq;
+  std::vector<double> m_mu;
+  std::vector<double> m_amp;
+  std::vector<double> m_phase;
+  double dx;
   int nEle;
-  float m_x=0.;
+  double m_x=0.;
 
 public:
   SineGenerator(): m_freq{1., 2., 3., 4.}, m_mu{2., 3., 4., 5.},
                    m_amp{1., 2., 3., 4.}, m_phase{0., 1., 2., 0.},
                    dx(0.01), nEle(4){
   }
-  SineGenerator(std::vector<float> freq, std::vector<float> mu,
-                std::vector<float> amp, std::vector<float> phase,
-                float dx): dx(dx){
+  SineGenerator(std::vector<double> freq, std::vector<double> mu,
+                std::vector<double> amp, std::vector<double> phase,
+                double dx): dx(dx){
     if(freq.size() != mu.size() || mu.size()!= amp.size()
        || amp.size() != phase.size()){
       throw "Generator Parameters must all be of the same length";
@@ -39,8 +39,8 @@ public:
     nEle = freq.size();
   }
 
-  std::vector<float> next() override {
-    std::vector<float> out;
+  std::vector<double> next() override {
+    std::vector<double> out;
     for(int i=0; i!=nEle; i++){
       out.push_back(m_mu[i]+m_amp[i]*std::sin(2*PI*m_x*m_freq[i]));
     }

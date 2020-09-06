@@ -1,3 +1,4 @@
+import json
 import numpy as np
 
 class Config(dict):
@@ -5,6 +6,8 @@ class Config(dict):
     Wraps a dictionary to have its keys accesible like attributes
     I.e can do both config['steps'] and config.steps to get/set items
 
+
+    Note - Recursively applies this class wrapper to each dictionary value in the parent dict
     """
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -29,19 +32,41 @@ class Config(dict):
         else:
             raise AttributeError("No such attribute: " + name)
 
+def load_config(path):
+    with open(path, 'r') as f:
+        out = json.load(f)
+    return Config(out)
 
-def make_config(env_type="Synth", generator_params=None, nsteps=1000000,
-                agent_type="DQN", discrete_actions=True,
-                discrete_action_atoms=11, lot_unit_value=1_000,
-                min_tf=1, savepath="/home/hemu/madigan/farm/",
-                double_dqn=False, dueling=False, iqn=False,
-                discount=0.99, nstep_return=1, rb_size=100000,
-                min_rb_size=50_000, train_freq=4, test_freq=32000,
-                log_freq=10000, model_save_freq=64000, batch_size=32,
-                expl_eps=1., expl_eps_min=0.1, expl_eps_decay=1e-6,
-                model_class="ConvModel", n_assets=4, d_model=256,
-                n_feats=1, n_layers=4, lr=1e-3, optim_eps=1e-8,
-                momentum=0.9, betas=(0.9, 0.999), optim_wd=0,
+def save_config(obj, path, write_mode='w'):
+    with open(path, write_mode) as f:
+        json.dump(dict(obj), f)
+
+def make_config(env_type="Synth", # Env is an abstraction (I.e could mean training/testing env or live trading env)
+                generator_params=None, # If a training/testing environment, then settings are needed for env data
+                nsteps=100000, # number_of_training_steps
+                test_steps=1000,
+                agent_type="DQN",
+                discrete_actions=True,
+                discrete_action_atoms=11,
+                lot_unit_value=1_000,
+                min_tf=64,
+                basepath="/media/hemu/Data/Markets/farm",
+                double_dqn=False,
+                dueling=False, iqn=False,
+                discount=0.99,
+                nstep_return=1, rb_size=100000,
+                min_rb_size=50_000,
+                train_freq=4, test_freq=32000,
+                log_freq=10000,
+                model_save_freq=64000, batch_size=32,
+                expl_eps=1.,
+                expl_eps_min=0.1, expl_eps_decay=1e-6,
+                model_class="ConvModel",
+                n_assets=4, d_model=256,
+                n_feats=1,
+                n_layers=4, lr=1e-3, optim_eps=1e-8,
+                momentum=0.9,
+                betas=(0.9, 0.999), optim_wd=0,
                 ):
     freq=[1., 2., 3., 4.]
     mu=[2., 3, 4., 5.] # (mu == offset) Keeps negative prices from ocurring
@@ -73,7 +98,7 @@ def make_config(env_type="Synth", generator_params=None, nsteps=1000000,
     }
     agent_config = {
         'type': agent_type,
-        'savepath': savepath,
+        'basepath': basepath,
         'model_config': model_config,
         'optim_config': optim_config,
         'double_dqn': double_dqn,
@@ -89,6 +114,7 @@ def make_config(env_type="Synth", generator_params=None, nsteps=1000000,
         discrete_actions=discrete_actions,
         discrete_action_atoms=discrete_action_atoms,
         nsteps=nsteps,
+        test_steps=test_steps,
         rb_size=rb_size,
         min_rb_size=min_rb_size,
         train_freq=train_freq,

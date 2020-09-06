@@ -18,27 +18,27 @@ _State(T price, T port): price(price), port(port){};
 
 struct Info{
   string event;
-  std::vector<float> transactionPrices;
-  std::vector<float> transactionCosts;
+  std::vector<double> transactionPrices;
+  std::vector<double> transactionCosts;
 
-Info(string event, std::vector<float> transPrices, std::vector<float> transCosts):
+Info(string event, std::vector<double> transPrices, std::vector<double> transCosts):
   event(event), transactionPrices(transPrices), transactionCosts(transCosts){}
 
-Info(std::vector<float> transPrices, std::vector<float> transCosts):
+Info(std::vector<double> transPrices, std::vector<double> transCosts):
   event(""), transactionPrices(transPrices), transactionCosts(transCosts){}
   Info(){};
 
 };
 
-typedef _State<std::vector<float>> State;
-typedef std::tuple<State, float, bool, Info> envOutput;
+typedef _State<std::vector<double>> State;
+typedef std::tuple<State, double, bool, Info> envOutput;
 
 class Synth{
 public:
   int nAssets;
   int minTf;
-  float transactionCost;
-  float slippagePct;
+  double transactionCost;
+  double slippagePct;
   bool discreteActions=true;
   int discreteActionAtoms;
   int lotUnitValue;
@@ -53,7 +53,7 @@ public:
 
  Synth(int nAssets, int minTf, int initCash,
        int discreteActionAtoms=11, int lotUnitValue=1'000,
-       float transactionCost=0.01, float slippagePct=0.001):
+       double transactionCost=0.01, double slippagePct=0.001):
   nAssets(nAssets), minTf(minTf), _initCash(initCash),
     discreteActionAtoms(discreteActionAtoms), lotUnitValue(lotUnitValue),
     transactionCost(transactionCost), slippagePct(slippagePct)
@@ -63,28 +63,28 @@ public:
     }
   envOutput step(std::vector<int> actions);
   int cash(){ return _cash;};
-  float equity();
-  float availableMargin();
-  std::vector<float> portfolio(){ return _portfolio;};
-  std::vector<float> portfolioNorm(){ return _portfolio;};
-  std::vector<float> currentPrices(){ return _currentPrices;};
+  double equity();
+  double availableMargin();
+  std::vector<double> portfolio(){ return _portfolio;};
+  std::vector<double> portfolioNorm(){ return _portfolio;};
+  std::vector<double> currentPrices(){ return _currentPrices;};
 
  private:
-  std::vector<float> generate();
-  State preprocess(std::vector<float>);
-  bool checkRisk(int assetId, float amount);
+  std::vector<double> generate();
+  State preprocess(std::vector<double>);
+  bool checkRisk(int assetId, double amount);
   Info stepDiscrete(std::vector<int> actions);
   Info stepContinuous(std::vector<int> actions);
-  void transaction(int assetId, float amount, float transPrice, float transCost);
+  void transaction(int assetId, double amount, double transPrice, double transCost);
 
 
 private:
   int _cash;
   int _initCash;
   int discreteActionAtomsShift;
-  std::vector<float> _portfolio;
-  std::vector<float> _currentPrices;
-  float _maintenanceMargin = 0.1;
+  std::vector<double> _portfolio;
+  std::vector<double> _currentPrices;
+  double _maintenanceMargin = 0.1;
   std::unique_ptr<Generator> generator = std::make_unique<SineGenerator>();
 };
 
