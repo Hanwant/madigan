@@ -65,7 +65,11 @@ def make_config(
 
         # Training #########################################################################
         nsteps=100000, # number_of_training_steps to run for
+        train_freq=4, # Train every k steps
         log_freq=10000, # Log data/results at this freq
+        test_freq=32000, # Run test episodes at this freq
+        target_update_freq=32000, # Update offline target at this freq
+        model_save_freq=64000, # Save models at this freq
 
         ####################################################################################
         # AGENT + MODEL ####################################################################
@@ -77,9 +81,6 @@ def make_config(
         expl_eps=1., # Initial eps if eps-greedy  is used for exploration
         expl_eps_min=0.1,
         expl_eps_decay=1e-6,
-        train_freq=4, # Train every k steps
-        test_freq=32000, # Run test episodes at this freq
-        model_save_freq=64000, # Save models at this freq
         batch_size=32,
 
         # MODEL ####################################################################
@@ -139,6 +140,7 @@ def make_config(
         rb_size=rb_size,
         min_rb_size=min_rb_size,
         train_freq=train_freq,
+        target_update_freq=target_update_freq,
         test_freq=test_freq,
         log_freq=log_freq,
         model_save_freq=model_save_freq,
