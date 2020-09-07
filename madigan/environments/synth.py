@@ -7,24 +7,27 @@ from ..utils.config import load_config, save_config
 from ..utils.data import State, SARSD
 from .env import Env
 
+def default_params():
+    param = {'type': 'multisine'}
+    freq = [1., 2., 3., 4.,]
+    mu = [2., 3, 4., 5.] # Keeps negative prices from ocurring
+    amp = [1., 2., 3., 4.]
+    phase = [0., 1., 2., 0.]
+    param['state_space'] = np.stack([freq, mu, amp, phase], axis=1)
+    return param
 
 
 class Synth(Env):
-    def __init__(self, generator_params=None, min_tf=1, **params):
+    def __init__(self, generator_params=None, min_tf=1, **config):
         if generator_params is None:
-            freq = [1., 2., 3., 4.,]
-            mu = [2., 3, 4., 5.] # Keeps negative prices from ocurring
-            amp = [1., 2., 3., 4.]
-            phase = [0., 1., 2., 0.]
-            state_space = np.stack([freq, mu, amp, phase], axis=1)
+            generator_params = default_params()
         else:
             if 'state_space' not in generator_params.keys():
-                raise ValueError('generator params needs state_space key')
-            state_space = np.array(generator_params['state_space'])
-
+                raise ValueError('Synth generator params needs state_space key')
+        state_space = np.array(generator_params['state_space'])
         self.min_tf = min_tf
         self._current_state = deque(maxlen=min_tf)
-        super().__init__(self._generator(state_space, dx=0.01), **params)
+        super().__init__(self._generator(state_space, dx=0.01), **config)
 
     @staticmethod
     def _generator(state_space, dx=0.01):

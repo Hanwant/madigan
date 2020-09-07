@@ -1,3 +1,4 @@
+from pathlib import Path
 import json
 import numpy as np
 
@@ -41,42 +42,60 @@ def save_config(obj, path, write_mode='w'):
     with open(path, write_mode) as f:
         json.dump(dict(obj), f)
 
-def make_config(env_type="Synth", # Env is an abstraction (I.e could mean training/testing env or live trading env)
-                generator_params=None, # If a training/testing environment, then settings are needed for env data
-                nsteps=100000, # number_of_training_steps
-                test_steps=1000,
-                agent_type="DQN",
-                discrete_actions=True,
-                discrete_action_atoms=11,
-                lot_unit_value=1_000,
-                min_tf=64,
-                basepath="/media/hemu/Data/Markets/farm",
-                double_dqn=False,
-                dueling=False, iqn=False,
-                discount=0.99,
-                nstep_return=1, rb_size=100000,
-                min_rb_size=50_000,
-                train_freq=4, test_freq=32000,
-                log_freq=10000,
-                model_save_freq=64000, batch_size=32,
-                expl_eps=1.,
-                expl_eps_min=0.1, expl_eps_decay=1e-6,
-                model_class="ConvModel",
-                n_assets=4, d_model=256,
-                n_feats=1,
-                n_layers=4, lr=1e-3, optim_eps=1e-8,
-                momentum=0.9,
-                betas=(0.9, 0.999), optim_wd=0,
-                ):
-    freq=[1., 2., 3., 4.]
-    mu=[2., 3, 4., 5.] # (mu == offset) Keeps negative prices from ocurring
-    amp=[1., 2., 3., 4.]
-    phase=[0., 1., 2., 0.]
-    gen_state_space = np.stack([freq, mu, amp, phase], axis=1) # (n_assets, nparameters)
+def make_config(
+        ##################################################################################
+        # GLOBAL #########################################################################
+        basepath="/media/hemu/Data/Markets/farm", # Path where experiments are stored
+        experiment_id="", # Unique ID for each experiment
+        parent_id="", # If branching from another experiment, ID of parent has to be specified
+        discrete_actions=True, # Env/Agent/Model spec
+        discrete_action_atoms=11, # Env/Agent/Model spec
+        lot_unit_value=1_000, # Env -> Accounting/Broker parameter
 
-    generator_params = generator_params or {'type': 'multisine',
-                            'state_space': gen_state_space.tolist()}
-    assert n_assets == len(generator_params['state_space'])
+        ###################################################################################
+        # ENV #############################################################################
+        env_type="Synth", # Env is an abstraction (I.e could mean training/testing env or live trading env)
+        generator_params=None, # If a training/testing environment, then settings are needed for env data
+        test_steps=1000, # number of testing steps to run each 'episode' for
+
+        # REPLAY BUFFER ####################################################################
+        rb_size=100000, # Size of replay buffer
+        min_rb_size=50_000, # Min size before training
+        nstep_return=1, # Agent/Model spec
+
+        # Training #########################################################################
+        nsteps=100000, # number_of_training_steps to run for
+        log_freq=10000, # Log data/results at this freq
+
+        ####################################################################################
+        # AGENT + MODEL ####################################################################
+        agent_type="DQN", # String of class name
+        double_dqn=False, # Agent/Model spec
+        dueling=False, # Agent/Model spec
+        iqn=False, # Agent/Model spec
+        discount=0.99, # Agent/Model spec
+        expl_eps=1., # Initial eps if eps-greedy  is used for exploration
+        expl_eps_min=0.1,
+        expl_eps_decay=1e-6,
+        train_freq=4, # Train every k steps
+        test_freq=32000, # Run test episodes at this freq
+        model_save_freq=64000, # Save models at this freq
+        batch_size=32,
+
+        # MODEL ####################################################################
+        model_class="ConvModel", # String of model class
+        d_model=256, # dimensionality of model
+        n_layers=4, # number of layer units
+        n_assets=4, # number of assets being traded - expected size of input
+        min_tf=64, # global time_frames parameter
+        n_feats=1, # 1 corresponds to an input of just price
+        lr=1e-3, # learning rate
+        optim_eps=1e-8, # eps - parameter for torch.optim
+        momentum=0.9, # parameter for torch.optim
+        betas=(0.9, 0.999), # parameter for torch.optim
+        optim_wd=0, # parameter for torch.optim
+):
+    assert experiment_id != "", "must specify experiment id"
     model_config = {
         'model_class': model_class,
         'd_model': 256,
@@ -107,7 +126,9 @@ def make_config(env_type="Synth", # Env is an abstraction (I.e could mean traini
         'action_atoms': discrete_action_atoms,
     }
     config = dict(
-        name='test',
+        basepath=basepath,
+        experiment_id=experiment_id,
+        parent_id=parent_id,
         env_type=env_type,
         agent_type=agent_type,
         generator_params=generator_params,

@@ -32,20 +32,18 @@ class DQN(Agent):
         a_config = config.agent_config
         m_config = a_config.model_config
         o_config = a_config.optim_config
-        self.savepath = a_config.savepath
         self.double_dqn = a_config['double_dqn']
         self.discount = a_config.discount
         self.action_atoms = a_config.action_atoms
-
-        if Path(self.savepath).is_file():
-            config = torch.load(self.savepath)
-            self.model_class = get_model_class(m_config['model_class'])
-        else:
-            self.model_class = get_model_class(m_config['model_class'])
+        self.savepath = Path(config.basepath)/f'{config.experiment_id}/models'
+        if not self.savepath.is_dir():
+            self.savepath.mkdir(parents=True)
+        self.model_class = get_model_class(m_config['model_class'])
 
         self.model_b = self.model_class(**m_config).to(device)
         self.model_t = self.model_class(**m_config).to(device)
         self.model_t.eval()
+
         if o_config['type'] == 'Adam':
             self.opt = torch.optim.Adam(self.model_b.parameters(), lr=o_config.lr,
                                         eps=o_config.eps, betas=o_config.betas)
@@ -54,8 +52,8 @@ class DQN(Agent):
             raise ValueError("Only 'Adam' accepted as type of optimizer in config")
 
         # SCHEDULER NOT YET IN USE
-        use_sched=False
-        if use_sched:
+        USE_SCHED=False
+        if USE_SCHED:
             self.lr_sched = torch.optim.lr_scheduler.CyclicLR(self.opt, base_lr=o_config.lr, max_lr=1e-2,
                                                               step_size_up=2000, mode="exp_range")
         else:
@@ -64,13 +62,39 @@ class DQN(Agent):
                 def step(self): pass
             self.lr_sched = Sched()
 
-        if Path(self.savepath).is_file():
-            self.load_state()
+        if len(list(self.savepath.iterdir())) > 0:
+            self.load_latest_state() # loads latest model by default
         else:
-            # self.save_state()
             self.training_steps = 0
             self.total_steps = 0
         super().__init__(name)
+
+    def save_state(self):
+        config = {'state_dict': self.model_t.state_dict(),
+                  'training_steps': self.training_steps,
+                  'total_steps': self.total_steps}
+        torch.save(config, self.savepath/f'main_{self.total_steps}.pth')
+
+    def save_checkpoint(self, name):
+        config = {'state_dict': self.model_t.state_dict(),
+                  'training_steps': self.training_steps,
+                  'total_steps': self.total_steps}
+        torch.save(config, self.savepath/f'{name}_{self.total_steps}.pth')
+
+    def get_latest_state(self):
+        model_savepoints = [int(name.stem[4:]) for name in self.savepath.listdir() if "main" in name.stem]
+        model_savepoints.sort(reverse=True)
+        return model_savepoints[0]
+
+    def load_latest_state(self):
+        self.load_state(self.get_latest_state())
+
+    def load_state(self, savepoint):
+        state = torch.load(savepoint)
+        self.model_b.load_state_dict(state['state_dict'])
+        self.model_t.load_state_dict(state['state_dict'])
+        self.training_steps = state['training_steps']
+        self.total_steps = state['total_steps']
 
     def make_state_tensor(self, state, device):
         price = torch.tensor(state.price, dtype=torch.float32, device=device)
@@ -144,15 +168,3 @@ class DQN(Agent):
         return {'loss': loss.detach().item(), 'td_error': td_error, 'G_t': G_t.detach(), 'Q_t': Q_t.detach()}
         # return loss.detach().item(), td_error, G_t.detach(), Q_t.detach()
 
-    def save_state(self):
-        config = {'state_dict': self.model_t.state_dict(),
-                  'training_steps': self.training_steps,
-                  'total_steps': self.total_steps}
-        torch.save(config, self.savepath)
-
-    def load_state(self):
-        state = torch.load(self.savepath)
-        self.model_b.load_state_dict(state['state_dict'])
-        self.model_t.load_state_dict(state['state_dict'])
-        self.training_steps = state['training_steps']
-        self.total_steps = state['total_steps']
