@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 import numpy as np
 import torch
@@ -5,7 +6,7 @@ import torch.nn.functional as F
 from .agent import Agent
 from .conv_model import ConvModel
 from .mlp_model import MLPModel
-from ..utils.utils import default_device
+from ..utils import default_device
 from ..utils.config import Config
 from ..utils.data import State
 
@@ -51,6 +52,7 @@ class DQN(Agent):
         else:
             raise ValueError("Only 'Adam' accepted as type of optimizer in config")
 
+        self.reward_clip = config.reward_clip or None
         # SCHEDULER NOT YET IN USE
         USE_SCHED=False
         if USE_SCHED:
@@ -62,39 +64,58 @@ class DQN(Agent):
                 def step(self): pass
             self.lr_sched = Sched()
 
-        if len(list(self.savepath.iterdir())) > 0:
-            self.load_latest_state() # loads latest model by default
+        # Overwrites previously saved models
+        if config.overwrite_exp:
+            print('deleting')
+            self._delete_models()
+
+        saved_models = list(self.savepath.iterdir())
+        if len(saved_models):
+            print('loading latest')
+            self.load_latest_state() # tries to load latest model by default
         else:
             self.training_steps = 0
             self.total_steps = 0
         super().__init__(name)
 
+    def target_update(self):
+        self.model_t.load_state_dict(self.model_b.state_dict())
+
     def save_state(self):
-        config = {'state_dict': self.model_t.state_dict(),
-                  'training_steps': self.training_steps,
-                  'total_steps': self.total_steps}
-        torch.save(config, self.savepath/f'main_{self.total_steps}.pth')
+        self.save_checkpoint("main")
 
     def save_checkpoint(self, name):
-        config = {'state_dict': self.model_t.state_dict(),
+        config = {'state_dict': self.model_b.state_dict(),
                   'training_steps': self.training_steps,
                   'total_steps': self.total_steps}
         torch.save(config, self.savepath/f'{name}_{self.total_steps}.pth')
 
+    def _delete_models(self):
+        if self.config.overwrite_exp:
+            saved_models = list(self.savepath.iterdir())
+            if len(saved_models):
+                for model in saved_models:
+                    os.remove(model)
+        else:
+            raise NotImplementedError("Attempting to delete models when config.overwrite_exp is not set to true")
+
     def get_latest_state(self):
-        model_savepoints = [int(name.stem[4:]) for name in self.savepath.listdir() if "main" in name.stem]
-        model_savepoints.sort(reverse=True)
-        return model_savepoints[0]
+        model_savepoints = [(int(name.stem[5:]), name) for name in self.savepath.iterdir() if "main" in name.stem]
+        if len(model_savepoints) > 0 :
+            model_savepoints.sort(reverse=True)
+            return model_savepoints[0][1]
+        else: return None
 
     def load_latest_state(self):
         self.load_state(self.get_latest_state())
 
     def load_state(self, savepoint):
-        state = torch.load(savepoint)
-        self.model_b.load_state_dict(state['state_dict'])
-        self.model_t.load_state_dict(state['state_dict'])
-        self.training_steps = state['training_steps']
-        self.total_steps = state['total_steps']
+        if savepoint is not None:
+            state = torch.load(savepoint)
+            self.model_b.load_state_dict(state['state_dict'])
+            self.model_t.load_state_dict(state['state_dict'])
+            self.training_steps = state['training_steps']
+            self.total_steps = state['total_steps']
 
     def make_state_tensor(self, state, device):
         price = torch.tensor(state.price, dtype=torch.float32, device=device)
@@ -147,6 +168,8 @@ class DQN(Agent):
 
     def train_step(self, sarsd):
         states, actions, rewards, next_states, done_mask = self.make_sarsd_tensors(sarsd)
+        if self.reward_clip is not None:
+            rewards = rewards.clamp(min=self.reward_clip[0], max=self.reward_clip[1])
         self.opt.zero_grad()
         with torch.no_grad():
             if self.double_dqn:

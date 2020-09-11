@@ -9,10 +9,10 @@ from .env import Env
 
 def default_params():
     param = {'type': 'multisine'}
-    freq = [1., 2., 3., 4.,]
-    mu = [2., 3, 4., 5.] # Keeps negative prices from ocurring
-    amp = [1., 2., 3., 4.]
-    phase = [0., 1., 2., 0.]
+    freq = [1., 0.3, 2., 0.5,]
+    mu = [2., 2.1, 2.2, 2.3] # Keeps negative prices from ocurring
+    amp = [1., 1.2, 1.3, 1.]
+    phase = [0., 1., 2., 1.]
     param['state_space'] = np.stack([freq, mu, amp, phase], axis=1)
     return param
 
@@ -36,8 +36,7 @@ class Synth(Env):
             yield {'prices': next(gen), 'timestamps': None}
 
     def reset(self):
-        self._portfolio = np.zeros(self.nassets)
-        self._cash = self.init_cash
+        self.reset_portfolio()
         for i in range(self.min_tf):
             current_state = self.preprocess(next(self._data_stream)['prices'])
         return current_state
@@ -52,7 +51,7 @@ class Synth(Env):
 
     def preprocess(self, prices):
         normed_prices = prices
-        self._current_state.append(normed_prices)
+        self._current_state.appendleft(normed_prices)
         return State(price=np.array(self._current_state), port=self.portfolio_norm)
 
 

@@ -1,5 +1,33 @@
 from random import random
 import numpy as np
+import matplotlib.pyplot as plt
+from ..utils import make_grid
+
+
+def plot_episode(test_metrics):
+    """
+    Plot using matplotlib
+    """
+    metrics = list(filter(lambda x: x not in ('assets',),
+                          test_metrics.keys()))
+    fig, axs = plt.subplots(*make_grid(len(metrics)))
+    ax = axs.flatten()
+    for i, name in enumerate(metrics):
+        ax[i].plot(test_metrics[name], label=name)
+        ax[i].set_title(name)
+        ax[i].legend()
+    plt.show()
+
+def plot_test_logs(test_logs):
+    metrics = list(filter(lambda x: x not in ('prices', 'positions'),
+                          test_logs.keys()))
+    fig, axs = plt.subplots(*make_grid(len(metrics)))
+    ax = axs.flatten()
+    for i, name in enumerate(metrics):
+        ax[i].plot(test_logs[name], label=name)
+        ax[i].set_title(name)
+        ax[i].legend()
+    plt.show()
 
 def test_loop(agent, env, eps=0., random_starts=0):
     state = env.reset()

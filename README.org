@@ -145,9 +145,10 @@
          - [ ] Noisy Nets
 
 
-***** TODO Establish Trading RL environment [2/8] [25%]
+***** TODO Establish Trading RL environment [1/8] [12%]
       SCHEDULED: <2020-08-22 Sat> DEADLINE: <2020-09-28 Mon>
       :LOGBOOK:
+      CLOCK: [2020-09-08 Tue 11:10]--[2020-09-08 Tue 13:11] =>  2:01
       CLOCK: [2020-09-02 Wed 17:29]--[2020-09-02 Wed 20:41] =>  3:12
       CLOCK: [2020-08-31 Mon 20:26]--[2020-08-31 Mon 22:55] =>  2:29
       CLOCK: [2020-08-31 Mon 13:03]--[2020-08-31 Mon 17:12] =>  4:09
@@ -177,13 +178,13 @@
        Work on the direct task of executing profitable trading stategies.
 
        - [X] Setup Synth environments  [5/5]
-         # - [ ] Rewrite main logic components of arena in c++ -for env use in RL
          - [X] Formalize principled action space
          - [X] Data-Generating Processes
          - [X] mean-reversion I.e sine
          - [X] Make base viz tools - Qt
          - [X] Accounting
-       - [X] Basic pre-processing 
+       - [ ] Rewrite main logic components of arena in c++ for env use in RL
+       - [ ] Establish tests
        - [-] Make and train agents to play the synth [2/4] [50%]
          - [X] Extend Control Panel for training
          - [X] DQN

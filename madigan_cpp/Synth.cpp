@@ -105,9 +105,9 @@ Info Synth::stepDiscrete(std::vector<int> actions){
   for(int i=0; i != nAssets; i++){
     double price = _currentPrices[i];
     int lot =  lotUnitValue * (actions[i] - discreteActionAtomsShift);
+    double amount = lot; //* transPrice;
     double slippage = price * slippagePct * (lot<0? -1: 1);
     double transPrice = price + slippage;
-    double amount = lot * transPrice;
     if (checkRisk(i, amount)){
       transaction(i, amount, transPrice, transactionCost);
       transPrices.push_back(transPrice);

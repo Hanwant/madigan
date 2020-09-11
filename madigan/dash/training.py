@@ -4,6 +4,7 @@ import json
 import yaml
 import logging
 from pathlib import Path
+import pandas as pd
 from PyQt5 import QtCore, QtGui, QtWidgets
 from PyQt5.QtGui import QPen, QColor
 from PyQt5.QtWidgets import QApplication, QLabel, QWidget, QPushButton, QVBoxLayout
@@ -11,7 +12,7 @@ import pyqtgraph as pg
 from .training_base import Ui_MainWindow
 from .utils import make_dark_palette
 from ..run.test import test
-from ..run.train import Trainer
+from ..run.train import Trainer, reduce_test_metrics, list_2_dict
 from ..utils.config import make_config, Config, load_config, save_config
 
 def deref_dict(dic):
@@ -27,8 +28,17 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         super().__init__(parent)
         self.setupUi(self)
         # VARIABLES ##########################################################
+        self.exp_config = make_config(experiment_id="TestDash",
+                                      # overwrite_exp=True,
+                                      env_type="Synth",
+                                      nsteps=60_000,
+                                      agent_type="DQN",
+                                      double_dqn=True,
+                                      min_tf=64)
         self.training_data = None
         self.test_data = None
+        self.episode_data = None
+        self.full_episode_data = {}
         self.colours = {'equity': (218, 112, 214), 'returns': (255, 228, 181),
                         'loss': (242, 242, 242), 'G_t': (0, 255, 255), 'Q_t': (255, 86, 0),
                         'rewards': (242, 242, 242)}
@@ -64,15 +74,13 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         # CONTROL SIGNALS/SLOTS #########################################
         # CONFIG
-        self.config_path = Path('/home/hemu/madigan/madigan/environments')/'test.json'
+        self.config_path = Path('/media/hemu/Data/Markets/farm/TestDash')/'test.json'
         self.FilenameLabel.setText('/'.join(self.config_path.parts[-1:]))
         self.LoadConfigButton.clicked.connect(self.load_config)
         self.SaveConfigButton.clicked.connect(self.save_config)
 
-        self.exp_config = load_config(self.config_path)
-        self.exp_config = make_config(env_type="Synth", nsteps=100_000, agent_type="DQN",
-                                      double_dqn=True, min_tf=64)
-        # import ipdb; ipdb.set_trace()
+        # self.exp_config = load_config(self.config_path)
+        save_config(self.exp_config, self.config_path)
         self.ParamsEdit.setText(str(yaml.safe_dump(deref_dict(self.exp_config))))
         self.ParamsEdit.textChanged.connect(self.update_config)
 
@@ -108,12 +116,12 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.train_plot_layout.addWidget(self.train_plot)
         self.PlotsWidgetTrain.setLayout(self.train_plot_layout)
         #  Testing #####################################################
-        self.test_plot_layout = QtGui.QGridLayout()
-        self.test_plot = pg.GraphicsLayoutWidget(show=True, title=f'Run: {exp_name}')
-        self.subplots = {}
-        self.subplots['prices'] = self.test_plot.addPlot(title='Prices', bottom='time', left='price')
-        self.subplots['equity'] = self.test_plot.addPlot(title='Equity', bottom='time', left='Denomination currency')
-        self.subplots['returns'] = self.test_plot.addPlot(title='Returns', bottom='time', left='returns (proportion)')
+        self.test_episode_layout = QtGui.QGridLayout()
+        self.test_episode = pg.GraphicsLayoutWidget(show=True, title=f'Run: {exp_name}')
+        # self.subplots = {}
+        self.subplots['prices'] = self.test_episode.addPlot(title='Prices', bottom='time', left='price')
+        self.subplots['equity'] = self.test_episode.addPlot(title='Equity', bottom='time', left='Denomination currency')
+        self.subplots['returns'] = self.test_episode.addPlot(title='Returns', bottom='time', left='returns (proportion)')
         self.subplots['prices'].showGrid(1, 1)
         self.subplots['equity'].showGrid(1, 1)
         self.subplots['equity'].setLabels()
@@ -121,15 +129,44 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.eq_line = self.subplots['equity'].plot(y=[])
         self.returns_line = self.subplots['returns'].plot(y=[])
 
+        self.price_plots = {}
         self.current_pos_line = pg.InfiniteLine(movable=True)
         self.subplots['equity'].addItem(self.current_pos_line)
-        self.current_pos_line.sigPositionChanged.connect(self.update_portfolio)
+        self.current_pos_line.sigPositionChanged.connect(self.update_account_tables)
 
-        self.price_plots = {}
 
-        self.test_plot_layout.addWidget(self.test_plot)
-        self.PlotsWidgetTest.setLayout(self.test_plot_layout)
-        # PORTFOLIO TABLES ###################################################
+        self.test_episode_layout.addWidget(self.test_episode)
+        self.PlotsWidgetTestEpisodes.setLayout(self.test_episode_layout)
+        #  Test History #####################################################
+        self.test_history_layout = QtGui.QGridLayout()
+        self.test_history = pg.GraphicsLayoutWidget(show=True, title=f'Run: {exp_name}')
+        self.subplots['mean_equity'] = self.test_history.addPlot(title='Mean Equity over Episodes',
+                                                              bottom='training_steps',
+                                                              left='Denomination currency')
+        self.subplots['mean_returns'] = self.test_history.addPlot(title='Mean Returns over Episodes',
+                                                               bottom='training_steps',
+                                                               left='returns (proportion)')
+        self.subplots['mean_cash'] = self.test_history.addPlot(title='Mean Cash over Episodes',
+                                                            bottom='training steps',
+                                                            left='returns (proportion)')
+        self.subplots['mean_equity'].showGrid(1, 1)
+        self.subplots['mean_returns'].showGrid(1, 1)
+        self.subplots['mean_cash'].showGrid(1, 1)
+        self.subplots['mean_cash'].setLabels()
+        self.mean_eq_line = self.subplots['mean_equity'].plot(y=[])
+        self.mean_returns_line = self.subplots['mean_returns'].plot(y=[])
+        self.mean_cash_line = self.subplots['mean_cash'].plot(y=[])
+        self.mean_margin_line = self.subplots['mean_cash'].plot(y=[])
+
+        self.test_history_layout.addWidget(self.test_history)
+        self.PlotsWidgetTest.setLayout(self.test_history_layout)
+        # EPISODE TABLES ###################################################
+        self.EpisodeTable.setColumnCount(4)
+        self.EpisodeTableCols= {col: num for num, col in enumerate(['experiment_id', 'training_steps',
+                                                            'total_steps', 'episode_steps',
+                                                            'agent'])}
+        self.EpisodeTable.cellClicked.connect(self.episode_table_clicked)
+        # self.EpisodeTable.horizontalHeader().setStyleSheet("QHeaderView { font-size 7pt; }")
         self.PositionsTable.setColumnCount(2)
         self.CashTable.setColumnCount(1)
         self.CashTable.setHorizontalHeaderLabels(['$'])
@@ -141,11 +178,17 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.Qt_line.setData(y=[])
         self.rewards_line.setData(y=[])
 
-    def clear_test_data(self):
+    def clear_episode_data(self):
         self.eq_line.setData(y=[])
         self.returns_line.setData(y=[])
         for asset, plot in self.price_plots.items():
             plot.setData(y=[])
+
+    def clear_test_data(self):
+        self.mean_eq_line.setData(y=[])
+        self.mean_returns_line.setData(y=[])
+        self.mean_cash_line.setData(y=[])
+        self.mean_margin_line.setData(y=[])
 
     def add_training_data(self, data):
         self.training_data = data
@@ -154,17 +197,25 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             data = {k: [] for k in ('loss', 'G_t', 'Q_t', 'rewards')}
         self.loss_line.setData(y=data['loss'], pen=self.colours['loss'])
         # G_t and Q_t are np/torch arrays - .mean().item() works on both
-        G_t = [dat.mean().item() for dat in data['G_t']]
-        Q_t = [dat.mean().item() for dat in data['Q_t']]
-        rewards = [dat.mean().item() for dat in data['rewards']]
+        G_t = data['G_t']
+        Q_t = data['Q_t']
+        rewards = data['rewards']
         self.Gt_line.setData(y=G_t, pen=self.colours['G_t'])
         self.Qt_line.setData(y=Q_t, pen=self.colours['Q_t'])
         self.rewards_line.setData(y=rewards, pen=self.colours['rewards'])
 
-    def add_test_data(self, data):
-        self.test_data = data
+
+    # def add_full_episode_data(self, data):
+    #     self.full_episode_data.append({'experiment_id': self.config.experiment_id,
+    #                                    'metrics': data, 'agent': repr(self.trainer.agent),
+    #                                    'total_steps': self.trainer.agent.total_steps,
+    #                                    'training_steps': self.trainer.agent.training_steps})
+
+
+    def add_episode_data(self, data):
+        self.episode_data = data
         if len(data) == 0:
-            logging.warning("test data is empty")
+            logging.warning("episode data is empty")
             data = {k: [] for k in ('equity', 'returns', 'prices', 'positions')}
             data['assets'] = 0
         self.eq_line.setData(y=data['equity'], pen=self.colours['equity'])
@@ -175,11 +226,43 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             else:
                 self.price_plots[asset].setData(y=data['prices'][:, i], pen=(i, data['prices'].shape[1]))
         self.current_pos_line.setValue(len(data['positions'])-1)
-        self.update_portfolio()
+        self.update_account_tables()
+
+    def add_test_data(self, data):
+        self.test_data = data
+        if len(data) == 0:
+            logging.warning("test data is empty")
+            data = {k: [] for k in ('equity', 'returns', 'cash', 'margin')}
+        self.mean_eq_line.setData(y=data['equity'], pen=self.colours['equity'])
+        self.mean_returns_line.setData(y=data['returns'], pen=self.colours['returns'])
+        self.mean_cash_line.setData(y=data['cash'], pen=self.colours['equity'])
+        self.mean_margin_line.setData(y=data['margin'], pen=self.colours['returns'])
+
 
     def update_training_data(self, data):
         self.clear_training_data()
         self.add_training_data(data)
+
+    def update_full_episode_data(self, data):
+        assert self.trainer is not None
+        key = len(self.full_episode_data)
+        self.full_episode_data[key] = {'experiment_id': self.exp_config.experiment_id,
+                                    'metrics': data,
+                                    'agent': repr(self.trainer.agent),
+                                    'total_steps': self.trainer.agent.total_steps,
+                                    'training_steps': self.trainer.agent.training_steps,
+                                    'episode_steps': len(data['equity'])}
+
+    def update_episode_data(self, data):
+        self.clear_episode_data()
+        self.add_episode_data(data)
+        self.update_account_tables()
+        self.update_episode_table()
+        if self.test_data is not None and len(self.test_data):
+            cols = self.test_data.columns
+            test_metrics = reduce_test_metrics(data, cols=cols)
+            test_metrics = dict(filter(lambda x: x[0] in cols, test_metrics.items()))
+            self.test_data = self.test_data.append(pd.DataFrame(test_metrics), ignore_index=True)
 
     def update_test_data(self, data):
         self.clear_test_data()
@@ -195,27 +278,36 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                 for col in range(self.ServerInfo.columnCount()):
                     self.ServerInfo.item(row, col).setBackground(QColor('#999999'))
 
-    # def update_data(self, data):
-    #     self.clear_data()
-    #     self.add_data(data)
+    def update_episode_table(self):
+        self.EpisodeTable.setRowCount(len(self.full_episode_data))
+        self.EpisodeTable.setVerticalHeaderLabels([str(k) for k in self.full_episode_data.keys()])
+        for i, episode in self.full_episode_data.items():
+            for col, num in self.EpisodeTableCols.items():
+                val = QtGui.QTableWidgetItem(str(episode[col]))
+                self.EpisodeTable.setItem(i, num, val)
 
-    def update_portfolio(self):
-        self.PositionsTable.setRowCount(len(self.test_data['assets']))
+    def episode_table_clicked(self, row, col):
+        key = self.EpisodeTable.verticalHeaderItem(row).text()
+        ep_data = self.full_episode_data[int(key)]
+        self.update_episode_data(ep_data['metrics'])
+
+    def update_account_tables(self):
+        self.PositionsTable.setRowCount(len(self.episode_data['assets']))
         current_timepoint = int(self.current_pos_line.value())
         try:
-            cash = QtGui.QTableWidgetItem(str(self.test_data['cash'][current_timepoint]))
-            margin = QtGui.QTableWidgetItem(str(self.test_data['margin'][current_timepoint]))
-            eq = QtGui.QTableWidgetItem(str(self.test_data['equity'][current_timepoint]))
+            cash = QtGui.QTableWidgetItem(str(self.episode_data['cash'][current_timepoint]))
+            margin = QtGui.QTableWidgetItem(str(self.episode_data['margin'][current_timepoint]))
+            eq = QtGui.QTableWidgetItem(str(self.episode_data['equity'][current_timepoint]))
             self.CashTable.setItem(0, 0, cash)
             self.CashTable.setItem(1, 0, margin)
             self.CashTable.setItem(2, 0, eq)
         except IndexError:
             pass
-        for i, asset in enumerate(self.test_data['assets']):
+        for i, asset in enumerate(self.episode_data['assets']):
             self.PositionsTable.setItem(i, 0, QtGui.QTableWidgetItem(asset))
             # if 0 < current_timepoint <= len(self.positions)-1:
             try:
-                pos = self.test_data['positions'][current_timepoint][i]
+                pos = self.episode_data['positions'][current_timepoint][i]
                 self.PositionsTable.setItem(i, 1, QtGui.QTableWidgetItem(str(pos)))
             except IndexError:
                 import traceback
@@ -230,11 +322,15 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                     print('Initializing environment and agent')
                     self.trainer = Trainer.from_config(self.exp_config)
                 if action == 'test':
-                    test_metrics = test(self.trainer.agent, self.trainer.env, nsteps=1000)
-                    self.update_test_data(test_metrics)
+                    eps=self.exp_config.agent_config.greedy_eps_testing
+                    test_metric = test(self.trainer.agent, self.trainer.env,
+                                       nsteps=1000, eps=eps)
+                    self.update_full_episode_data(test_metric)
+                    self.update_episode_data(test_metric)
                 elif action == 'train':
                     train_metrics, test_metrics = self.trainer.train()
                     self.update_training_data(train_metrics)
+                    self.update_test_data(test_metrics)
             elif self.compSource == "Server":
                 # if action == 'test':
                     # self.socket.send_pyobj({'signal': 'job', 'action': 'test',
@@ -249,7 +345,8 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             import traceback; traceback.print_exc()
         finally:
             print('destructing env and agent')
-            self.trainer = None
+            del self.trainer
+            self.trainer=None
 
 
     def compSourceToggle(self):

@@ -48,6 +48,7 @@ def make_config(
         basepath="/media/hemu/Data/Markets/farm", # Path where experiments are stored
         experiment_id="", # Unique ID for each experiment
         parent_id="", # If branching from another experiment, ID of parent has to be specified
+        overwrite_exp=False,
         discrete_actions=True, # Env/Agent/Model spec
         discrete_action_atoms=11, # Env/Agent/Model spec
         lot_unit_value=1_000, # Env -> Accounting/Broker parameter
@@ -70,9 +71,11 @@ def make_config(
         test_freq=32000, # Run test episodes at this freq
         target_update_freq=32000, # Update offline target at this freq
         model_save_freq=64000, # Save models at this freq
+        reward_clip=(-1., 1.),
 
         ####################################################################################
         # AGENT + MODEL ####################################################################
+
         agent_type="DQN", # String of class name
         double_dqn=False, # Agent/Model spec
         dueling=False, # Agent/Model spec
@@ -82,6 +85,7 @@ def make_config(
         expl_eps_min=0.1,
         expl_eps_decay=1e-6,
         batch_size=32,
+        greedy_eps_testing=0.,
 
         # MODEL ####################################################################
         model_class="ConvModel", # String of model class
@@ -99,7 +103,7 @@ def make_config(
     assert experiment_id != "", "must specify experiment id"
     model_config = {
         'model_class': model_class,
-        'd_model': 256,
+        'd_model': d_model,
         'n_layers': n_layers,
         'n_feats': n_feats,
         'action_atoms': discrete_action_atoms,
@@ -125,16 +129,22 @@ def make_config(
         'discount': discount,
         'nstep_return': nstep_return,
         'action_atoms': discrete_action_atoms,
+        'greedy_eps_testing': greedy_eps_testing,
     }
     config = dict(
         basepath=basepath,
         experiment_id=experiment_id,
         parent_id=parent_id,
+        overwrite_exp=overwrite_exp,
+
         env_type=env_type,
-        agent_type=agent_type,
         generator_params=generator_params,
+        lot_unit_value=lot_unit_value,
+        n_assets=n_assets,
         discrete_actions=discrete_actions,
         discrete_action_atoms=discrete_action_atoms,
+
+        agent_type=agent_type,
         nsteps=nsteps,
         test_steps=test_steps,
         rb_size=rb_size,
@@ -144,15 +154,15 @@ def make_config(
         test_freq=test_freq,
         log_freq=log_freq,
         model_save_freq=model_save_freq,
-        lot_unit_value=lot_unit_value,
+
         min_tf=min_tf,
         batch_size=batch_size,
         agent_config=agent_config,
-        n_assets = n_assets,
-        nstep_return = nstep_return,
+        nstep_return=nstep_return,
         expl_eps=expl_eps,
         expl_eps_min=expl_eps_min,
         expl_eps_decay=expl_eps_decay,
+        reward_clip=reward_clip,
     )
     return Config(config)
 

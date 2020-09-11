@@ -1,4 +1,5 @@
 __all__ = ["load_json", "save_json", "default_device",
+           "save_to_hdf", "load_from_hdf",
            "State", "SARSD", "ReplayBuffer"
            "Config", "make_config"]
 import time
@@ -6,10 +7,12 @@ import sys
 from pathlib import Path
 import numpy as np
 import torch
-from .utils import *
+# from .utils import *
 from .config import *
 from .data import *
 from .replay_buffer import *
+from .logging import *
+
 
 def time_profile(repeats, out_results=False, **kwargs):
     """

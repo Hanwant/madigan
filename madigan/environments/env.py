@@ -39,7 +39,7 @@ class Env:
                  initial_margin=1.,
                  slippage_pct=0.001,
                  transaction_cost=0.01,
-                 assets = None,
+                 assets=None,
                  maintenance_margin=0.1,
                  **params):
         assert discrete_action_atoms % 2 != 0, "action_atoms must be an odd number - to allow for the action of hold"
@@ -64,7 +64,10 @@ class Env:
         prices = next(self.test_stream)['prices']
         self._current_prices = prices
         self.nassets = prices.shape[0]
-        self.assets = assets or [f'asset_{i}' for i in range(self.nassets)]
+        if isinstance(assets, (list, tuple)) and len(assets) == self.nassets:
+            self.assets = assets
+        else:
+            self.assets = [f'asset_{i}' for i in range(self.nassets)]
         self._portfolio = np.zeros(self.nassets, np.float64)
 
         self.current_order_id = 0
@@ -87,12 +90,15 @@ class Env:
     def reset(self):
         """
         Example implementation:
-        self._portfolio = np.zeros(self.nassets)
-        self.cash = self.init_cash
+        self.reset_portfolio()
         self._current_prices = next(self._data_stream)
         return self.get_state()
         """
         raise NotImplementedError
+
+    def reset_portfolio(self):
+        self._portfolio = np.zeros(self.nassets)
+        self._cash = self.init_cash
 
     @property
     def observation_shape(self):
@@ -126,7 +132,6 @@ class Env:
 
     @property
     def portfolio(self):
-        """ Human Readable """
         return self._portfolio.copy()
 
     @property
@@ -211,7 +216,7 @@ class Env:
             transaction_price, transaction_cost = self.step_discrete(actions)
         else:
             transaction_price, transaction_cost = self.step_continuous(actions)
-        info['tranaction_price'] = transaction_price
+        info['transaction_price'] = transaction_price
         info['transaction_cost'] = transaction_cost
 
         data = next(self._data_stream)
@@ -231,30 +236,22 @@ class Env:
         """
         lot_units = actions - self.discrete_action_atoms // 2
         lots = lot_units * self.lot_unit_value
+        amounts = lots #* transaction_prices
         slippage = self._current_prices * self.slippage_pct * (1 - 2*(lots<0))
         transaction_prices = self._current_prices + slippage
         transaction_costs = [self.transaction_cost] * len(actions) #+ np.abs(slippage)
-        amounts = lots * transaction_prices
-        # transaction_prices = []
-        # transaction_costs = []
         for i, amount in enumerate(amounts):
             if self.check_risk(i, amount):
                 self.transaction(i, amount, transaction_prices[i], transaction_costs[i])
             else:
                 transaction_prices[i] = None
                 transaction_costs[i] = None
-        # print(transaction_prices)
         return transaction_prices, transaction_costs
 
     def step_continuous(self, actions):
         return None, None
 
-    def transaction(self, asset_idx, cash_amount, transaction_price=None, transaction_cost=None):
-        if transaction_price is None or transaction_cost is None:
-            current_price = self._current_prices[asset_idx]
-            slippage = current_price * self.slippage_pct * (1 - 2*(cash_amount<0))
-        transaction_price = transaction_price or (current_price + slippage)
-        transaction_cost = transaction_cost or self.transaction_cost
-        units_to_buy = cash_amount / transaction_price
+    def transaction(self, asset_idx, cash_amount, transaction_price, transaction_cost):
+        units_to_buy = cash_amount // transaction_price
         self._cash -= cash_amount + transaction_cost
         self._portfolio[asset_idx] += units_to_buy
