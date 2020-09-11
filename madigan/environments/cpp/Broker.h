@@ -5,15 +5,15 @@
 #include <string>
 
 #include "Portfolio.h"
+#include "Account.h"
 
 namespace madigan{
   class Broker{
   public:
-    Broker();
-    ~Broker();
+    Broker(){};
+    ~Broker(){};
   private:
-    std::map<std::string, Portfolio> ports;
-    // std::map<string, Account> accounts;
+    std::map<std::string, Account> accountBook;
   };
 
 }

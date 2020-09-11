@@ -27,15 +27,15 @@ class Portfolio {
 
  public:
   Portfolio();
- Portfolio(int nAssets, int initCash, std::vector<double> portfolio): nAssets(nAssets),
+ Portfolio(int nAssets, double initCash, std::vector<double> portfolio): nAssets(nAssets),
     initCash(initCash), _portfolio(portfolio){};
-  Portfolio(int nAssets, int initCash){
+  Portfolio(int nAssets, double initCash){
     /* vector<double> port(nAssets, 0.); */
     Portfolio(nAssets, initCash, std::vector<double>(nAssets, 0.));
   };
-  ~Portfolio();
+  ~Portfolio()=default;
   double cash(){return _cash;};
-  std::vector<double> portfolio();
+  std::vector<double> portfolio(){return _portfolio;};
   std::vector<double> portfolioNormed();
   double equity();
   double availableMargin();
