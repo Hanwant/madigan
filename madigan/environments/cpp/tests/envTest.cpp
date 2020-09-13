@@ -19,9 +19,15 @@ int main(){
 
   Synth dataSource_ = Synth(_freq, _mu, _amp, _phase, _dX);
   Synth dataSource = Synth();
-  Portfolio port = Portfolio(4, 1'000'000);
+  Portfolio port = Portfolio("port_0", 4, 1'000'000);
 
-  std::cout<< "DataStream obs 1\n";
+  std::cout<< "dataSource 1. \n";
+  for (auto dat: dataSource_.getData()){
+    std::cout << dat << " ";
+  }
+  std::cout << "\n";
+
+  std::cout<< "dataSource 2. \n";
   for (auto dat: dataSource.getData()){
     std::cout << dat << " ";
   }

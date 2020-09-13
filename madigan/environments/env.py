@@ -80,7 +80,7 @@ class Env:
             self.action_mode = action_mode
             self.lot_unit_value = lot_unit_value
         else:
-            raise NotImplementedError("Continuous Actions are not Implemented yet")
+            raise NotImplementedError("Continuous Actions are not Implemented yet, discrete_actions passed as False")
         # Doing this at the end as preprocessing should require self.portfolio (as input to model)
         # self._obs_shape = self.preprocess(prices).shape
 

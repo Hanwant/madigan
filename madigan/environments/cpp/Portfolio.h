@@ -6,6 +6,8 @@
 
 namespace madigan{
 
+using std::string;
+
 struct Info{
   std::string event;
   std::vector<double> transactionPrices;
@@ -27,13 +29,14 @@ class Portfolio {
 
  public:
   Portfolio();
- Portfolio(int nAssets, double initCash, std::vector<double> portfolio): nAssets(nAssets),
+ Portfolio(string id, int nAssets, double initCash, std::vector<double> portfolio): ID(id), nAssets(nAssets),
     initCash(initCash), _portfolio(portfolio){};
-  Portfolio(int nAssets, double initCash){
-    /* vector<double> port(nAssets, 0.); */
-    Portfolio(nAssets, initCash, std::vector<double>(nAssets, 0.));
+ Portfolio(string id, int nAssets, double initCash): ID(id), nAssets(nAssets),
+    initCash(initCash){
+    this->_portfolio = std::vector<double>(nAssets, 0.);
   };
   ~Portfolio()=default;
+  string id(){ return ID;};
   double cash(){return _cash;};
   std::vector<double> portfolio(){return _portfolio;};
   std::vector<double> portfolioNormed();
@@ -43,6 +46,7 @@ class Portfolio {
 
 
  private:
+  const string ID;
   std::vector<double> _portfolio;
   double _cash;
 };
