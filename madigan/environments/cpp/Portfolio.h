@@ -4,6 +4,9 @@
 #include <vector>
 #include <string>
 
+#include "Assets.h"
+
+
 namespace madigan{
 
 using std::string;
@@ -24,29 +27,39 @@ Info(std::vector<double> transPrices, std::vector<double> transCosts):
 
 class Portfolio {
  public:
-  int nAssets;
+  Assets assets;
   double initCash;
 
  public:
-  Portfolio();
- Portfolio(string id, int nAssets, double initCash, std::vector<double> portfolio): ID(id), nAssets(nAssets),
-    initCash(initCash), _portfolio(portfolio){};
- Portfolio(string id, int nAssets, double initCash): ID(id), nAssets(nAssets),
+  Portfolio(){};
+ Portfolio(Assets assets, double initCash): ID("port_default"), assets(assets),
+    initCash(initCash){};
+ Portfolio(string id, Assets assets, double initCash): ID(id), assets(assets),
     initCash(initCash){
-    this->_portfolio = std::vector<double>(nAssets, 0.);
+    this->_portfolio = std::vector<double>(assets.size(), 0.);
   };
+ Portfolio(string id, Assets assets, double initCash, std::vector<double> portfolio): ID(id), assets(assets),
+    initCash(initCash), _portfolio(portfolio){};
+ Portfolio(string id, std::vector<string> assets, double initCash): ID(id), assets(assets),
+    initCash(initCash){
+    this->_portfolio = std::vector<double>(assets.size(), 0.);
+  };
+ Portfolio(string id, std::vector<string> assets, double initCash, std::vector<double> portfolio): ID(id), assets(assets),
+    initCash(initCash), _portfolio(portfolio){};
   ~Portfolio()=default;
+  int nAssets(){ return assets.size();};
   string id(){ return ID;};
-  double cash(){return _cash;};
+  double cash(){ return _cash;};
   std::vector<double> portfolio(){return _portfolio;};
   std::vector<double> portfolioNormed();
   double equity();
   double availableMargin();
   double borrowedCash();
 
+  friend class Broker;
 
  private:
-  const string ID;
+  string ID;
   std::vector<double> _portfolio;
   double _cash;
 };

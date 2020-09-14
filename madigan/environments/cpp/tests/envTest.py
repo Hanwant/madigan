@@ -1,12 +1,18 @@
 import numpy as np
-from madigan.environments.cpp import Portfolio, Synth, Account
+from numpy import isclose
+from numpy.testing import assert_equal
+from madigan.environments.cpp import Portfolio, Synth, Account, Asset, Assets#, Broker, Env
 
 def test_dataSource_init():
     synth = Synth()
-    # synth = Synth([1., 0.3, 2., 0.5],[2., 2.1, 2.2, 2.3],
-    #               [1., 1.2, 1.3, 1.], [0., 1., 2., 1.],
-    #               dx=0.01)
-    assert synth.getData() is not None
+    synth_ = Synth([1., 0.3, 2., 0.5], [2., 2.1, 2.2, 2.3],
+                  [1., 1.2, 1.3, 1.], [0., 1., 2., 1.],
+                  dx=0.01)
+    prices = synth.getData()
+    prices_ = synth_.getData()
+    assert isinstance(prices, np.ndarray)
+    assert isinstance(prices_, np.ndarray)
+    assert_equal(prices, prices_)
 
 def test_buffer_referencing():
     synth = Synth()
@@ -14,15 +20,32 @@ def test_buffer_referencing():
     arr_default = np.array(dat)
     arr_ref = np.array(dat, copy=False)
     arr_copy = np.array(dat, copy=True)
+    dat[0] = 33333
+    assert arr_ref[0] == dat[0], "pybind is not returning by reference"
+    assert arr_copy[0] != dat[0]
+    if arr_default[0] == dat[0]:
+        print("default ndarray constructor references buffer without copy")
+    else:
+
+        print("default ndarray constructor copies buffer ")
+
+def test_assets_init():
+    asset1 = Asset("EURUSD")
+    asset2 = Asset("GBPUSD")
+    # import ipdb; ipdb.set_trace()
+    assets = Assets(['EURUSD', 'GBPUSD'])
+    assets_ = Assets([asset1, asset2])
+    assert all((ass1.code==ass2.code for ass1, ass2 in zip(assets, assets_)))
 
 def test_port_init():
-    port = Portfolio("port_1", nAssets=4, initCash=1_000_000)
+    assets = Assets(['EURUSD', 'GBPUSD'])
+    port = Portfolio("port_1", assets=assets, initCash=1_000_000)
 
 def test_account_init():
-    account = Account("coinbase_acc", nAssets=4, initCash=1_000_000)
+    assets = Assets(['EURUSD', 'GBPUSD'])
+    account = Account("coinbase_acc", assets=assets, initCash=1_000_000)
     # port = Portfolio(nAssets=3, initCash=1_000_000)
     # account.addPortfolio(port)
-    pass
 
 
 def test_broker_init():
@@ -46,6 +69,7 @@ if __name__ == "__main__":
 
     test_dataSource_init()
     test_buffer_referencing()
+    test_assets_init()
     test_port_init()
     test_account_init()
     test_broker_init()

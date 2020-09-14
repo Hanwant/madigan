@@ -8,14 +8,17 @@ namespace madigan{
                          std::vector<double> _amp, std::vector<double> _phase,
                          double _dX)
   {
-    std::cout << "initing params\n";
     this->freq=_freq;
     this->mu=_mu;
     this->amp=_amp;
     this->initPhase=_phase;
     this->x=_phase;
-    this->nAssets=_freq.size();
     this->dX=_dX;
+    for (int i=0; i < freq.size(); i++){
+      std::string assetName = "sine_" + std::to_string(i);
+      this->assets.push_back(Asset(assetName));
+    }
+    this->nAssets = assets.size();
     currentData.resize(nAssets);;
   }
 

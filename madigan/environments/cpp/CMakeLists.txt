@@ -5,7 +5,7 @@ set(PYTHON_INCLUDE_PATH "/home/hemu/miniconda3/envs/madigan/include/python3.7m")
 set(PYTHON_LIBRARIES "/home/hemu/miniconda3/envs/madigan/lib/libpython3.7m.so")
 
 set(CMAKE_CXX_STANDARD 17)
-set(CUSTOM_FLAGS "-O3 -march=native -ffast-math -fopenmp -mavx2 -mfma")# -DNDEBUG")#-g -fopt-info-vec")
+set(CUSTOM_FLAGS "-O3 -march=native -ffast-math -fopenmp -mavx2 -mfma -g")# -DNDEBUG")#-g -fopt-info-vec")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CUSTOM_FLAGS}")
 
 find_package(pybind11 REQUIRED)

@@ -9,22 +9,34 @@
 namespace madigan{
 
   using std::string;
-  typedef std::unordered_map<std::string, std::unique_ptr<Portfolio>> PortfolioBook;
+  // typedef std::unordered_map<std::string, std::shared_ptr<Portfolio>> PortfolioBook;
+  typedef std::unordered_map<std::string, Portfolio> PortfolioBook;
+  typedef std::unordered_map<std::string, std::vector<double>> AccountPortfolio;
 
   class Account{
   public:
-    Account();
-    Account(Portfolio *port){ addPortfolio(port);};
-    Account(string id, int nAssets, double initCash){ addPortfolio(id, nAssets, initCash);};
-    Account(int nAssets, double initCash){ addPortfolio(nAssets, initCash);};
+    Account(){};
+    Account(Portfolio &port) { addPortfolio(port);};
+    Account(string id, Assets assets, double initCash): ID(id){ addPortfolio(id, assets, initCash);};
+    Account(Assets assets, double initCash) { addPortfolio(assets, initCash);};
     ~Account(){};
-    void addPortfolio(Portfolio *port);
-    void addPortfolio(string id, int nAssets, double initCash);
-    void addPortfolio(int nAssets, double initCash);
+
+    const string id(){ return ID;}
+
+    // void addPortfolio(Portfolio &port);
+    void addPortfolio(Portfolio &port);
+    void addPortfolio(string id, Assets assets, double initCash);
+    void addPortfolio(Assets assets, double initCash);
+
+    AccountPortfolio portfolio();
+    double cash();
+    double eq();
+    double availableMargin();
+    double borrowedCash();
     friend class Broker;
   private:
     PortfolioBook Portfolios;
-    const string ID;
+    string ID;
   };
 
 } // namespace madigan

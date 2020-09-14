@@ -5,8 +5,12 @@
 #include <vector>
 #include <cstdint>
 
+#include <Eigen/Core>
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
+// #include <pybind11/eigen.h>
+
+#include "Assets.h"
 
 #define PI2 (3.141592653589793238463*2)
 
@@ -22,10 +26,17 @@ namespace madigan{
     T data;
   };
 
-  // typedef Data<std::pair<std::uint64_t, vector<double>>> PriceItem;
-  typedef vector<double> PriceVector;
+  typedef Eigen::VectorXd PriceVector;
+
+  struct DataItem{
+    PriceVector prices;
+    // TimeStamp timestamp;
+  };
 
   class DataSource{
+  public:
+    int nAssets;
+    Assets assets;
   public:
     virtual ~DataSource(){}
     // Data<T> nextData();
@@ -36,6 +47,7 @@ namespace madigan{
   class Synth: public DataSource{
   public:
     int nAssets;
+    Assets assets;
   public:
     Synth(); // use default values for parameters
     Synth(std::vector<double> freq, std::vector<double> mu,
