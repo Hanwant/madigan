@@ -3,66 +3,76 @@
 
 #include <vector>
 #include <string>
+#include <unordered_map>
+#include <iostream>
+
+#include<Eigen/Core>
 
 #include "Assets.h"
 
 
 namespace madigan{
 
-using std::string;
+  using Ledger=Eigen::VectorXd;
+  using std::string;
 
-struct Info{
-  std::string event;
-  std::vector<double> transactionPrices;
-  std::vector<double> transactionCosts;
+  struct Info{
+    std::string event;
+    std::vector<double> transactionPrices;
+    std::vector<double> transactionCosts;
 
-Info(std::string event, std::vector<double> transPrices, std::vector<double> transCosts):
-  event(event), transactionPrices(transPrices), transactionCosts(transCosts){}
+  Info(std::string event, std::vector<double> transPrices, std::vector<double> transCosts):
+    event(event), transactionPrices(transPrices), transactionCosts(transCosts){}
 
-Info(std::vector<double> transPrices, std::vector<double> transCosts):
-  event(""), transactionPrices(transPrices), transactionCosts(transCosts){}
-  Info(){};
+  Info(std::vector<double> transPrices, std::vector<double> transCosts):
+    event(""), transactionPrices(transPrices), transactionCosts(transCosts){}
+    Info(){};
 
-};
-
-class Portfolio {
- public:
-  Assets assets;
-  double initCash;
-
- public:
-  Portfolio(){};
- Portfolio(Assets assets, double initCash): ID("port_default"), assets(assets),
-    initCash(initCash){};
- Portfolio(string id, Assets assets, double initCash): ID(id), assets(assets),
-    initCash(initCash){
-    this->_portfolio = std::vector<double>(assets.size(), 0.);
   };
- Portfolio(string id, Assets assets, double initCash, std::vector<double> portfolio): ID(id), assets(assets),
-    initCash(initCash), _portfolio(portfolio){};
- Portfolio(string id, std::vector<string> assets, double initCash): ID(id), assets(assets),
-    initCash(initCash){
-    this->_portfolio = std::vector<double>(assets.size(), 0.);
-  };
- Portfolio(string id, std::vector<string> assets, double initCash, std::vector<double> portfolio): ID(id), assets(assets),
-    initCash(initCash), _portfolio(portfolio){};
-  ~Portfolio()=default;
-  int nAssets(){ return assets.size();};
-  string id(){ return ID;};
-  double cash(){ return _cash;};
-  std::vector<double> portfolio(){return _portfolio;};
-  std::vector<double> portfolioNormed();
-  double equity();
-  double availableMargin();
-  double borrowedCash();
 
-  friend class Broker;
 
- private:
-  string ID;
-  std::vector<double> _portfolio;
-  double _cash;
-};
+  class Portfolio {
+  public:
+    Portfolio(){};
+    Portfolio(Assets assets, double initCash);
+    Portfolio(string id, Assets assets, double initCash);
+    Portfolio(string id, Assets assets, double initCash, Ledger portfolio);
+    Portfolio(string id, std::vector<string> assets, double initCash);
+    Portfolio(string id, std::vector<string> assets, double initCash, Ledger portfolio);
+    ~Portfolio()=default;
+    string id() const { return id_;}
+    Assets assets() const {return assets_;}
+    std::unordered_map<string, unsigned int> assetIdx() const;
+    unsigned int assetIdx(const string code) const;
+    int nAssets() const { return assets_.size();}
+    double initCash() const {return initCash_;}
+    double cash() const { return cash_;}
+    Ledger portfolio() const {return portfolio_;}
+    Ledger portfolioNormed() const;
+    double equity() const;
+    double availableMargin() const;
+    double borrowedCash() const;
+
+    double operator[](string code) {
+      return portfolio_[assetIdx_[code]];
+    }
+
+    friend std::ostream& operator<<(std::ostream& os, const Portfolio& port);
+
+    friend class Broker;
+
+  private:
+    void registerAssets(Assets assets);
+    void registerAssets(Assets assets, std::vector<unsigned int> order);
+
+  private:
+    string id_="portfolio_default";
+    double initCash_=1'000'000;
+    Assets assets_;
+    Ledger portfolio_;
+    double cash_=initCash_;
+    std::unordered_map<string, unsigned int> assetIdx_;
+      };
 
 
 } /*namespace madigan*/

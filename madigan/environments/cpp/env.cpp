@@ -86,22 +86,27 @@ PYBIND11_MODULE(env, m){
 
   py::class_<Account>(m, "Account")
     .def(py::init<>())
+    .def(py::init<Portfolio> (), py::arg("portfolio"))
     .def(py::init<string, Assets, double> (), py::arg("id"), py::arg("assets"), py::arg("initCash")=double(1'000'000))
-    .def(py::init<Assets, double> (), py::arg("assets"), py::arg("initCash")=double(1'000'000));
-    // .def("portfolios", (AccountPortfolio(Account::*)()) &Account::portfolio,
-    //      "Return vector of asset holdings",
-    //      py::return_value_policy::copy);
+    .def(py::init<Assets, double> (), py::arg("assets"), py::arg("initCash")=double(1'000'000))
+    .def("portfolio", (Portfolio(Account::*)()) &Account::portfolio,
+         "Return default porfolio",
+         py::return_value_policy::copy)
+    .def("portfolios", (PortfolioBook(Account::*)()) &Account::portfolios,
+         "Return dict of porfolios",
+         py::return_value_policy::copy);
 
   py::class_<Portfolio>(m, "Portfolio")
     .def(py::init<>())
     .def(py::init<string, Assets, double> (), py::arg("id"), py::arg("assets"), py::arg("initCash")=double(1'000'000))
-    .def("portfolio", (vector<double>(Portfolio::*)()) &Portfolio::portfolio,
+    .def("portfolio", (Ledger(Portfolio::*)()) &Portfolio::portfolio,
          "Return vector of asset holdings",
          py::return_value_policy::copy);
 
-  // py::class_<Broker>(m, "Broker")
-  //   .def(py::init<string, int, double> (), py::arg("id"), py::arg("nAssets"), py::arg("initCash")=double(1'000'000))
-  //   .def(py::init<Account> (), py::arg("account"))
-  //   .def(py::init<Portfolio> (), py::arg("portfolio"));
+  py::class_<Broker>(m, "Broker")
+    .def(py::init<>())
+    .def(py::init<Account> (), py::arg("account"))
+    .def(py::init<Portfolio> (), py::arg("portfolio"))
+    .def(py::init<string, Assets, double> (), py::arg("AccId"), py::arg("assets"), py::arg("initCash")=double(1'000'000));
 
 }

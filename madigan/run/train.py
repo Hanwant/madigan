@@ -27,7 +27,7 @@ def plot_train_logs(train_logs, filter_cols=('prices', )):
 
 def list_2_dict(metrics: list):
     """
-    This function aggregates a list of (homogenous-keys) dicts into a dict of lists
+    aggregates a list of dicts (all with same keys) into a dict of lists
 
     the train_loop generator yield dictionaries of metrics at each iteration.
     this allows the loop to be interoperable in different scenarios

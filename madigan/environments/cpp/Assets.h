@@ -21,6 +21,12 @@ namespace madigan{
 
   struct Assets :public std::vector<Asset>{
     Assets(){};
+    // using std::vector<Asset>::std::vector<Asset>(std::initializer_list);
+    Assets(std::initializer_list<string> assetNames){
+      for(auto name: assetNames){
+        push_back(Asset(name));
+      }
+    };
     Assets(vector<string> assetNames){
       for(auto name: assetNames){
         push_back(Asset(name));

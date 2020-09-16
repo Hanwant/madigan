@@ -1,7 +1,7 @@
 import numpy as np
 from numpy import isclose
 from numpy.testing import assert_equal
-from madigan.environments.cpp import Portfolio, Synth, Account, Asset, Assets#, Broker, Env
+from madigan.environments.cpp import Portfolio, Synth, Account, Asset, Assets, Broker#, Env
 
 def test_dataSource_init():
     synth = Synth()
@@ -32,24 +32,37 @@ def test_buffer_referencing():
 def test_assets_init():
     asset1 = Asset("EURUSD")
     asset2 = Asset("GBPUSD")
-    # import ipdb; ipdb.set_trace()
     assets = Assets(['EURUSD', 'GBPUSD'])
     assets_ = Assets([asset1, asset2])
     assert all((ass1.code==ass2.code for ass1, ass2 in zip(assets, assets_)))
 
 def test_port_init():
     assets = Assets(['EURUSD', 'GBPUSD'])
-    port = Portfolio("port_1", assets=assets, initCash=1_000_000)
+    port1 = Portfolio()
+    port2 = Portfolio("port_1", assets=assets, initCash=1_000_000)
 
 def test_account_init():
     assets = Assets(['EURUSD', 'GBPUSD'])
-    account = Account("coinbase_acc", assets=assets, initCash=1_000_000)
-    # port = Portfolio(nAssets=3, initCash=1_000_000)
-    # account.addPortfolio(port)
+    port = Portfolio("REF PORT", assets, 1_000_000)
+    account1 = Account()
+    account2 = Account("coinbase_acc", assets=assets, initCash=1_000_000)
+    account3 = Account(assets=assets, initCash=1_000_000)
+    print("doing port init")
+    account4 = Account(port)
+    del port # ACCOUNT DOES NOT REFER TO PORT PASSED IN CONSTRUCTOR
+    print("account1 port", account1.portfolios())
+    print("account2 port", account2.portfolios())
+    print("account3 port", account3.portfolios())
+    print("account4 port", account4.portfolios())
 
 
 def test_broker_init():
-    pass
+    assets = Assets(['EURUSD', 'GBPUSD'])
+    account = Account("acc", assets, 1_000_000)
+    broker1 = Broker()
+    broker2 = Broker("broker_cons_acc", assets, 1_000_000)
+    broker3 = Broker(account)
+    broker4 = Broker(account.portfolio())
 
 def test_env_init():
     pass
