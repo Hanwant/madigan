@@ -19,7 +19,7 @@ namespace madigan{
       this->assets.push_back(Asset(assetName));
     }
     this->nAssets = assets.size();
-    currentData.resize(nAssets);;
+    currentData_.resize(nAssets);;
   }
 
   Synth::Synth(){
@@ -46,21 +46,21 @@ namespace madigan{
 
   const PriceVector& Synth::getData(){
     for (int i=0; i < nAssets; i++){
-      currentData[i] = mu[i] + amp[i] * std::sin(PI2*x[i]*freq[i]);
+      currentData_[i] = mu[i] + amp[i] * std::sin(PI2*x[i]*freq[i]);
       x[i] += dX;
     }
-    return currentData;
+    return currentData_;
   }
 
   const pybind11::array_t<double> Synth::getData_np(){
     for (int i=0; i < nAssets; i++){
-      currentData[i] = mu[i] + amp[i] * std::sin(PI2*x[i]*freq[i]);
+      currentData_[i] = mu[i] + amp[i] * std::sin(PI2*x[i]*freq[i]);
       x[i] += dX;
     }
     return pybind11::array_t<double>(
-                               {currentData.size()},
+                               {currentData_.size()},
                                {sizeof(double)},
-                               currentData.data()
+                               currentData_.data()
                                );
   }
 

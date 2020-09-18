@@ -76,6 +76,12 @@ void testBroker(){
   Broker broker4(account1.portfolio());
 
 }
+void testEnv(){
+  Assets assets{"sine1", "sine2", "sine3", "sine4"};
+  Synth dataSource1 = Synth();
+  Broker broker1 = Broker(assets, 1'00'000);
+  Env env = Env(&dataSource1, &broker1);
+}
 
 int main(){
 
@@ -83,12 +89,10 @@ int main(){
   testDataSource();
   testPortfolio();
   testAccount();
+  testBroker();
+  testEnv();
 
 
-  Assets assets{"sine1", "sine2", "sine3", "sine4"};
-  Synth dataSource = Synth();
-  Broker broker1 = Broker(assets, 1'00'000);
-  Env env = Env(&dataSource, broker1);
 
   return 0;
 }

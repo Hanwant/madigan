@@ -8,28 +8,15 @@
 
 #include<Eigen/Core>
 
+#include "DataTypes.h"
 #include "Assets.h"
 
 
 namespace madigan{
 
-  using Ledger=Eigen::VectorXd;
+  class Account; // forward declare for friend 
+
   using std::string;
-
-  struct Info{
-    std::string event;
-    std::vector<double> transactionPrices;
-    std::vector<double> transactionCosts;
-
-  Info(std::string event, std::vector<double> transPrices, std::vector<double> transCosts):
-    event(event), transactionPrices(transPrices), transactionCosts(transCosts){}
-
-  Info(std::vector<double> transPrices, std::vector<double> transCosts):
-    event(""), transactionPrices(transPrices), transactionCosts(transCosts){}
-    Info(){};
-
-  };
-
 
   class Portfolio {
   public:
@@ -49,6 +36,7 @@ namespace madigan{
     double cash() const { return cash_;}
     Ledger portfolio() const {return portfolio_;}
     Ledger portfolioNormed() const;
+    double usedMargin() const { return usedmargin.sum()}
     double equity() const;
     double availableMargin() const;
     double borrowedCash() const;
@@ -60,6 +48,7 @@ namespace madigan{
     friend std::ostream& operator<<(std::ostream& os, const Portfolio& port);
 
     friend class Broker;
+    friend class Account;
 
   private:
     void registerAssets(Assets assets);
@@ -69,8 +58,9 @@ namespace madigan{
     string id_="portfolio_default";
     double initCash_=1'000'000;
     Assets assets_;
-    Ledger portfolio_;
     double cash_=initCash_;
+    Ledger portfolio_;
+    Ledger usedMargin_;
     std::unordered_map<string, unsigned int> assetIdx_;
       };
 

@@ -17,6 +17,11 @@ namespace madigan{
     Asset(string assetName, string exchange): name(assetName), code(assetName),
                                               exchange(exchange){
     };
+    bool operator==(const Asset& other){
+      if(code == other.code && exchange == other.exchange){
+        return true;
+      } else return false;
+    }
   };
 
   struct Assets :public std::vector<Asset>{
@@ -38,6 +43,14 @@ namespace madigan{
       }
     }
   };
+
+  // typedef std::vector<Asset> Assets;
+  // template<>
+  // Assets::Assets(vector<string> assetNames){
+  //   for (auto name: assetNames){
+  //     push_back(Asset(name));
+  //   }
+  // }
 
 }
 

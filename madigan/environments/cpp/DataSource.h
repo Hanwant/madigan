@@ -11,6 +11,7 @@
 // #include <pybind11/eigen.h>
 
 #include "Assets.h"
+#include "Portfolio.h"
 
 #define PI2 (3.141592653589793238463*2)
 
@@ -19,19 +20,6 @@ namespace madigan{
 
   using std::vector;
 
-  template<typename T>
-  struct Data{
-    Data();
-    ~Data();
-    T data;
-  };
-
-  typedef Eigen::VectorXd PriceVector;
-
-  struct DataItem{
-    PriceVector prices;
-    // TimeStamp timestamp;
-  };
 
   class DataSource{
   public:
@@ -40,7 +28,8 @@ namespace madigan{
   public:
     virtual ~DataSource(){}
     // Data<T> nextData();
-    virtual const PriceVector &getData()=0;
+    virtual const PriceVector& getData()=0;
+    virtual PriceVector* currentData()=0;
   };
 
 
@@ -57,6 +46,7 @@ namespace madigan{
     // Data<T> getData();
     const PriceVector& getData() override;
     const pybind11::array_t<double> getData_np() ;
+    PriceVector* currentData(){ return &currentData_;}
 
   private:
     void initParams(std::vector<double> freq, std::vector<double> mu,
@@ -71,10 +61,10 @@ namespace madigan{
     vector<double> initPhase;
     vector<double> x;
 
-    PriceVector currentData;
+    PriceVector currentData_;
   };
 
-} // namespace madigan
+} // namespace oadigan
 
 
 #endif
