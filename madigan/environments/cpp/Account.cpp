@@ -3,19 +3,29 @@
 namespace madigan{
 
   void Account::addPortfolio(Portfolio port){
-    std::cout << "acc id: " << id() <<  " adding port: " << port << "\n";
-    if (portfolios_.find(port.id()) == portfolios_.end()){
-      portfolios_[port.id()] = port;
-      setDefaultPortfolio(port);
-      for(auto asset: port.assets()){
+    if (portfolioBook_.find(port.id()) == portfolioBook_.end()){
+      portfolios_.push_back(port);
+      Portfolio* m_port = &(portfolios_[portfolios_.size()-1]);
+      portfolioBook_[port.id()] = m_port;
+      if (portfolios_.size() == 1){
+        setDefaultPortfolio(m_port);
+        // std::cout << "Setting default port: " << m_port->id() << "\n";
+      }
+      for(auto asset: m_port->assets()){
         auto found =std::find(assets_.begin(), assets_.end(), asset);
         if (found == assets_.end()){
           assets_.push_back(asset);
+          defaultPrices_.push_back(0.);
         }
+      }
+      if (!registeredDataSource){
+          new (&currentPrices_) PriceVectorMap(defaultPrices_.data(), defaultPrices_.size());
+        }
+      else{
+        m_port->setDataSource(dataSource_);
       }
       cash_.conservativeResize(cash_.size()+1, Eigen::NoChange);
       borrowedCash_.conservativeResize(borrowedCash_.size()+1, Eigen::NoChange);
-      // port.cash_ = cash_(portfolios_.size()-1);
     }
     else{
       throw std::logic_error("Portfolio id must be unique and not already associated with Account");
@@ -32,45 +42,46 @@ namespace madigan{
     addPortfolio(id, assets, initCash);
   }
 
-  // PortfolioBook Account::portfolios(){
-  //   for(auto iter=portfolios_.begin(); iter!=portfolios_.end(); iter++){
-  //     std::cout<< "key: " << iter->first << "\n";
-  //     std::cout<< "val: " << iter->second<< "\n";
-  //   }
-  //   return portfolios_;
-  // }
   void Account::setDefaultPortfolio(string accId){
-    auto acc = portfolios_.find(accId);
-    if (acc != portfolios_.end()){
-      defaultPortfolio_ = &(acc->second);
+    auto acc = portfolioBook_.find(accId);
+    if (acc != portfolioBook_.end()){
+      defaultPortfolio_ = acc->second;
     }
   }
-  void Account::setDefaultPortfolio(Portfolio &portfolio){
-    auto found = portfolios_.find(portfolio.id());
-    if (found != portfolios_.end()){
-      defaultPortfolio_= &(found->second);
+  void Account::setDefaultPortfolio(Portfolio* portfolio){
+    auto found = portfolioBook_.find(portfolio->id());
+    if (found != portfolioBook_.end()){
+      defaultPortfolio_= found->second;
     }
     else{
-      addPortfolio(portfolio);
-      setDefaultPortfolio(portfolio);
+      addPortfolio(*portfolio);
+      setDefaultPortfolio(portfolio->id());
     }
   }
   // Ledger Account::portfolio(){
-  //   return portfolios_[];
+  //   return portfolioBook_[];
   // }
 
+  void Account::setDataSource(DataSource* source){
+    dataSource_ = source;
+    new (&currentPrices_) PriceVectorMap(source->currentData().data(), source->currentData().size());
+    for (auto&& port: portfolios_){
+      port.setDataSource(source);
+    }
+    registeredDataSource = true;
+  }
 
   double Account::equity(){
     double sum{0};
     for (auto port: portfolios_){
-      sum += port.second.portfolio_.dot(*currentPrices_);
+      sum += port.portfolio_.dot(currentPrices_);
     }
     sum += cash_.sum();
     return sum;
   }
 
   double Account::availableMargin(){
-    return cash() - borrowedMargin();
+    return cash(); //- borrowedMargin();
   }
 
 }

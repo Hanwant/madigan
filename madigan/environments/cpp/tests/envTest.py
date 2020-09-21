@@ -68,7 +68,10 @@ def test_env_init():
     pass
 
 def test_accounting_logic():
-    pass
+    assets = Assets(['EURUSD', 'GBPUSD'])
+    port = Portfolio("accounting_testing", assets, initCash=1_000_000)
+    broker = Broker(port)
+    broker.handleOrder()
 
 def test_env_interface():
     pass

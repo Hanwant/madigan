@@ -11,7 +11,8 @@
 // #include <pybind11/eigen.h>
 
 #include "Assets.h"
-#include "Portfolio.h"
+#include "DataTypes.h"
+// #include "Portfolio.h"
 
 #define PI2 (3.141592653589793238463*2)
 
@@ -26,10 +27,12 @@ namespace madigan{
     int nAssets;
     Assets assets;
   public:
+    // DataSource(const DataSource&) =delete;
+    // DataSource& operator=(const DataSource&) =delete;
     virtual ~DataSource(){}
     // Data<T> nextData();
     virtual const PriceVector& getData()=0;
-    virtual PriceVector* currentData()=0;
+    virtual const PriceVector& currentData() const=0;
   };
 
 
@@ -46,7 +49,7 @@ namespace madigan{
     // Data<T> getData();
     const PriceVector& getData() override;
     const pybind11::array_t<double> getData_np() ;
-    PriceVector* currentData(){ return &currentData_;}
+    const PriceVector& currentData() const{ return currentData_;}
 
   private:
     void initParams(std::vector<double> freq, std::vector<double> mu,

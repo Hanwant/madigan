@@ -8,42 +8,58 @@
 
 #include<Eigen/Core>
 
-#include "DataTypes.h"
 #include "Assets.h"
+#include "DataTypes.h"
+#include "DataSource.h"
 
 
 namespace madigan{
 
-  class Account; // forward declare for friend 
+  class Account; // forward declare for friend class declaration below
 
   using std::string;
 
   class Portfolio {
   public:
-    Portfolio(){};
+    /* Portfolio(){}; */
     Portfolio(Assets assets, double initCash);
     Portfolio(string id, Assets assets, double initCash);
     Portfolio(string id, Assets assets, double initCash, Ledger portfolio);
     Portfolio(string id, std::vector<string> assets, double initCash);
     Portfolio(string id, std::vector<string> assets, double initCash, Ledger portfolio);
     ~Portfolio()=default;
+
+    void setDataSource(DataSource* source);
+
     string id() const { return id_;}
     Assets assets() const {return assets_;}
     std::unordered_map<string, unsigned int> assetIdx() const;
     unsigned int assetIdx(const string code) const;
+    const DataSource* dataSource() const{ return dataSource_;}
+    const PriceVectorMap& currentPrices() const { return currentPrices_;}
+
     int nAssets() const { return assets_.size();}
     double initCash() const {return initCash_;}
     double cash() const { return cash_;}
     Ledger portfolio() const {return portfolio_;}
     Ledger portfolioNormed() const;
-    double usedMargin() const { return usedmargin.sum()}
+    /* double usedMargin() const { return usedmargin.sum()} */
+    double assetValue() const;
     double equity() const;
     double availableMargin() const;
+    const double borrowedMargin() const {return borrowedMargin_;};
     double borrowedCash() const;
-
     double operator[](string code) {
       return portfolio_[assetIdx_[code]];
     }
+    double operator[](int assetIdx) {
+      return portfolio_[assetIdx];
+    }
+
+    void handleTransaction(string asset, double tranactionPrice,
+                           double units, double transactionCost, double requiredMargin);
+    void handleTransaction(int assetIdx, double tranactionPrice,
+                           double units, double transactionCost, double requiredMargin);
 
     friend std::ostream& operator<<(std::ostream& os, const Portfolio& port);
 
@@ -61,7 +77,14 @@ namespace madigan{
     double cash_=initCash_;
     Ledger portfolio_;
     Ledger usedMargin_;
+    double borrowedMargin_{0.};
+
     std::unordered_map<string, unsigned int> assetIdx_;
+    bool registeredDataSource{false};
+    std::vector<double> defaultPrices_; // just to have some default prices (init to 0.) when datasource is na
+    PriceVectorMap currentPrices_{nullptr, 0};
+    DataSource* dataSource_{nullptr};
+
       };
 
 

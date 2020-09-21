@@ -44,7 +44,7 @@ namespace madigan{
   }
 
 
-  const PriceVector& Synth::getData(){
+  const PriceVector& Synth::getData() {
     for (int i=0; i < nAssets; i++){
       currentData_[i] = mu[i] + amp[i] * std::sin(PI2*x[i]*freq[i]);
       x[i] += dX;
