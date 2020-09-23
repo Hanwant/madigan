@@ -30,6 +30,7 @@ namespace madigan{
     vector<double> phase{0., 1., 2., 1.};
     initParams(freq, mu, amp, phase, dX);
   }
+
   Synth::Synth(std::vector<double> _freq, std::vector<double> _mu,
                std::vector<double> _amp, std::vector<double> _phase,
                double _dX){
@@ -43,6 +44,41 @@ namespace madigan{
     }
   }
 
+  Synth::Synth(Config config){
+    bool allParamsPresent{true};
+    if (config.find("generator_params") == config.end()){
+      throw ConfigError("config passed but doesn't contain generator params");
+      allParamsPresent = false;
+    }
+    Config params = std::any_cast<Config>(config["generator_params"]);
+    for (auto key: {"freq", "mu", "amp", "phase", "dX"}){
+      if (params.find(key) == params.end()){
+        allParamsPresent=false;
+        throw ConfigError("generator parameters don't have all required constructor arguments");
+      }
+    }
+    if (allParamsPresent){
+      vector<double> freq = std::any_cast<vector<double>>(params["freq"]);
+      vector<double> mu = std::any_cast<vector<double>>(params["mu"]);
+      vector<double> amp = std::any_cast<vector<double>>(params["amp"]);
+      vector<double> phase = std::any_cast<vector<double>>(params["phase"]);
+      double dX = std::any_cast<double>(params["dX"]);
+      initParams(freq, mu, amp, phase, dX);
+    }
+    else{
+      vector<double> freq{1., 0.3, 2., 0.5};
+      vector<double> mu{2., 2.1, 2.2, 2.3};
+      vector<double> amp{1., 1.2, 1.3, 1.};
+      vector<double> phase{0., 1., 2., 1.};
+      double dX{0.01};
+      initParams(freq, mu, amp, phase, dX);
+    }
+  }
+
+  Synth::Synth(pybind11::dict py_config): Synth::Synth(makeConfigFromPyDict(py_config)){
+    // Config config = makeConfigFromPyDict(py_config);
+
+  }
 
   const PriceVector& Synth::getData() {
     for (int i=0; i < nAssets; i++){

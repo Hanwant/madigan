@@ -134,15 +134,28 @@ void testBroker(){
 }
 void testEnv(){
   Assets assets{"sine1", "sine2", "sine3", "sine4"};
-  std::unique_ptr<DataSource> dataSource1 = std::make_unique<Synth>();
+  // std::unique_ptr<DataSource> dataSource1 = std::make_unique<Synth>();
   Broker broker1 = Broker(assets, 1'000'000);
-  Env env = Env(std::move(dataSource1), assets, 1'000'000);
+  Env env = Env("Synth", assets, 1'000'000);
 }
 
-void testEnvData(){
+void testEnvConfig(){
   Assets assets{"sine1", "sine2", "sine3", "sine4"};
-  std::unique_ptr<DataSource> dataSource1 = std::make_unique<Synth>();
-  Env env = Env(std::move(dataSource1), assets, 1'000'000);
+  vector<double> _freq{1., 0.3, 2., 0.5};
+  vector<double> _mu{2., 2.1, 2.2, 2.3};
+  vector<double> _amp{1., 1.2, 1.3, 1.};
+  vector<double> _phase{0., 1., 2., 1.};
+  double _dX = 0.01;
+  Config config{
+    {
+      "generator_params", Config{{"freq", _freq},
+                           {"mu", _mu},
+                           {"amp", _amp},
+                           {"phase", _phase},
+                           {"dX", _dX}}
+    }
+  };
+  Env env = Env("Synth", assets, 1'000'000, config);
 }
 
 
@@ -152,7 +165,8 @@ void testAccountingPortfolio(){
   // dataSource.getData();
   // Broker broker = Broker(assets, 1'000'000);
   std::unique_ptr<DataSource> dataSource1 = std::make_unique<Synth>();
-  Env env = Env(std::move(dataSource1), assets, 1'000'000);
+  // Env env = Env(std::move(dataSource1), assets, 1'000'000);
+  Env env = Env("Synth", assets, 1'000'000);
   // const PriceVector& sourceRef = env.dataSource()->getData();
   const PriceVector& envRef = env.currentData();
   std::cout << "env Ref: ";
@@ -179,9 +193,9 @@ int main(){
   std::cout<< "testEnv();\n";
   testEnv();
   std::cout<< "===========================================\n";
-  std::cout<< "testEnvData();\n";
+  std::cout<< "testEnvConfig();\n";
   std::cout<< "===========================================\n";
-  testEnvData();
+  testEnvConfig();
   std::cout<< "===========================================\n";
   std::cout<< "testAccountingportfolio();\n";
   std::cout<< "===========================================\n";

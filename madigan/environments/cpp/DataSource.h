@@ -8,10 +8,10 @@
 #include <Eigen/Core>
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
-// #include <pybind11/eigen.h>
 
 #include "Assets.h"
 #include "DataTypes.h"
+#include "Config.h"
 // #include "Portfolio.h"
 
 #define PI2 (3.141592653589793238463*2)
@@ -45,6 +45,8 @@ namespace madigan{
     Synth(std::vector<double> freq, std::vector<double> mu,
           std::vector<double> amp, std::vector<double> phase,
           double dX);
+    Synth(Config config);
+    Synth(pybind11::dict config);
     ~Synth(){}
     // Data<T> getData();
     const PriceVector& getData() override;

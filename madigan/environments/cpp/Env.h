@@ -3,13 +3,16 @@
 
 #include <vector>
 #include <memory>
+#include <stdexcept>
 
 #include "Assets.h"
 #include "DataSource.h"
 #include "Broker.h"
 
+namespace py=pybind11;
 
 namespace madigan{
+
 
   // template<typename T>
   class Env{
@@ -17,7 +20,10 @@ namespace madigan{
     // Env(DataSource* dataSource): dataSource(dataSource){
     //   assets = dataSource->assets;
     // };
-    inline Env(std::unique_ptr<DataSource> dataSource, Assets assets, double initCash);
+    // inline Env(std::unique_ptr<DataSource> dataSource, Assets assets, double initCash);
+    inline Env(string dataSourceType, Assets assets, double initCash);
+    inline Env(string dataSourceType, Assets assets, double initCash, Config config);
+    inline Env(string dataSourceType, Assets assets, double initCash, pybind11::dict config);
     // Env(DataSource* dataSource, Broker* broker);
     inline SRDI step(); // No action - I.e Hold
     SRDI step(int action); // Single Asset;
@@ -40,20 +46,33 @@ namespace madigan{
 
   };
 
-  Env::Env(std::unique_ptr<DataSource> dataSource, Assets assets, double initCash)
-    : dataSource_(std::move(dataSource))
+  Env::Env(string sourceType, Assets assets, double initCash)
   {
+    if(sourceType == "Synth"){
+      dataSource_ = std::make_unique<Synth>();
+    }
+    else throw NotImplemented("Only Synth as datasource is implemented");
+
     broker_ = std::make_unique<Broker>(assets, initCash);
     for (auto& acc: broker_->accounts_){
       acc.setDataSource(dataSource_.get());
     }
   };
+  Env::Env(string sourceType, Assets assets, double initCash, Config config)
+  {
+    if(sourceType == "Synth"){
+        dataSource_ = std::make_unique<Synth>(config);
+      }
+    else throw NotImplemented("only synth as dataource is implemented");
 
-  // Env::Env(DataSource* dataSource, Broker* broker): dataSource_(dataSource), broker_(broker){
-  //   for (auto acc: broker_->accountBook()){
-  //     acc.second->setDataSource(dataSource_);
-  //   }
-  // };
+    broker_ = std::make_unique<Broker>(assets, initCash);
+    for (auto& acc: broker_->accounts_){
+      acc.setDataSource(dataSource_.get());
+    }
+  };
+  Env::Env(string sourceType, Assets assets, double initCash, pybind11::dict py_config)
+    : Env(sourceType, assets, initCash, makeConfigFromPyDict(py_config)){};
+
 
   SRDI Env::step(){
     // PriceVector currentprices(*(dataSource_->currentData()));

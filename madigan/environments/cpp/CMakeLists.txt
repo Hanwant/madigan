@@ -24,7 +24,7 @@ link_libraries(${PYTHON_LIBRARIES})
 
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CWD ${CMAKE_CURRENT_SOURCE_DIR})
-set(HEADER_FILES Portfolio.h Broker.h Account.h DataSource.h Env.h)
+set(HEADER_FILES Portfolio.h Broker.h Account.h DataSource.h Env.h Config.h)
 set(SOURCE_FILES Portfolio.cpp Broker.cpp Account.cpp DataSource.cpp Env.cpp)
 set(TESTFOLDER tests/)
 # pybind11_add_module(env MODULE env.cpp Portfolio.cpp Env.cpp DataSource.cpp Broker.cpp)

@@ -1,24 +1,42 @@
-#ifndef DATAYPES_H_
-#define DATAYPES_H_
+#ifndef DATATYPES_H_
+#define DATATYPES_H_
 
 #include <memory>
+#include <unordered_map>
+#include <any>
 
 #include <Eigen/Core>
+#include <pybind11/pybind11.h>
+#include <pybind11/stl.h>
+
 
 namespace madigan{
 
-  // template<typename T>
-  // struct Data{
-  //   Data();
-  //   ~Data();
-  //   T data;
-  // };
+  using std::string;
+  using std::vector;
 
+  // ================================================================
+  // ========= Data Types implicitly converitble to numpy ===========
+  // ================================================================
   typedef Eigen::VectorXi ActionVector;
   typedef Eigen::VectorXd PriceVector;
   typedef Eigen::Map<const PriceVector> PriceVectorMap;
   typedef Eigen::VectorXd AmountVector;
   typedef Eigen::VectorXd Ledger;
+  // ================================================================
+  // ================== Custom Exceptions for project ===============
+  // ================================================================
+  class ConfigError: public std::logic_error
+  {
+  public:
+    ConfigError(std::string message) : std::logic_error(message) { };
+  };
+
+  class NotImplemented : public std::logic_error
+  {
+  public:
+    NotImplemented(std::string message) : std::logic_error(message) { };
+  };
 
   struct State{
     PriceVector price;
@@ -58,6 +76,10 @@ namespace madigan{
   // };
 
   typedef std::tuple<State, double, bool, std::unique_ptr<Info>> SRDI;
+
+
+
+
 
 
 }
