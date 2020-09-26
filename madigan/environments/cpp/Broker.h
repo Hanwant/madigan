@@ -49,9 +49,13 @@ namespace madigan{
     Broker(const Portfolio& portfolio);
     Broker(Assets assets, double initCash);
     Broker(string AccId, Assets assets, double initCash);
+    Broker(const Broker&)=delete;
+    Broker& operator=(const Broker&)=delete;
     ~Broker(){};
 
     void addAccount(const Account& account);
+    void addPortfolio(const Portfolio& port);
+    void addPortfolio(string accID, const Portfolio& port);
     void setDefaultAccount(string accId);
     void setDefaultAccount(Account* account);
     void setSlippage(double slippagePct=0., double slippageAbs=0.);
@@ -71,6 +75,14 @@ namespace madigan{
     const std::vector<Account>& accounts() const{return accounts_;}
     const DataSource* dataSource() const{return dataSource_;}
     const PriceVectorMap currentPrices() const{return currentPrices_;}
+    const Portfolio& portfolio() const { return *defaultPortfolio_; }
+    const Portfolio& portfolio(string portID) const;
+    vector<Portfolio> portfolios() const;
+    const vector<Portfolio>& portfolios(string accID) const {
+      return accountBook_.at(accID)->portfolios();}
+    const PortfolioBook& portfolioBook(string accID) const {
+      return accountBook_.at(accID)->portfolioBook(); }
+    std::unordered_map<string, Portfolio> portfolioBook() const;
 
     BrokerResponse handleEvent(AmountVector& units);
     BrokerResponse handleEvent(Order& order);
@@ -110,8 +122,9 @@ namespace madigan{
     std::unordered_map<string, unsigned int> assetIdx_;
     AccountBook accountBook_;
     std::vector<Account> accounts_;
-    Account* defaultAccount_;
-    Portfolio* defaultPortfolio_;
+    Account* defaultAccount_{nullptr};
+    string defaultAccID_;
+    Portfolio* defaultPortfolio_{nullptr};
 
     std::vector<double> defaultPrices_;
     bool registeredDataSource{false};
@@ -119,10 +132,10 @@ namespace madigan{
 
     DataSource* dataSource_{nullptr};
 
-    double slippagePct_;
-    double slippageAbs_;
-    double transactionPct_;
-    double transactionAbs_;
+    double slippagePct_{0.};
+    double slippageAbs_{0.};
+    double transactionPct_{0.};
+    double transactionAbs_{0.};
   };
 
 }

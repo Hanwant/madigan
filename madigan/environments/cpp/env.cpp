@@ -169,6 +169,10 @@ PYBIND11_MODULE(env, m){
          py::arg("Assets"), py::arg("initCash"))
     .def("setDataSource", &Account::setDataSource,
          "assign data source for current prices reference")
+    .def("setRequiredMargin", &Account::setRequiredMargin,
+         "set required Margin level account wide, takes proportion as input"
+         " I.e 0.1 for 10% margin or 10x levarage",
+         py::arg("requiredMargin"))
     .def("equity", (double(Account::*)() const) &Account::equity,
          "returns net equity")
     .def("cash", (double(Account::*)() const) &Account::cash,
@@ -236,20 +240,91 @@ PYBIND11_MODULE(env, m){
 
   py::class_<Broker>(m, "Broker")
     // .def(py::init<>())
-    // .def(py::init<Account&> (), py::arg("account"))
-    // .def(py::init<Portfolio&> (), py::arg("portfolio"))
+    .def(py::init<Account&> (), py::arg("account"))
+    .def(py::init<Portfolio&> (), py::arg("portfolio"))
     .def(py::init<Assets, double> (), py::arg("assets"), py::arg("initCash")=double(1'000'000))
     .def(py::init<string, Assets, double> (),
          py::arg("AccId"), py::arg("assets"), py::arg("initCash")=double(1'000'000))
+    .def("setDataSource", &Broker::setDataSource,
+         "set data source to query/link current prices to",
+         py::arg("DataSource object"))
+    .def("addAccount", &Broker::addAccount,
+         "add account by copying given account object")
+    .def("addPortfolio", (void (Broker::*)(const Portfolio&)) &Broker::addPortfolio,
+         "add port to default account by copying given port object",
+         py::arg("port"))
+    .def("addPortfolio", (void (Broker::*)(string, const Portfolio&)) &Broker::addPortfolio,
+         "add port to account specified by accID by copying given port object",
+         py::arg("accID"), py::arg("port"))
+    .def("setRequiredMargin", (void (Broker::*)(double)) &Broker::setRequiredMargin,
+         "set requiredMargin level for default Acc"
+        "takes margin level as a proprtion as input "
+         "I.e 0.1 for 10% reuqired margin or 10x levarage",
+         py::arg("requiredMarginLevel"))
+    .def("setRequiredMargin", (void (Broker::*)(string, double)) &Broker::setRequiredMargin,
+         "set requiredMargin level for specified Acc"
+         "takes margin level as a proprtion as input "
+         "I.e 0.1 for 10% reuqired margin or 10x levarage",
+         py::arg("accID"), py::arg("requiredMarginLevel"))
     .def("account", (const Account& (Broker::*)() const) &Broker::account,
          "Returns default account - useful if just one acc",
          py::return_value_policy::reference)
     .def("account", (const Account& (Broker::*)(string) const) &Broker::account,
          "Returns acc by accID. Throws out_of_range error if accID doesn't exist",
          py::return_value_policy::reference)
-    .def("accounts", (std::vector<Account>&(Broker::*)()) &Broker::accounts,
+    .def("accounts", (std::vector<Account>&(Broker::*)() const) &Broker::accounts,
          "Return list of accounts",
-         py::return_value_policy::reference);
+         py::return_value_policy::reference)
+    .def("portfolios", (std::vector<Portfolio>(Broker::*)() const) &Broker::portfolios,
+         "Return list of portfolios",
+         py::return_value_policy::move)
+    .def("portfolios", (const std::vector<Portfolio>&(Broker::*)(string accID) const) &Broker::portfolios,
+         "Return list of portfolios", py::arg("accID"),
+         py::return_value_policy::reference)
+    .def("portfolio", (const Portfolio&(Broker::*)() const) &Broker::portfolio,
+         "return default portfolio",
+         py::return_value_policy::copy)
+    .def("portfolio", (const Portfolio&(Broker::*)(string portID) const) &Broker::portfolio,
+         "return portfolio given specified ID", py::arg("portID"),
+         py::return_value_policy::reference)
+    .def("portfolioBook", (std::unordered_map<string, Portfolio> (Broker::*)() const)
+         &Broker::portfolioBook,
+         "Return dict of portfolios for all accounts",
+         py::return_value_policy::move)
+    .def("portfolioBook", (const PortfolioBook& (Broker::*)(string accID) const)
+         &Broker::portfolioBook,
+         "Return dict of portfolios for specific acc", py::arg("accID"),
+         py::return_value_policy::reference)
+    .def("handleTransaction", (std::pair<double, double>(Broker::*)(int, double) )
+         &Broker::handleTransaction,
+         "handle a transaction given asset index and units to purchase",
+         py::arg("assetIdx"), py::arg("units"),
+         py::return_value_policy::copy)
+    .def("handleTransaction", (std::pair<double, double>(Broker::*)(string, double) )
+         &Broker::handleTransaction,
+         "handle a transaction given asset code and units to purchase",
+         py::arg("assetCode"), py::arg("units"),
+         py::return_value_policy::copy)
+    .def("handleTransaction", (std::pair<double, double>(Broker::*)(string, int, double) )
+         &Broker::handleTransaction,
+         "handle a transaction given accID, asset index and units to purchase",
+         py::arg("accID"), py::arg("assetIdx"), py::arg("units"),
+         py::return_value_policy::copy)
+    .def("handleTransaction", (std::pair<double, double>(Broker::*)(string, string, double) )
+         &Broker::handleTransaction,
+         "handle a transaction given accID, asset code and units to purchase",
+         py::arg("accID"), py::arg("assetCode"), py::arg("units"),
+         py::return_value_policy::copy)
+    .def("handleTransaction", (std::pair<double, double>(Broker::*)(string, string, int, double) )
+         &Broker::handleTransaction,
+         "handle a transaction given accID, portID, asset index and units to purchase",
+         py::arg("accID"), py::arg("portID"), py::arg("assetIdx"), py::arg("units"),
+         py::return_value_policy::copy)
+    .def("handleTransaction", (std::pair<double, double>(Broker::*)(string, string, string, double) )
+         &Broker::handleTransaction,
+         "handle a transaction given accID, portID, asset index and units to purchase",
+         py::arg("accID"), py::arg("portID"), py::arg("assetCode"), py::arg("units"),
+         py::return_value_policy::copy);
 
   py::class_<Env>(m, "Env")
     .def(py::init<string, Assets, double> (),

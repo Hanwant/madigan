@@ -216,7 +216,10 @@ def test_acc_accounting_logic():
 
 def test_broker_init():
     assets = Assets(['EURUSD', 'GBPUSD', 'BTCUSD', 'ETHBTC'])
+    acc = Account("port_accounting_test", assets, 1_000_000)
     broker1 = Broker("broker_init_test", assets, 1_000_000)
+    broker2 = Broker(acc)
+    broker3 = Broker(acc.portfolio())
     print("broker1 accounts", broker1.accounts())
 
 def test_broker_data_ref():
@@ -228,10 +231,81 @@ def test_broker_data_ref():
     assert isinstance(acc.currentPrices(), np.ndarray)
     assert_equal(synth.getData(), acc.currentPrices())
 
+def compare_broker_transaction_ref(units, init_cash, required_margin):
+    assets = Assets(['EURUSD', 'GBPUSD', 'BTCUSD', 'ETHBTC'])
+    data_source = Synth(config)
+    assetIdx=0
+    broker = Broker("BrokerAcc", assets, init_cash)
+    broker.setDataSource(data_source)
+    broker.setRequiredMargin(required_margin)
+
+    current_prices = data_source.getData()
+    # acc calc
+    broker.handleTransaction(assetIdx, units)
+    # reference calc
+    cash, borrowed_margin, equity=transaction(units=units, init_cash=init_cash,
+                                                    prices=current_prices,
+                                                    assetIdx=assetIdx, margin=required_margin)
+    assert cash == broker.account().cash()
+    assert borrowed_margin == broker.account().borrowedMargin()
+    assert equity == broker.account().equity()
+
+def test_broker_accounting_logic():
+    compare_broker_transaction_ref(1000., 1_000_000, 1.) # buy on cash
+    compare_broker_transaction_ref(-1000., 1_000_000, 1.) # sell on cash
+    compare_broker_transaction_ref(1000., 1_000_000, .1) # buy on margin (0.1)
+    compare_broker_transaction_ref(-1000., 1_000_000, .1)# sell on margin (0.1)
+
+def test_broker_acc_port_routing():
+    assets = Assets(['EURUSD', 'GBPUSD', 'BTCUSD', 'ETHBTC'])
+    synth = Synth()
+    current_prices = synth.getData()
+    port = Portfolio("port_routing_test", assets, initCash=1_000_000)
+    broker = Broker("broker_acc", assets=assets, initCash=1_000_000)
+    port.setDataSource(synth)
+    broker.setDataSource(synth)
+    broker.addPortfolio(port)
+    broker.addPortfolio(Portfolio("manually_added_port", assets, 1_000_000))
+    broker.setRequiredMargin("broker_acc", 0.1)
+    ports = broker.portfolios()
+    assert (len(ports) == 3)
+    price = current_prices[0]
+    port.handleTransaction('EURUSD', price,
+                           10_000, 0., .1)
+    broker.handleTransaction('broker_acc', 'EURUSD', 10_000.)
+    broker.handleTransaction("broker_acc", "manually_added_port", 'EURUSD', 10_000)
+    manual_port = broker.portfolioBook()['manually_added_port']
+    manual_port_ref = broker.portfolio('manually_added_port')
+    acc1 = broker.account()
+    try:
+        assert port.equity == manual_port.equity == broker.account().equity()/len(ports), \
+            f'equity -> {port.equity} {manual_port.equity} {broker.account().equity()/len(ports)}'
+        assert port.cash == manual_port.cash == acc1.cash() - (len(ports)-1)*(1_000_000) +\
+            0.1*price*10_000
+        assert port.borrowedMargin == manual_port.borrowedMargin == acc1.borrowedMargin()/2
+        del port # no longer referenced
+        assert broker.portfolioBook()['port_routing_test'].cash == 1_000_000.
+        broker.handleTransaction('broker_acc', 'manually_added_port', 'EURUSD', 10_000.)
+        assert manual_port.cash > broker.account().cash('manually_added_port'), \
+            "portfolio from broker.portfolioBook() being referenced instead of copied"
+        assert manual_port.borrowedMargin < broker.account().borrowedMargin('manually_added_port'), \
+            "portfolio from broker.portfolioBook() being referenced instead of copied"
+        assert manual_port_ref.cash == broker.account().cash('manually_added_port'), \
+            "portfolio from broker.portfolio(id) being copied instead of referenced"
+        assert manual_port_ref.borrowedMargin == broker.account().borrowedMargin('manually_added_port'), \
+            "portfolio from broker.portfolio(id) being copied instead of referenced"
+        try:
+            acc1.portfolio("port doesn't exist") # THROWS INDEX ERROR
+        except IndexError:
+            pass
+    except AssertionError as E:
+        import traceback; traceback.print_exc()
+        import ipdb; ipdb.set_trace();
+        # raise E
+
 def test_env_init():
     env1 = Env("Synth", Assets(['BTCUSD', 'ETHUSD']), 1_000_000)
     env2 = Env("Synth", Assets(['BTCUSD', 'ETHUSD']), 1_000_000, config)
-
 
 
 def test_env_interface():
@@ -244,14 +318,21 @@ if __name__ == "__main__":
     test_dataSource_init()
     test_buffer_referencing()
     test_assets_init()
+
     test_port_init()
     test_port_data_ref()
     test_port_accounting_logic()
+
     test_account_init()
     test_acc_data_ref()
     test_acc_port_routing()
     test_acc_accounting_logic()
+
     test_broker_init()
+    test_broker_data_ref()
+    test_broker_acc_port_routing()
+    test_broker_accounting_logic()
+
     test_env_init()
     test_env_interface()
     print("TESTS COMPLETED")

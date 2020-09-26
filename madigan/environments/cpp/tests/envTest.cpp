@@ -100,7 +100,8 @@ void testAccount(){
     }
   }
   for (const auto& port: account4.portfolios()){
-    const DataSource* datSource=port.dataSource();
+    const DataSource* datSource{nullptr};
+    datSource=port.dataSource();
     assert(dataSource.getData().isApprox(port.currentPrices()));
     assert(dataSource.getData().isApprox(datSource->currentData()));
   }
@@ -136,7 +137,8 @@ void testBroker(){
   broker2.setDataSource(pdataSource);
   std::cout << broker1.account().portfolio().currentPrices()<< "\n";
   std::cout << broker2.account().portfolio().currentPrices()<< "\n";
-  for(auto& broker: {broker1, broker2}){
+  for(const auto pbroker: {&broker1, &broker2}){
+    const Broker& broker = *pbroker;
     const PriceVector& sourceRef = dataSource.currentData();
     const PriceVector& brokerRef= broker.currentPrices();
     const PriceVector& accountRef= broker.account().currentPrices();

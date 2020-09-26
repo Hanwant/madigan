@@ -42,6 +42,9 @@ namespace madigan {
       if(accounts_.size() == 1){
         setDefaultAccount(m_account);
       }
+      else{
+        setDefaultAccount(defaultAccID_); // vector has been resized - update memory location
+      }
       for(auto asset: m_account->assets()){
         auto found =std::find(assets_.begin(), assets_.end(), asset);
         if (found == assets_.end()){
@@ -65,11 +68,19 @@ namespace madigan {
   void Broker::setDefaultAccount(string accID){
     Account* acc = accountBook_.at(accID);
     defaultAccount_ = acc;
+    defaultAccID_ = accID;
     defaultPortfolio_ = acc->defaultPortfolio_;
   }
 
   void Broker::setDefaultAccount(Account *account){
     setDefaultAccount(account->id());
+  }
+
+  void Broker::addPortfolio(const Portfolio& port){
+    defaultAccount_->addPortfolio(port);
+  }
+  void Broker::addPortfolio(string accID, const Portfolio& port){
+    accountBook_.at(accID)->addPortfolio(port);
   }
 
   void Broker::setDataSource(DataSource* source){
@@ -89,6 +100,35 @@ namespace madigan {
     transactionPct_ = transactionPct;
     transactionAbs_ = transactionAbs;
   };
+
+  const Portfolio& Broker::portfolio(string portID) const{
+    for (const auto& acc: accounts_){
+      auto found = acc.portfolioBook().find(portID);
+      if (found != acc.portfolioBook().end()){
+        return *(found->second);
+      }
+    }
+    throw std::out_of_range(string("Broker doesn't contain portfolio with id: ")+portID);
+  }
+
+  std::vector<Portfolio> Broker::portfolios() const{
+    std::vector<Portfolio> ports;
+    for(const auto& acc: accounts_){
+      for (const auto& port: acc.portfolios()){
+        ports.push_back(port);
+      }
+    }
+    return ports;
+  }
+  std::unordered_map<string, Portfolio> Broker::portfolioBook() const{
+    std::unordered_map<string, Portfolio> book;
+    for (const auto& acc: accounts_){
+      for (const auto& port: acc.portfolios()){
+        book.emplace(port.id(), port);
+      }
+      return book;
+    }
+  }
 
   BrokerResponse Broker::handleEvent(AmountVector& units){
     return handleAction(units);

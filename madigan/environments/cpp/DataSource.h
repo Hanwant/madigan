@@ -38,7 +38,6 @@ namespace madigan{
 
   class Synth: public DataSource{
   public:
-    int nAssets;
     Assets assets;
   public:
     Synth(); // use default values for parameters
@@ -49,6 +48,7 @@ namespace madigan{
     Synth(pybind11::dict config);
     ~Synth(){}
     // Data<T> getData();
+    int nAssets() const { return nAssets_;}
     const PriceVector& getData() override;
     const pybind11::array_t<double> getData_np() ;
     const PriceVector& currentData() const{ return currentData_;}
@@ -59,7 +59,8 @@ namespace madigan{
                     double dX);
 
   private:
-    double dX;
+    int nAssets_{0};
+    double dX{0};
     vector<double> freq;
     vector<double> mu;
     vector<double> amp;

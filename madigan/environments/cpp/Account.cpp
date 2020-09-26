@@ -81,6 +81,9 @@ namespace madigan{
       if (portfolios_.size() == 1){
         setDefaultPortfolio(m_port);
       }
+      else{
+        setDefaultPortfolio(defaultPortID_); // BECAUSE VECTOR HAS BEEN RESIZED - UPDATE MEMORY LOCATION
+      }
       for(auto asset: m_port->assets()){
         auto found = std::find(assets_.begin(), assets_.end(), asset);
         if (found == assets_.end()){
