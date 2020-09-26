@@ -54,19 +54,6 @@ namespace madigan{
     virtual ~Info(){};
   };
 
-  struct BrokerResponse: public Info{
-  public:
-    std::string event;
-    PriceVector transactionPrices;
-    PriceVector transactionCosts;
-
-  public:
-    BrokerResponse(){};
-    BrokerResponse(PriceVector transPrices, PriceVector transCosts):
-      event(""), transactionPrices(transPrices), transactionCosts(transCosts){}
-    BrokerResponse(std::string event, PriceVector transPrices, PriceVector transCosts):
-      event(event), transactionPrices(transPrices), transactionCosts(transCosts){}
-  };
 
   // struct SRDI{
   //   State state;

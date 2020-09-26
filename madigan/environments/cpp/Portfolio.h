@@ -1,5 +1,5 @@
-#ifndef PORTFOLIO_H_
-#define PORTFOLIO_H_
+#ifndef LEDGER_H_
+#define LEDGER_H_
 
 #include <vector>
 #include <string>
@@ -27,6 +27,10 @@ namespace madigan{
     Portfolio(string id, Assets assets, double initCash, Ledger portfolio);
     Portfolio(string id, std::vector<string> assets, double initCash);
     Portfolio(string id, std::vector<string> assets, double initCash, Ledger portfolio);
+    Portfolio(const Portfolio& other);
+    Portfolio& operator=(const Portfolio& other);
+    Portfolio(const Portfolio&& other)=delete;
+    Portfolio& operator=(const Portfolio&& other)=delete;
     ~Portfolio()=default;
 
     void setDataSource(DataSource* source);
@@ -41,19 +45,19 @@ namespace madigan{
     int nAssets() const { return assets_.size();}
     double initCash() const {return initCash_;}
     double cash() const { return cash_;}
-    Ledger portfolio() const {return portfolio_;}
-    Ledger portfolioNormed() const;
+    const Ledger& ledger() const {return ledger_;}
+    Ledger ledgerNormed() const;
     /* double usedMargin() const { return usedmargin.sum()} */
-    double assetValue() const;
+    double assetValue() const { return ledger_.dot(currentPrices_); }
     double equity() const;
     double availableMargin() const;
-    const double borrowedMargin() const {return borrowedMargin_;};
+    const double borrowedMargin() const {return borrowedMargin_;}
     double borrowedCash() const;
     double operator[](string code) {
-      return portfolio_[assetIdx_[code]];
+      return ledger_[assetIdx_[code]];
     }
     double operator[](int assetIdx) {
-      return portfolio_[assetIdx];
+      return ledger_[assetIdx];
     }
 
     void handleTransaction(string asset, double tranactionPrice,
@@ -71,11 +75,11 @@ namespace madigan{
     void registerAssets(Assets assets, std::vector<unsigned int> order);
 
   private:
-    string id_="portfolio_default";
+    string id_="ledger_default";
     double initCash_=1'000'000;
     Assets assets_;
     double cash_=initCash_;
-    Ledger portfolio_;
+    Ledger ledger_;
     Ledger usedMargin_;
     double borrowedMargin_{0.};
 
@@ -90,4 +94,4 @@ namespace madigan{
 
 } /*namespace madigan*/
 
-#endif /*  PORTFOLIO_H_ */
+#endif /*  LEDGER_H_ */

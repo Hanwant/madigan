@@ -1,5 +1,6 @@
 #include <iostream>
 #include <assert.h>
+#include <stdexcept>
 
 #include "DataSource.h"
 #include "Assets.h"
@@ -42,13 +43,13 @@ void testPortfolio(){
     std::cout << "repr: ";
     std::cout << port << "\n";
     std::cout << "ledger" << "\n";
-    std::cout << port.portfolio() << "\n";
+    std::cout << port.ledger() << "\n";
     std::cout << "current prices pre registering data source" << "\n";
     std::cout << port.currentPrices()<< "\n";
     std::cout << "current prices post registering data source" << "\n";
     port.setDataSource(&dataSource);
     std::cout << port.currentPrices()<< "\n";
-    assert(port.portfolio().size() == port.nAssets());
+    assert(port.ledger().size() == port.nAssets());
   }
   portfolio1.setDataSource(&dataSource);
   portfolio2.setDataSource(&dataSource);
@@ -86,6 +87,7 @@ void testAccount(){
   assert(dataSource.getData().isApprox(account1.currentPrices()));
   assert(account2.currentPrices().isApprox(account3.currentPrices()));
 
+  int i = 0;
   for (auto& acc: {account1, account2, account3}){
     const PortfolioBook portBook= acc.portfolioBook();
     const Portfolio& port=acc.portfolio();
@@ -102,17 +104,33 @@ void testAccount(){
     assert(dataSource.getData().isApprox(port.currentPrices()));
     assert(dataSource.getData().isApprox(datSource->currentData()));
   }
+
+  bool caught{false};
+  try{
+    account1.portfolio("portfolio_doesn't_exist");
+  }
+  catch (const std::out_of_range& oor){
+    std::cerr<< "Expected exception caught: \n";
+    std::cerr << "Portfolio doesn't exist: " << oor.what() << "\n";
+    caught=true;
+  }
+  assert(caught);
+
 }
 
 void testBroker(){
   Assets assets{"sine1", "sine2", "sine3", "sine4"};
-  Account account1(assets, 1'000'000);
+  Account account1("acc01", assets, 1'000'000);
   Broker broker1(assets, 1'000'000);
   Broker broker2("testing account", assets, 1'000'000);
-  // Broker broker3(account1);
-  // Broker broker4(*(account1.portfolio()));
+  Broker broker3(account1);
+  Broker broker4(account1.portfolio());
   Synth dataSource = Synth();
   DataSource* pdataSource = &dataSource;
+
+  assert(&account1 != &broker3.account("acc01"));
+  assert(&account1.portfolio() != &broker3.account("acc01").portfolio());
+
   dataSource.getData();
   broker1.setDataSource(pdataSource);
   broker2.setDataSource(pdataSource);
@@ -158,24 +176,65 @@ void testEnvConfig(){
   Env env = Env("Synth", assets, 1'000'000, config);
 }
 
+void testTransactionHandling(){
+  Assets assets{"sine1", "sine2", "sine3", "sine4"};
+  Synth dataSource = Synth();
+  dataSource.getData();
+  Portfolio port = Portfolio("port_for_acc_init", assets, 1'000'000);
+  Account acc = Account("Account_Test", assets, 1'000'000);
+  Broker broker = Broker("BrokerAcc", assets, 1'000'000);
+  broker.setDataSource(&dataSource);
+  broker.addAccount(acc);
+  broker.setRequiredMargin("Account_Test", 0.1);
+  port.setDataSource(&dataSource);
+  acc.setDataSource(&dataSource);
+  acc.addPortfolio("manually_added_port", assets, 1'000'000);
+  acc.addPortfolio(port);
+  acc.setDefaultPortfolio(acc.portfolios()[0].id());
+  double price = dataSource.currentData()[0];
+  port.handleTransaction(0, price, 10'000,
+                         0., 1.);
+  port.handleTransaction("sine1", price, 10'000,
+                         0., 1.);
+  acc.handleTransaction(0, price, 10'000,
+                         0., 1.);
+  acc.handleTransaction("sine1", price, 10'000,
+                         0., 1.);
+  acc.handleTransaction("manually_added_port", 0, price, 10'000,
+                        0., 1.);
+  acc.handleTransaction("manually_added_port", "sine1", price, 10'000,
+                        0., 1.);
+  broker.handleTransaction("sine1", 10'000);
+  broker.handleTransaction(0, 10'000);
+  broker.handleTransaction("BrokerAcc", "sine1", 10'000);
+  broker.handleTransaction("BrokerAcc", 0, 10'000);
+  broker.handleTransaction("Account_Test", "port_0", "sine1", 10'000);
+  broker.handleTransaction("Account_Test", "port_0", 0, 10'000);
+  assert(acc.equity() == 3*port.equity());
+  assert(acc.cash() == 3*1'000'000 - 4*price*10'000);
+  assert(acc.borrowedMargin() == 2*port.borrowedMargin());
+  assert(broker.account("Account_Test").cash() == 1'000'000-2*0.1*price*10'000);
+  assert(broker.account("Account_Test").borrowedMargin() == 2*0.9*price*10'000);
+}
 
 void testAccountingPortfolio(){
-  // Synth dataSource = Synth();
-  Assets assets{"sine1", "sine2", "sine3", "sine4"};
-  // dataSource.getData();
-  // Broker broker = Broker(assets, 1'000'000);
-  std::unique_ptr<DataSource> dataSource1 = std::make_unique<Synth>();
-  // Env env = Env(std::move(dataSource1), assets, 1'000'000);
-  Env env = Env("Synth", assets, 1'000'000);
-  // const PriceVector& sourceRef = env.dataSource()->getData();
-  const PriceVector& envRef = env.currentData();
-  std::cout << "env Ref: ";
-  std::cout << envRef << "\n";
-
+  ///////////////////////////////
+  // Done via envTest.py - easier
+  ///////////////////////////////
+  // // Synth dataSource = Synth();
+  // Assets assets{"sine1", "sine2", "sine3", "sine4"};
+  // // dataSource.getData();
+  // // Broker broker = Broker(assets, 1'000'000);
+  // std::unique_ptr<DataSource> dataSource1 = std::make_unique<Synth>();
+  // // Env env = Env(std::move(dataSource1), assets, 1'000'000);
+  // Env env = Env("Synth", assets, 1'000'000);
+  // // const PriceVector& sourceRef = env.dataSource()->getData();
+  // const PriceVector& envRef = env.currentData();
+  // std::cout << "env Ref: ";
+  // std::cout << envRef << "\n";
 }
 
 int main(){
-
 
   std::cout<< "===========================================\n";
   std::cout<< "testDataSource();\n";
@@ -197,9 +256,16 @@ int main(){
   std::cout<< "===========================================\n";
   testEnvConfig();
   std::cout<< "===========================================\n";
+  std::cout<< "testTransactionHandling();\n";
+  std::cout<< "===========================================\n";
+  testTransactionHandling();
+  std::cout<< "===========================================\n";
   std::cout<< "testAccountingportfolio();\n";
   std::cout<< "===========================================\n";
   testAccountingPortfolio();
+  std::cout<< "===========================================\n";
+  std::cout<< "TESTS COMPLETED\n";
+  std::cout<< "===========================================\n";
 
 
   return 0;

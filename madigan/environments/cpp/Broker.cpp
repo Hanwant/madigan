@@ -3,17 +3,26 @@
 
 namespace madigan {
 
-  // Broker::Broker(Account& account){
-  //   addAccount(account);
-  // }
+  Broker::Broker(const Account& account){
+    addAccount(account);
+  }
 
-  // Broker::Broker(Portfolio& portfolio){
-  //   Account account(portfolio);
-  //   addAccount(account);
-  // }
+  Broker::Broker(const Portfolio& portfolio){
+    Account account(portfolio);
+    addAccount(account);
+  }
+
+  std::unordered_map<string, Account> Broker::accountBookCopy() const {
+    std::unordered_map<string, Account> book;
+    for (const auto& acc: accounts_){
+      book.emplace(make_pair(acc.id(), acc));
+    }
+    return book;
+  }
 
   Broker::Broker(Assets assets, double initCash){
-    Account account(assets, initCash);
+    string id = "acc_" + std::to_string(accounts_.size());
+    Account account(id, assets, initCash);
     addAccount(account);
   }
 
@@ -22,11 +31,14 @@ namespace madigan {
     addAccount(account);
   }
 
-  bool Broker::addAccount(Account& account){
+  void Broker::addAccount(const Account& account){
     if (accountBook_.find(account.id()) == accountBook_.end()){
       accounts_.push_back(account);
       Account* m_account = &(accounts_[accounts_.size()-1]);
-      accountBook_[account.id()] = m_account;
+      for(auto& acc: accounts_){ // because vector has been resized
+        accountBook_[acc.id()] = &acc;
+      }
+      // accountBook_[account.id()] = m_account;
       if(accounts_.size() == 1){
         setDefaultAccount(m_account);
       }
@@ -34,6 +46,7 @@ namespace madigan {
         auto found =std::find(assets_.begin(), assets_.end(), asset);
         if (found == assets_.end()){
           assets_.push_back(asset);
+          assetIdx_[asset.code] = assets_.size()-1;
           defaultPrices_.push_back(0.);
         }
       }
@@ -43,29 +56,20 @@ namespace madigan {
       else{
         m_account->setDataSource(dataSource_);
       }
-      return true;
     }
     else{
-      return false;
+      throw std::logic_error((string)"acc with this id already exists!"+" ("+account.id()+")");
     }
   }
 
-  void Broker::setDefaultAccount(string accId){
-    auto acc = accountBook_.find(accId);
-    if (acc != accountBook_.end()){
-      defaultAccount_ = acc->second;
-    }
+  void Broker::setDefaultAccount(string accID){
+    Account* acc = accountBook_.at(accID);
+    defaultAccount_ = acc;
+    defaultPortfolio_ = acc->defaultPortfolio_;
   }
 
   void Broker::setDefaultAccount(Account *account){
-    auto found = accountBook_.find(account->id());
-    if (found != accountBook_.end()){
-      defaultAccount_ = found->second;
-    }
-    else{
-      addAccount(*account);
-      setDefaultAccount(account->id());
-    }
+    setDefaultAccount(account->id());
   }
 
   void Broker::setDataSource(DataSource* source){
@@ -97,12 +101,13 @@ namespace madigan {
     if (units.size() == defaultAccount_->assets_.size()){
       for (int assetIdx=0; assetIdx<units.size(); assetIdx++){
         double unit = units[assetIdx];
-        std::pair<double, double> transactionInfo;
+        double transPrice{0.};
+        double transCost{0.};
         if(unit != 0. && checkRisk(assetIdx, unit)){
-          transactionInfo = transaction(assetIdx, unit);
+          auto [transPrice, transCost] = handleTransaction(assetIdx, unit);
         }
-        transPrices(assetIdx) = transactionInfo.first;
-        transCosts(assetIdx) = transactionInfo.second;
+        transPrices(assetIdx) = transPrice;
+        transCosts(assetIdx) = transCost;
       }
     }
     return BrokerResponse(transPrices, transCosts);
@@ -110,33 +115,67 @@ namespace madigan {
 
   bool Broker::checkRisk(int assetIdx, double units){
     // double currencyAmount=currentPrices_.operator()(assetIdx) * units;
-    double currencyAmount=currentPrices_(assetIdx) * units;
-    if (currencyAmount < defaultAccount_->availableMargin() - defaultAccount_->maintenanceMargin()){
-      return true;
-    }
-    else return false;
+    // double currencyAmount=currentPrices_(assetIdx) * units;
+    // if (currencyAmount < defaultAccount_->availableMargin() - defaultAccount_->maintenanceMargin()){
+    //   return true;
+    // }
+    // else return false;
+    return true;
   }
 
-  std::pair<double, double> Broker::transaction(int assetIdx, double units){
-    // Acounting for purchasing assets
-    double transactionPrice = applySlippage(currentPrices_(assetIdx), units);
-    double& currentUnits = defaultAccount_->defaultPortfolio_->portfolio_[assetIdx];
-    currentUnits += units;
-    // Accounting for adjusting cash
-    double currencyAmount= transactionPrice*units;
-    double transactionCost = abs(units)*transactionPct_ + transactionAbs_;
-    defaultAccount_->defaultPortfolio_->cash_ -= (currencyAmount + transactionCost);
+  // Private version called by all public handleTransaction overloads
+  std::pair<double, double> Broker::handleTransaction(Account* acc, Portfolio* port,
+                                                      int assetIdx, double units){
+    double transactionPrice = applySlippage(currentPrices_(assetIdx) ,units);
+    double transactionCost = getTransactionCost(units);
+    port->handleTransaction(assetIdx, transactionPrice, units,
+                            transactionCost, acc->requiredMargin());
     return std::make_pair(transactionPrice, transactionCost);
+  }
+  std::pair<double, double> Broker::handleTransaction(int assetIdx, double units){
+    Account* acc = defaultAccount_;
+    Portfolio* port = acc->defaultPortfolio_;
+    return handleTransaction(acc, port, assetIdx, units);
+  }
+  std::pair<double, double> Broker::handleTransaction(string assetCode, double units){
+    Account* acc = defaultAccount_;
+    Portfolio* port = acc->defaultPortfolio_;
+    unsigned int assetIdx = assetIdx_.at(assetCode);
+    return handleTransaction(acc, port, assetIdx, units);
+  }
+  std::pair<double, double> Broker::handleTransaction(string accID, int assetIdx,
+                                                      double units){
+    Account* acc = accountBook_.at(accID);
+    Portfolio* port = acc->defaultPortfolio_;
+    return handleTransaction(acc, port, assetIdx, units);
+  }
+  std::pair<double, double> Broker::handleTransaction(string accID, string assetCode,
+                                                      double units){
+    Account* acc = accountBook_.at(accID);
+    Portfolio* port = acc->defaultPortfolio_;
+    unsigned int assetIdx = assetIdx_.at(assetCode);
+    return handleTransaction(acc, port, assetIdx, units);
+  }
+  std::pair<double, double> Broker::handleTransaction(string accID, string portID,
+                                                      int assetIdx, double units){
+    Account* acc = accountBook_.at(accID);
+    Portfolio* port = acc->portfolioBook_.at(portID);
+    return handleTransaction(acc, port, assetIdx, units);
+  }
+  std::pair<double, double> Broker::handleTransaction(string accID, string portID,
+                                                      string assetCode, double units){
+    Account* acc = accountBook_.at(accID);
+    Portfolio* port = acc->portfolioBook_.at(portID);
+    unsigned int assetIdx = assetIdx_.at(assetCode);
+    return handleTransaction(acc, port, assetIdx, units);
   }
 
   double Broker::applySlippage(double price, double units){
     double slippage{(price*slippagePct_) + slippageAbs_};
-    if (units<0){ // if selling
-      return price - slippage;
-    }
-    else{ // if buying
-      return price + slippage;
-    }
+    return units<0? price-slippage: price+slippage;
   }
+  double Broker::getTransactionCost(double units){
+    return abs(units)*transactionPct_ + transactionAbs_;
 
+  }
 }

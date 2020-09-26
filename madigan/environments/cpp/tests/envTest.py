@@ -65,12 +65,12 @@ def test_port_init():
     assets = Assets(['EURUSD', 'GBPUSD', 'BTCUSD', 'ETHBTC'])
     # port1 = Portfolio()
     port1 = Portfolio("port_1", assets=assets, initCash=1_000_000)
-    print(port1.nAssets())
-    print(port1.assets())
-    print(port1.equity())
-    print(port1.cash())
-    print(type(port1.currentPrices()), port1.currentPrices())
-    print(type(port1.portfolio()), port1.portfolio())
+    print("nAssets: ", port1.nAssets)
+    print("assets: ", port1.assets)
+    print("equity: ", port1.equity)
+    print("cash: ", port1.cash)
+    assert isinstance(port1.currentPrices, np.ndarray)
+    assert isinstance(port1.ledger, np.ndarray)
     # port.currentPrices()
 
 def test_port_data_ref():
@@ -79,8 +79,8 @@ def test_port_data_ref():
     ref = synth.getData()
     port1 = Portfolio("port_1", assets=assets, initCash=1_000_000)
     port1.setDataSource(synth)
-    print(type(port1.currentPrices()), port1.currentPrices())
-    assert_equal(synth.getData(), port1.currentPrices())
+    assert isinstance(port1.currentPrices, np.ndarray)
+    assert_equal(synth.getData(), port1.currentPrices)
 
 @pytest.mark.skip("util")
 def transaction(units, init_cash, prices, assetIdx=0, margin=1., num_trans=4):
@@ -114,9 +114,9 @@ def compare_port_transaction_ref(units, init_cash, required_margin):
     cash, borrowed_margin, equity=transaction(units=units, init_cash=init_cash,
                                                     prices=current_prices,
                                                     assetIdx=assetIdx, margin=required_margin)
-    assert cash == port.cash()
-    assert borrowed_margin == port.borrowedMargin()
-    assert equity == port.equity()
+    assert cash == port.cash
+    assert borrowed_margin == port.borrowedMargin
+    assert equity == port.equity
 
 def test_port_accounting_logic():
     compare_port_transaction_ref(1000., 1_000_000, 1.) # buy on cash
@@ -125,7 +125,7 @@ def test_port_accounting_logic():
     compare_port_transaction_ref(-1000., 1_000_000, .1)# sell on margin (0.1)
 
 def test_account_init():
-    assets = Assets(['EURUSD', 'GBPUSD'])
+    assets = Assets(['EURUSD', 'GBPUSD', 'BTCUSD', 'ETHBTC'])
     port = Portfolio("REF PORT", assets, 1_000_000)
     account1 = Account("coinbase_acc", assets=assets, initCash=1_000_000)
     account2 = Account(assets=assets, initCash=1_000_000)
@@ -135,26 +135,98 @@ def test_account_init():
     print("account2 ports", account2.portfolios())
     print("account3 ports", account3.portfolios())
 
-
 def test_acc_data_ref():
-    assets = Assets(['EURUSD', 'GBPUSD'])
+    assets = Assets(['EURUSD', 'GBPUSD', 'BTCUSD', 'ETHBTC'])
     synth = Synth()
     ref = synth.getData()
-    port1 = Portfolio("port_1", assets=assets, initCash=1_000_000)
-    port1.setDataSource(synth)
-    print(type(port1.currentPrices()), port1.currentPrices())
-    assert_equal(synth.getData(), port1.currentPrices())
+    acc = Account("acc_test_data_ref", assets=assets, initCash=1_000_000)
+    acc.setDataSource(synth)
+    assert isinstance(acc.currentPrices(), np.ndarray)
+    assert_equal(synth.getData(), acc.currentPrices())
+
+def test_acc_port_routing():
+    assets = Assets(['EURUSD', 'GBPUSD', 'BTCUSD', 'ETHBTC'])
+    synth = Synth()
+    current_prices = synth.getData()
+    port = Portfolio("port_routing_test", assets, initCash=1_000_000)
+    port.setDataSource(synth)
+    acc1 = Account("acc_test_data_ref", assets=assets, initCash=1_000_000)
+    acc1.setDataSource(synth)
+    acc2 = Account("acc_test_data_ref", assets=assets, initCash=1_000_000)
+    acc2.setDataSource(synth)
+    acc1.addPortfolio(port) # seg faults despite explicit cast from py::obj on c++ side
+    acc1.addPortfolio("manually_added_port", assets, 1_000_000)
+    acc1.addPortfolio(assets, 1_000_000)
+    acc2.addPortfolio(port)
+    ports = acc1.portfolios()
+    assert (len(ports) == 4)
+    port.handleTransaction('EURUSD', current_prices[0],
+                           10_000, 0., .1)
+    acc1.handleTransaction('manually_added_port', 'EURUSD', current_prices[0],
+                           10_000., 0., .1)
+    acc2.handleTransaction('EURUSD', current_prices[0],
+                           10_000, 0., .1)
+    manual_port = acc1.portfolioBook()['manually_added_port']
+    try:
+        assert port.equity == manual_port.equity == acc1.equity() / len(ports)
+        assert port.cash == manual_port.cash == acc1.cash() - ((len(ports)-1) * 1_000_000)
+        assert port.borrowedMargin == manual_port.borrowedMargin == acc1.borrowedMargin()
+        del port # no longer referenced
+        acc1.portfolioBook()['port_routing_test'] # test that acc contains own copy of port
+        assert acc1.portfolioBook()['port_routing_test'].borrowedMargin == 0.
+        acc1.handleTransaction('manually_added_port', 'EURUSD', current_prices[0],
+                            10_000., 0., .1)
+        assert manual_port.cash > acc1.cash('manually_added_port'), \
+            "portfolio from account api being referenced instead of copied"
+        assert manual_port.borrowedMargin < acc1.borrowedMargin('manually_added_port'), \
+            "portfolio from account api being referenced instead of copied"
+        try:
+            acc1.portfolio("port doesn't exist") # THROWS INDEX ERROR
+        except IndexError:
+            pass
+    except AssertionError:
+        import ipdb; ipdb.set_trace();
+
+
+@pytest.mark.skip("util")
+def compare_acc_transaction_ref(units, init_cash, required_margin):
+    assets = Assets(['EURUSD', 'GBPUSD', 'BTCUSD', 'ETHBTC'])
+    data_source = Synth(config)
+    assetIdx=0
+    acc = Account("port_accounting_test", assets, init_cash)
+    acc.setDataSource(data_source)
+
+    current_prices = data_source.getData()
+    # acc calc
+    acc.handleTransaction(assetIdx, current_prices[assetIdx],
+                           units, 0., required_margin)
+    # reference calc
+    cash, borrowed_margin, equity=transaction(units=units, init_cash=init_cash,
+                                                    prices=current_prices,
+                                                    assetIdx=assetIdx, margin=required_margin)
+    assert cash == acc.cash()
+    assert borrowed_margin == acc.borrowedMargin()
+    assert equity == acc.equity()
+
+def test_acc_accounting_logic():
+    compare_acc_transaction_ref(1000., 1_000_000, 1.) # buy on cash
+    compare_acc_transaction_ref(-1000., 1_000_000, 1.) # sell on cash
+    compare_acc_transaction_ref(1000., 1_000_000, .1) # buy on margin (0.1)
+    compare_acc_transaction_ref(-1000., 1_000_000, .1)# sell on margin (0.1)
 
 def test_broker_init():
-    assets = Assets(['EURUSD', 'GBPUSD'])
-    # account = Account("acc", assets, 1_000_000)
+    assets = Assets(['EURUSD', 'GBPUSD', 'BTCUSD', 'ETHBTC'])
     broker1 = Broker("broker_init_test", assets, 1_000_000)
-    # broker2 = Broker(account)
-    # broker3 = Broker(account.portfolio())
-    # del account
     print("broker1 accounts", broker1.accounts())
-    # print("broker2 accounts", broker2.accounts())
-    # print("broker3 accounts", broker3.accounts())
+
+def test_broker_data_ref():
+    assets = Assets(['EURUSD', 'GBPUSD', 'BTCUSD', 'ETHBTC'])
+    synth = Synth()
+    ref = synth.getData()
+    acc = Account("acc_test_data_ref", assets=assets, initCash=1_000_000)
+    acc.setDataSource(synth)
+    assert isinstance(acc.currentPrices(), np.ndarray)
+    assert_equal(synth.getData(), acc.currentPrices())
 
 def test_env_init():
     env1 = Env("Synth", Assets(['BTCUSD', 'ETHUSD']), 1_000_000)
@@ -174,10 +246,13 @@ if __name__ == "__main__":
     test_assets_init()
     test_port_init()
     test_port_data_ref()
+    test_port_accounting_logic()
     test_account_init()
     test_acc_data_ref()
+    test_acc_port_routing()
+    test_acc_accounting_logic()
     test_broker_init()
     test_env_init()
-    test_port_accounting_logic()
     test_env_interface()
+    print("TESTS COMPLETED")
 

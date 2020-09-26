@@ -17,9 +17,9 @@ namespace madigan{
   Portfolio::Portfolio(string id,
                        Assets assets,
                        double initCash,
-                       Ledger portfolio): id_(id), assets_(assets),
+                       Ledger ledger): id_(id), assets_(assets),
                                                        initCash_(initCash), cash_(initCash),
-                                                       portfolio_(portfolio){
+                                                       ledger_(ledger){
   };
   Portfolio::Portfolio(string id,
                        std::vector<string> assets,
@@ -32,12 +32,54 @@ namespace madigan{
                        double initCash,
                        Ledger portfolio)
     : id_(id), assets_(assets), initCash_(initCash), cash_(initCash),
-      portfolio_(portfolio){
+      ledger_(portfolio){
     registerAssets(assets);
   };
 
+  Portfolio::Portfolio(const Portfolio& other){
+    id_ = other.id_;
+    initCash_ = other.initCash_;
+    cash_ = other.cash_;
+    borrowedMargin_ = other.borrowedMargin_;
+    assets_ = other.assets_;
+    assetIdx_ = other.assetIdx_;
+    ledger_ = other.ledger_;
+    registeredDataSource = other.registeredDataSource;
+    dataSource_ = other.dataSource_;
+    defaultPrices_ = other.defaultPrices_;
+    if(registeredDataSource){
+      new (&currentPrices_) PriceVectorMap(other.currentPrices_.data(),
+                                           defaultPrices_.size());
+    }
+    else{
+      new (&currentPrices_) PriceVectorMap(defaultPrices_.data(), defaultPrices_.size());
+    }
+    // std::cout << "PORT COPY CONSTR: " << id_ << "\n";
+  }
+  Portfolio& Portfolio::operator=(const Portfolio& other){
+    id_ = other.id_;
+    initCash_ = other.initCash_;
+    cash_ = other.cash_;
+    borrowedMargin_ = other.borrowedMargin_;
+    assets_ = other.assets_;
+    assetIdx_ = other.assetIdx_;
+    ledger_ = other.ledger_;
+    registeredDataSource = other.registeredDataSource;
+    dataSource_ = other.dataSource_;
+    defaultPrices_ = other.defaultPrices_;
+    if(registeredDataSource){
+      new (&currentPrices_) PriceVectorMap(other.currentPrices_.data(),
+                                           defaultPrices_.size());
+    }
+    else{
+      new (&currentPrices_) PriceVectorMap(defaultPrices_.data(), defaultPrices_.size());
+    }
+    // std::cout << "PORT COPY ASSIGN: " << id_ << "\n";
+    return *(this);
+  }
+
   void Portfolio::registerAssets(Assets assets){
-    this->portfolio_ = Ledger::Zero(assets.size());
+    this->ledger_ = Ledger::Zero(assets.size());
     usedMargin_ = Ledger::Zero(assets.size());
     for (unsigned int i=0; i<assets.size(); i++){
       string code = assets[i].code;
@@ -60,29 +102,33 @@ namespace madigan{
     registeredDataSource = true;
   }
 
-  double Portfolio::equity() const{
-    double sum=0;
-    // for(int i=0; i<portfolio_.size(); i++){
-    //   sum += (portfolio_(i) * currentPrices_(i));
-    // }
-    sum += portfolio_.dot(currentPrices_);
-    sum += cash_;
-    sum -= borrowedMargin_;
-    return sum;
+  std::ostream& operator<<(std::ostream& os, const Portfolio& port){
+    os << "Port id: " << port.id() << " equity: " << port.equity() << " cash: " << port.cash() << "\n";
+    return os;
   };
 
   std::unordered_map<string, unsigned int> Portfolio::assetIdx() const{
     return assetIdx_;
   }
   unsigned int Portfolio::assetIdx(const string code) const {
-    return portfolio_(assetIdx_.find(code)->second);
+    return ledger_(assetIdx_.find(code)->second);
   }
 
-  std::ostream& operator<<(std::ostream& os, const Portfolio& port){
-    os << "Port id: " << port.id() << " equity: " << port.equity() << "\n";
-    return os;
+  double Portfolio::equity() const{
+    double sum=0;
+    sum += cash_;
+    sum += assetValue();
+    sum -= borrowedMargin_;
+    return sum;
   };
 
+  Ledger Portfolio::ledgerNormed() const{
+    return (ledger_.array() / equity()).matrix();
+  }
+
+  double Portfolio::availableMargin() const{
+    return cash_ - borrowedMargin_;
+  }
 
   void Portfolio::handleTransaction(string asset, double transactionPrice, double units,
                                     double transactionCost, double requiredMargin){
@@ -96,12 +142,12 @@ namespace madigan{
     double borrowedMargin = amount_in_base_currency - usedMargin;
     borrowedMargin_ += borrowedMargin;
     cash_ -= (usedMargin+transactionCost);
-    portfolio_[assetIdx] += units;
-
+    ledger_[assetIdx] += units;
     if (borrowedMargin_<0.){
       cash_ -= borrowedMargin_;
       borrowedMargin_=0.;
     }
   }
+
 
 }

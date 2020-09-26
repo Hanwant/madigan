@@ -24,6 +24,7 @@ namespace madigan{
     inline Env(string dataSourceType, Assets assets, double initCash);
     inline Env(string dataSourceType, Assets assets, double initCash, Config config);
     inline Env(string dataSourceType, Assets assets, double initCash, pybind11::dict config);
+    Env(const Env& other)=delete;
     // Env(DataSource* dataSource, Broker* broker);
     inline SRDI step(); // No action - I.e Hold
     SRDI step(int action); // Single Asset;
@@ -31,8 +32,8 @@ namespace madigan{
     SRDI step(int action, unsigned int assetIdx, string portforlioID); // Multiple portfolios
     SRDI step(int action, unsigned int assetIdx, string portforlioID, string accountID); // Multiple accounts
     SRDI step(ActionVector actions); // Multiple Assets
-    SRDI step(ActionVector actions, string portforlioID); // Multiple portfolios
-    SRDI step(ActionVector actions, string portforlioID, string accountID); // Multiple accounts
+    SRDI step(ActionVector actions, string accID); // specific acc, default port
+    SRDI step(ActionVector actions, string portforlioID, string accountID); // specific acc, specific port
     SRDI step(Order order);
     ~Env(){};
 
