@@ -1,10 +1,11 @@
 import pytest
 import numpy as np
 from numpy import isclose
-from numpy.testing import assert_equal
+from numpy.testing import assert_equal, assert_allclose
 from madigan.utils import time_profile, Config
 from madigan.environments import Synth as Synth_py
-from madigan.environments.cpp import Portfolio, Synth, Account, Asset, Assets, Broker, Env
+from madigan.environments.cpp import Asset, Assets, RiskInfo
+from madigan.environments.cpp import Synth, Portfolio, Account, Broker, Env
 
 config = Config({'data_source_type': 'Synth',
                  'generator_params': {
@@ -14,6 +15,7 @@ config = Config({'data_source_type': 'Synth',
                      'phase':[0., 1.0, 2., 1.],
                      'dX':0.01
                  }})
+assets = Assets(['BTCUSD', 'ETHUSD', 'BTCETH', 'EURUSD'])
 
 def test_assets_init():
     asset1 = Asset("EURUSD")
@@ -105,11 +107,11 @@ def compare_port_transaction_ref(units, init_cash, required_margin):
     assetIdx=0
     port = Portfolio("port_accounting_test", assets, init_cash)
     port.setDataSource(data_source)
+    port.setRequiredMargin(required_margin)
 
     current_prices = data_source.getData()
     # port calc
-    port.handleTransaction(assetIdx, current_prices[assetIdx],
-                           units, 0., required_margin)
+    port.handleTransaction(assetIdx, current_prices[assetIdx], units, 0.)
     # reference calc
     cash, borrowed_margin, equity=transaction(units=units, init_cash=init_cash,
                                                     prices=current_prices,
@@ -160,12 +162,16 @@ def test_acc_port_routing():
     acc2.addPortfolio(port)
     ports = acc1.portfolios()
     assert (len(ports) == 4)
+    port.setRequiredMargin(0.1)
+    acc1.setRequiredMargin(0.1)
+    acc1.setRequiredMargin("manually_added_port", 0.1)
+    acc2.setRequiredMargin(0.1)
     port.handleTransaction('EURUSD', current_prices[0],
-                           10_000, 0., .1)
+                           10_000, 0.)
     acc1.handleTransaction('manually_added_port', 'EURUSD', current_prices[0],
-                           10_000., 0., .1)
+                           10_000., 0.)
     acc2.handleTransaction('EURUSD', current_prices[0],
-                           10_000, 0., .1)
+                           10_000, 0.)
     manual_port = acc1.portfolioBook()['manually_added_port']
     try:
         assert port.equity == manual_port.equity == acc1.equity() / len(ports)
@@ -175,7 +181,7 @@ def test_acc_port_routing():
         acc1.portfolioBook()['port_routing_test'] # test that acc contains own copy of port
         assert acc1.portfolioBook()['port_routing_test'].borrowedMargin == 0.
         acc1.handleTransaction('manually_added_port', 'EURUSD', current_prices[0],
-                            10_000., 0., .1)
+                            10_000., 0.)
         assert manual_port.cash > acc1.cash('manually_added_port'), \
             "portfolio from account api being referenced instead of copied"
         assert manual_port.borrowedMargin < acc1.borrowedMargin('manually_added_port'), \
@@ -195,11 +201,11 @@ def compare_acc_transaction_ref(units, init_cash, required_margin):
     assetIdx=0
     acc = Account("port_accounting_test", assets, init_cash)
     acc.setDataSource(data_source)
+    acc.setRequiredMargin(required_margin)
 
     current_prices = data_source.getData()
     # acc calc
-    acc.handleTransaction(assetIdx, current_prices[assetIdx],
-                           units, 0., required_margin)
+    acc.handleTransaction(assetIdx, current_prices[assetIdx], units, 0.)
     # reference calc
     cash, borrowed_margin, equity=transaction(units=units, init_cash=init_cash,
                                                     prices=current_prices,
@@ -267,11 +273,12 @@ def test_broker_acc_port_routing():
     broker.addPortfolio(port)
     broker.addPortfolio(Portfolio("manually_added_port", assets, 1_000_000))
     broker.setRequiredMargin("broker_acc", 0.1)
+    broker.setRequiredMargin("broker_acc", "manually_added_port", 0.1)
     ports = broker.portfolios()
     assert (len(ports) == 3)
     price = current_prices[0]
-    port.handleTransaction('EURUSD', price,
-                           10_000, 0., .1)
+    port.setRequiredMargin(0.1)
+    port.handleTransaction('EURUSD', price, 10_000, 0.)
     broker.handleTransaction('broker_acc', 'EURUSD', 10_000.)
     broker.handleTransaction("broker_acc", "manually_added_port", 'EURUSD', 10_000)
     manual_port = broker.portfolioBook()['manually_added_port']
@@ -299,18 +306,124 @@ def test_broker_acc_port_routing():
         except IndexError:
             pass
     except AssertionError as E:
+        # import traceback; traceback.print_exc()
+        # import ipdb; ipdb.set_trace();
+        raise E
+
+def test_broker_interface():
+    assets = Assets(['EURUSD', 'GBPUSD', 'BTCUSD', 'ETHBTC'])
+    synth = Synth()
+    current_prices = synth.getData()
+    broker = Broker("broker_acc", assets=assets, initCash=1_000_000)
+    broker.setDataSource(synth)
+    brokerResponse = broker.handleAction([10_000, -10_000, 50_000, -200_000])
+    # import ipdb; ipdb.set_trace()
+
+
+def test_successive_accounting():
+    synth = Synth()
+    port = Portfolio("successive", assets, 1_000_000)
+    port.setDataSource(synth)
+    port.setRequiredMargin(0.1)
+    prices = synth.getData()
+    port.handleTransaction(0, prices[0], 10_000) # BUY 10_000
+    assert port.assetValue == prices[0]*10_000
+    port.handleTransaction(0, prices[0], 10_000) # BUY 10_000
+    assert port.cash == 1_000_000. - 0.1 * prices[0] * 20_000
+    assert port.assetValue == prices[0]*20_000
+    assert port.usedMargin == 0.1*prices[0]*20_000
+    assert port.borrowedMargin == 0.9*prices[0]*20_000
+    assert port.borrowedAssetValue == 0.
+    port.handleTransaction(0, prices[0], -20_000) # SELL 20_000
+    assert_allclose(port.cash, 1_000_000., rtol=1e-12)
+    assert_allclose(port.assetValue, 0., rtol=1e-12)
+    assert_allclose(port.usedMargin, 0., rtol=1e-12)
+    assert_allclose(port.borrowedMargin, 0., rtol=1e-12)
+    assert_allclose(port.borrowedAssetValue, 0., rtol=1e-12)
+    port.handleTransaction(0, prices[0], -20_000) # SELL 20_000
+    assert_allclose(port.cash, 1_000_000 + prices[0]*20_000., rtol=1e-12)
+    assert_allclose(port.assetValue, prices[0]*-20_000, rtol=1e-12)
+    assert_allclose(port.usedMargin, 0., rtol=1e-12)
+    assert_allclose(port.borrowedMargin, 0.)
+    assert_allclose(port.borrowedAssetValue, prices[0]*-20_000, rtol=1e-12)
+
+def test_multiasset_accounting():
+    assets = Assets(['BTCUSD', 'ETHUSD', 'BTCETH', 'EURUSD'])
+    synth = Synth()
+    port = Portfolio("successive", assets, 1_000_000)
+    port.setDataSource(synth)
+    port.setRequiredMargin(0.1)
+    prices = synth.getData()
+    port.handleTransaction("BTCUSD", prices[0], 20_000) # BUY 10_000
+    assert port.cash == 1_000_000. - 0.1 * prices[0] * 20_000
+    assert port.assetValue == prices[0]*20_000
+    assert port.usedMargin == 0.1*prices[0]*20_000
+    assert port.borrowedMargin == 0.9*prices[0]*20_000
+    assert port.borrowedAssetValue == 0.
+    port.handleTransaction("EURUSD", prices[3], -20_000) # SELL 20_000
+    cash = 1_000_000. - (0.1*prices[0]*20_000) + (prices[3]*20_000)
+    balance = 1_000_000 - (0.1 * prices[0] * 20_000)
+    assetValue = prices[0]*20_000 + prices[3]*-20_000
+    # usedMargin = 0.1*(prices[0]*20_000 + prices[3]*-20_000)
+    usedMargin = 0.1*prices[0]*20_000
+    borrowedMargin = 0.9*prices[0]*20_000
+    borrowedAssetValue = prices[3]*-20_000
+    try:
+        assert_allclose(port.cash, cash, rtol=1e-12)
+        assert_allclose(port.balance, balance, rtol=1e-12)
+        assert_allclose(port.assetValue, assetValue, rtol=1e-12)
+        assert_allclose(port.usedMargin, usedMargin, rtol=1e-12)
+        assert_allclose(port.borrowedMargin, borrowedMargin, rtol=1e-12)
+        assert_allclose(port.borrowedAssetValue, borrowedAssetValue, rtol=1e-12)
+    except AssertionError as E:
         import traceback; traceback.print_exc()
-        import ipdb; ipdb.set_trace();
-        # raise E
+        import ipdb; ipdb.set_trace()
+
+def test_risk_handling():
+    assets = Assets(['BTCUSD', 'ETHUSD', 'BTCETH', 'EURUSD'])
+    synth = Synth()
+    prices = synth.getData()
+    prices[1] = 4
+    price = prices[1]
+    port = Portfolio("margin_call", assets, 1_000_000)
+    port.setDataSource(synth)
+    reqM = 0.1
+    mainM = 1.
+    port.setRequiredMargin(reqM)
+    port.setMaintenanceMargin(mainM)
+    port.handleTransaction("ETHUSD", price, 1_000_000)
+    assert port.checkRisk(-1. + (port.balance + port.pnl)/reqM) == RiskInfo.green
+    assert port.checkRisk( 0. + (port.balance + port.pnl)/reqM) == RiskInfo.insuff_margin
+    assert port.checkRisk( 1. + (port.balance + port.pnl)/reqM) == RiskInfo.insuff_margin
+    new_price = 3.51
+    prices[1] = new_price
+    assert port.checkRisk() == RiskInfo.green
+    assert port.checkRisk(1_000_000) == RiskInfo.green
+    new_price = 3.49
+    prices[1] = new_price
+    assert port.checkRisk() == RiskInfo.margin_call
+    assert port.checkRisk(-1. + (port.balance + port.pnl)/reqM) == RiskInfo.margin_call
+    assert port.checkRisk(0.) == RiskInfo.margin_call
+    loss = 1_000_000*(price-new_price)
+    equity = 1_000_000 - loss
+    assert_allclose(-loss, port.pnl, rtol=1e-12)
+    port.handleTransaction("ETHUSD", new_price, -1_000_000)
+    cash = equity
+    assert_allclose(equity, port.equity, rtol=1e-12)
+    assert_allclose(cash, port.cash, rtol=1e-12)
+    # import ipdb; ipdb.set_trace()
+
 
 def test_env_init():
-    env1 = Env("Synth", Assets(['BTCUSD', 'ETHUSD']), 1_000_000)
-    env2 = Env("Synth", Assets(['BTCUSD', 'ETHUSD']), 1_000_000, config)
+    assets = Assets(['BTCUSD', 'ETHUSD', 'BTCETH', 'EURUSD'])
+    env1 = Env("Synth", assets, 1_000_000)
+    env2 = Env("Synth", assets, 1_000_000, config)
 
 
 def test_env_interface():
-    env1 = Env("Synth", Assets(['BTCUSD', 'ETHUSD']), 1_000_000)
-    env2 = Env("Synth", Assets(['BTCUSD', 'ETHUSD']), 1_000_000, config)
+    assets = Assets(['BTCUSD', 'ETHUSD', 'BTCETH', 'EURUSD'])
+    env1 = Env("Synth", assets, 1_000_000)
+    env2 = Env("Synth", assets, 1_000_000, config)
 
 
 if __name__ == "__main__":
@@ -332,6 +445,11 @@ if __name__ == "__main__":
     test_broker_data_ref()
     test_broker_acc_port_routing()
     test_broker_accounting_logic()
+    test_broker_interface()
+
+    test_successive_accounting()
+    test_multiasset_accounting()
+    test_risk_handling()
 
     test_env_init()
     test_env_interface()

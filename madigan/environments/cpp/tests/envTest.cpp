@@ -1,6 +1,7 @@
 #include <iostream>
 #include <assert.h>
 #include <stdexcept>
+#include <iomanip>
 
 #include "DataSource.h"
 #include "Assets.h"
@@ -137,11 +138,11 @@ void testBroker(){
   broker2.setDataSource(pdataSource);
   std::cout << broker1.account().portfolio().currentPrices()<< "\n";
   std::cout << broker2.account().portfolio().currentPrices()<< "\n";
-  for(const auto pbroker: {&broker1, &broker2}){
+  for(const auto& pbroker: {&broker1, &broker2}){
     const Broker& broker = *pbroker;
     const PriceVector& sourceRef = dataSource.currentData();
-    const PriceVector& brokerRef= broker.currentPrices();
-    const PriceVector& accountRef= broker.account().currentPrices();
+    const PriceVectorMap& brokerRef= broker.currentPrices();
+    const PriceVectorMap& accountRef= broker.account().currentPrices();
     const PriceVectorMap& portfolioRef= broker.account().portfolio().currentPrices();
     const Portfolio& portfolio = broker.account().portfolio();
     const  DataSource* datSource=portfolio.dataSource();
@@ -151,33 +152,19 @@ void testBroker(){
     assert(dataSource.getData().isApprox(portfolioRef));
     assert(dataSource.getData().isApprox(portfolioRef2));
   }
-}
-void testEnv(){
-  Assets assets{"sine1", "sine2", "sine3", "sine4"};
-  // std::unique_ptr<DataSource> dataSource1 = std::make_unique<Synth>();
-  Broker broker1 = Broker(assets, 1'000'000);
-  Env env = Env("Synth", assets, 1'000'000);
-}
 
-void testEnvConfig(){
-  Assets assets{"sine1", "sine2", "sine3", "sine4"};
-  vector<double> _freq{1., 0.3, 2., 0.5};
-  vector<double> _mu{2., 2.1, 2.2, 2.3};
-  vector<double> _amp{1., 1.2, 1.3, 1.};
-  vector<double> _phase{0., 1., 2., 1.};
-  double _dX = 0.01;
-  Config config{
-    {
-      "generator_params", Config{{"freq", _freq},
-                           {"mu", _mu},
-                           {"amp", _amp},
-                           {"phase", _phase},
-                           {"dX", _dX}}
-    }
-  };
-  Env env = Env("Synth", assets, 1'000'000, config);
-}
+  // 2 types of broker response
+  // BrokerResponseSingle for single transactions
+  // BrokerResponseMulti for multiple sent/executed transactions
+  BrokerResponseSingle brokerResp1(0.1, 0.1, RiskInfo::green);
+  PriceVector transPrices(1);
+  PriceVector transCosts(1);
+  transPrices << 1.;
+  transCosts << 1.;
+  BrokerResponseMulti brokerResp2(transPrices, transCosts, std::vector<RiskInfo>{RiskInfo::green});
 
+
+}
 void testTransactionHandling(){
   Assets assets{"sine1", "sine2", "sine3", "sine4"};
   Synth dataSource = Synth();
@@ -195,17 +182,17 @@ void testTransactionHandling(){
   acc.setDefaultPortfolio(acc.portfolios()[0].id());
   double price = dataSource.currentData()[0];
   port.handleTransaction(0, price, 10'000,
-                         0., 1.);
+                         0.);
   port.handleTransaction("sine1", price, 10'000,
-                         0., 1.);
+                         0.);
   acc.handleTransaction(0, price, 10'000,
-                         0., 1.);
+                         0.);
   acc.handleTransaction("sine1", price, 10'000,
-                         0., 1.);
+                         0.);
   acc.handleTransaction("manually_added_port", 0, price, 10'000,
-                        0., 1.);
+                        0.);
   acc.handleTransaction("manually_added_port", "sine1", price, 10'000,
-                        0., 1.);
+                        0.);
   broker.handleTransaction("sine1", 10'000);
   broker.handleTransaction(0, 10'000);
   broker.handleTransaction("BrokerAcc", "sine1", 10'000);
@@ -221,20 +208,86 @@ void testTransactionHandling(){
 
 void testAccountingPortfolio(){
   ///////////////////////////////
-  // Done via envTest.py - easier
+  // Done mostly  via envTest.py - easier
   ///////////////////////////////
-  // // Synth dataSource = Synth();
-  // Assets assets{"sine1", "sine2", "sine3", "sine4"};
-  // // dataSource.getData();
-  // // Broker broker = Broker(assets, 1'000'000);
-  // std::unique_ptr<DataSource> dataSource1 = std::make_unique<Synth>();
-  // // Env env = Env(std::move(dataSource1), assets, 1'000'000);
-  // Env env = Env("Synth", assets, 1'000'000);
-  // // const PriceVector& sourceRef = env.dataSource()->getData();
-  // const PriceVector& envRef = env.currentData();
-  // std::cout << "env Ref: ";
-  // std::cout << envRef << "\n";
+  // Synth dataSource = Synth();
+  Assets assets{"sine1", "sine2", "sine3", "sine4"};
+  Synth dataSource = Synth();
+  PriceVector oldPrices = dataSource.getData();
+  Portfolio port = Portfolio("port_for_acc_init", assets, 1'000'000);
+  port.setDataSource(&dataSource);
+  port.handleTransaction(0, oldPrices(0), 10'000,0.);
+  assert(port.pnl() == 0.);
+  PriceVector newPrices = dataSource.getData();
+  assert(!oldPrices.isApprox(newPrices));
+  double manualPNL = 10'000*(newPrices(0)-oldPrices(0));
+  assert(0.000001 > (port.pnl() - manualPNL));
+  std::cout <<std::setprecision(20)<< port.pnl() << "\n";
+  std::cout << std::setprecision(20)<< manualPNL << "\n";
+  assert(abs(port.pnl() - manualPNL) < 0.0000001);
+  std::cout << "equity: " << port.equity() << "\n";
+  double diff1 = abs(port.equity() - (port.cash() + port.assetValue() - port.borrowedMargin()));
+  double diff2 = abs(port.equity() - (port.balance() + port.pnl() + port.usedMargin()));
+  double diff3 = abs(port.equity() - (port.cash() + port.borrowedAssetValue() +
+                                      port.pnl() + port.usedMargin()));
+  // std::cout <<std::setprecision(20)<< port.usedMargin()<< "\n";
+  // std::cout <<std::setprecision(20)<< port.borrowedMargin()<< "\n";
+  // std::cout <<std::setprecision(20)<< port.assetValue()<< "\n";
+  // std::cout <<std::setprecision(20)<< port.borrowedAssetValue()<< "\n";
+  // std::cout <<std::setprecision(20)<< port.borrowedEquity()<< "\n";
+  // std::cout <<std::setprecision(20)<< port.ledger()<< "\n";
+  // std::cout <<std::setprecision(20)<< port.currentPrices()<< "\n";
+  std::cout <<std::setprecision(20)<< diff1 << "\n";
+  std::cout <<std::setprecision(20)<< diff2 << "\n";
+  std::cout <<std::setprecision(20)<< diff3 << "\n";
+  assert(diff1 < 0.0000000001);
+  assert(diff2 < 0.0000000001);
+  assert(diff3 < 0.0000000001);
+  port.handleTransaction(0, newPrices(0), 10'000,0.);
+  port.handleTransaction(0, newPrices(0), -20'000,0.);
+  std::cout <<std::setprecision(20)<< port.pnl() << "\n";
+  assert(port.pnl() == 0.);
+  port.handleTransaction(0, newPrices(0), -10'000,0.);
+  // std::cout << "Asset Value\n";
+  // std::cout <<std::setprecision(20)<< port.assetValue() << "\n";
+  // std::cout << "mean entry price\n";
+  // std::cout <<std::setprecision(20)<< port.meanEntryPrices() << "\n";
+  // std::cout << "ledger\n";
+  // std::cout <<std::setprecision(20)<< port.ledger() << "\n";
+  // std::cout << "mean entry value\n";
+  // std::cout <<std::setprecision(20)<< port.meanEntryValue() << "\n";
+  // std::cout << "pnl\n";
+  std::cout <<std::setprecision(20)<< port.pnl() << "\n";
+  assert(port.pnl() == 0.);
 }
+
+void testEnv(){
+  Assets assets{"sine1", "sine2", "sine3", "sine4"};
+  // std::unique_ptr<DataSource> dataSource1 = std::make_unique<Synth>();
+  Broker broker1 = Broker(assets, 1'000'000);
+  Env env = Env("Synth", assets, 1'000'000);
+  SRDI<double> envResponse = env.step();
+}
+
+void testEnvConfig(){
+  Assets assets{"sine1", "sine2", "sine3", "sine4"};
+  vector<double> _freq{1., 0.3, 2., 0.5};
+  vector<double> _mu{2., 2.1, 2.2, 2.3};
+  vector<double> _amp{1., 1.2, 1.3, 1.};
+  vector<double> _phase{0., 1., 2., 1.};
+  double _dX = 0.01;
+  Config config{
+    {
+      "generator_params", Config{{"freq", _freq},
+                                 {"mu", _mu},
+                                 {"amp", _amp},
+                                 {"phase", _phase},
+                                 {"dX", _dX}}
+    }
+  };
+  Env env = Env("Synth", assets, 1'000'000, config);
+}
+
 
 int main(){
 
@@ -251,23 +304,19 @@ int main(){
   std::cout<< "testBroker();\n";
   testBroker();
   std::cout<< "===========================================\n";
+  std::cout<< "testTransactionHandling();\n";
+  testTransactionHandling();
+  std::cout<< "===========================================\n";
+  std::cout<< "testAccountingportfolio();\n";
+  testAccountingPortfolio();
+  std::cout<< "===========================================\n";
   std::cout<< "testEnv();\n";
   testEnv();
   std::cout<< "===========================================\n";
   std::cout<< "testEnvConfig();\n";
-  std::cout<< "===========================================\n";
   testEnvConfig();
   std::cout<< "===========================================\n";
-  std::cout<< "testTransactionHandling();\n";
-  std::cout<< "===========================================\n";
-  testTransactionHandling();
-  std::cout<< "===========================================\n";
-  std::cout<< "testAccountingportfolio();\n";
-  std::cout<< "===========================================\n";
-  testAccountingPortfolio();
-  std::cout<< "===========================================\n";
   std::cout<< "TESTS COMPLETED\n";
-  std::cout<< "===========================================\n";
 
 
   return 0;

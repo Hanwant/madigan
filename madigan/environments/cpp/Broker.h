@@ -28,19 +28,6 @@ namespace madigan{
     std::size_t executedTime;
   };
 
-  struct BrokerResponse: public Info{
-  public:
-    std::string event;
-    PriceVector transactionPrices;
-    PriceVector transactionCosts;
-
-  public:
-    BrokerResponse(){};
-    BrokerResponse(PriceVector transPrices, PriceVector transCosts):
-      event(""), transactionPrices(transPrices), transactionCosts(transCosts){}
-    BrokerResponse(std::string event, PriceVector transPrices, PriceVector transCosts):
-      event(event), transactionPrices(transPrices), transactionCosts(transCosts){}
-  };
 
   class Broker{
   public:
@@ -57,7 +44,8 @@ namespace madigan{
     void addPortfolio(const Portfolio& port);
     void addPortfolio(string accID, const Portfolio& port);
     void setDefaultAccount(string accId);
-    void setDefaultAccount(Account* account);
+    void setDefaultAccount(Account*);
+    void setDefaultPortfolio(Portfolio*);
     void setSlippage(double slippagePct=0., double slippageAbs=0.);
     void setTransactionCosts(double transactionPct=0., double transactionAbs=0.);
     void setDataSource(DataSource* source);
@@ -65,6 +53,14 @@ namespace madigan{
       defaultAccount_->setRequiredMargin(reqMargin); }
     void setRequiredMargin(string accID, double reqMargin){
       accountBook_.at(accID)->setRequiredMargin(reqMargin);}
+    void setRequiredMargin(string accID, string portID, double reqMargin){
+      accountBook_.at(accID)->setRequiredMargin(portID, reqMargin);}
+    void setMaintenanceMargin(double mainMargin){
+      defaultAccount_->setMaintenanceMargin(mainMargin); }
+    void setMaintenanceMargin(string accID, double mainMargin){
+      accountBook_.at(accID)->setMaintenanceMargin(mainMargin);}
+    void setMaintenanceMargin(string accID, string portID, double mainMargin){
+      accountBook_.at(accID)->setMaintenanceMargin(portID, mainMargin);}
 
     // const PriceVector& currentPrices(){ return dataSource_->currentData();}
     const Account& account() const { return *defaultAccount_;}
@@ -74,7 +70,7 @@ namespace madigan{
     std::unordered_map<string, Account> accountBookCopy() const;
     const std::vector<Account>& accounts() const{return accounts_;}
     const DataSource* dataSource() const{return dataSource_;}
-    const PriceVectorMap currentPrices() const{return currentPrices_;}
+    const PriceVectorMap& currentPrices() const{return currentPrices_;}
     const Portfolio& portfolio() const { return *defaultPortfolio_; }
     const Portfolio& portfolio(string portID) const;
     vector<Portfolio> portfolios() const;
@@ -84,10 +80,10 @@ namespace madigan{
       return accountBook_.at(accID)->portfolioBook(); }
     std::unordered_map<string, Portfolio> portfolioBook() const;
 
-    BrokerResponse handleEvent(AmountVector& units);
-    BrokerResponse handleEvent(Order& order);
-    BrokerResponse handleAction(AmountVector& units);
-    BrokerResponse handleOrder(Order& order);
+    BrokerResponseMulti handleEvent(AmountVector& units);
+    BrokerResponseSingle handleEvent(Order& order);
+    BrokerResponseMulti handleAction(AmountVector& units);
+    BrokerResponseSingle handleOrder(Order& order);
 
     std::pair<double, double> handleTransaction(int assetIdx, double units); // use default account
     std::pair<double, double> handleTransaction(string assetCode, double units); // use default account
@@ -107,11 +103,12 @@ namespace madigan{
     // std::pair<double, double> handleTransaction(Account* acc, Portfolio* port,
     //                                             string assetCode, double units);
 
-    bool checkRisk(double currencyAmount); // use default account & port
-    bool checkRisk(int assetIdx, double units); // use default account & port
-    bool checkRisk(string assetCode, double units); // use default account
-    bool checkRisk(int assetIdx, double units, string accountID); // use specific account
-    bool checkRisk(string assetCode, double units, string accountID); // use specific account
+    // bool checkRisk(double currencyAmount); // use default account & port
+    RiskInfo checkRisk();
+    RiskInfo checkRisk(int assetIdx, double units); // use default account & port
+    RiskInfo checkRisk(string assetCode, double units); // use default account
+    RiskInfo checkRisk(int assetIdx, double units, string accountID); // use specific account
+    RiskInfo checkRisk(string assetCode, double units, string accountID); // use specific account
 
     double applySlippage(double price, double cash);
     double getTransactionCost(double cash);

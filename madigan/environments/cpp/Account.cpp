@@ -13,10 +13,10 @@ namespace madigan{
     defaultPortfolio_ = portfolioBook_[defaultPortID_];
     assets_=other.assets_;
     nAssets_ = assets_.size();
-    maintenanceMargin_ = other.maintenanceMargin_;
-    requiredMargin_ = other.requiredMargin_;
-    borrowedMargin_ = other.borrowedMargin_;
-    borrowedMarginRatio_ = other.borrowedMarginRatio_;
+    // maintenanceMargin_ = other.maintenanceMargin_;
+    // requiredMargin_ = other.requiredMargin_;
+    // borrowedMargin_ = other.borrowedMargin_;
+    // borrowedMarginRatio_ = other.borrowedMarginRatio_;
     cash_ = other.cash_;
     balance_ = other.balance_;
     borrowedCash_ = other.borrowedCash_;
@@ -44,10 +44,10 @@ namespace madigan{
     defaultPortfolio_ = portfolioBook_[defaultPortID_];
     assets_=other.assets_;
     nAssets_=assets_.size();
-    maintenanceMargin_=other.maintenanceMargin_;
-    requiredMargin_=other.requiredMargin_;
-    borrowedMargin_ = other.borrowedMargin_;
-    borrowedMarginRatio_ = other.borrowedMarginRatio_;
+    // maintenanceMargin_=other.maintenanceMargin_;
+    // requiredMargin_=other.requiredMargin_;
+    // borrowedMargin_ = other.borrowedMargin_;
+    // borrowedMarginRatio_ = other.borrowedMarginRatio_;
     cash_ = other.cash_;
     balance_ = other.balance_;
     borrowedCash_ = other.borrowedCash_;
@@ -140,6 +140,19 @@ namespace madigan{
       setDefaultPortfolio(portfolio->id());
     }
   }
+  void Account::setRequiredMargin(double reqMargin){
+    defaultPortfolio_->setRequiredMargin(reqMargin);
+  }
+  void Account::setRequiredMargin(string portID, double reqMargin){
+    portfolioBook_.at(portID)->setRequiredMargin(reqMargin);
+  }
+  void Account::setMaintenanceMargin(double mainMargin){
+    defaultPortfolio_->setMaintenanceMargin(mainMargin);
+  }
+  void Account::setMaintenanceMargin(string portID, double mainMargin){
+    portfolioBook_.at(portID)->setMaintenanceMargin(mainMargin);
+  }
+
   std::unordered_map<string, Portfolio> Account::portfolioBookCopy() const{
     std::unordered_map<string, Portfolio> book;
     for (auto& port: portfolios_){
@@ -255,26 +268,26 @@ namespace madigan{
   }
 
   void Account::handleTransaction(string assetCode, double transactionPrice,
-                         double units, double transactionCost, double requiredMargin){
+                         double units, double transactionCost){
     handleTransaction(defaultPortID_, assetCode, transactionPrice, units,
-                      transactionCost , requiredMargin);
+                      transactionCost);
   }
   void Account::handleTransaction(int assetIdx, double transactionPrice,
-                         double units, double transactionCost, double requiredMargin){
+                         double units, double transactionCost){
     handleTransaction(defaultPortID_, assetIdx, transactionPrice, units,
-                      transactionCost , requiredMargin);
+                      transactionCost);
   }
 
   void Account::handleTransaction(string portId, string assetCode, double transactionPrice,
-                                  double units, double transactionCost, double requiredMargin){
+                                  double units, double transactionCost){
     Portfolio* port = portfolioBook_.at(portId);
     port->handleTransaction(assetCode, transactionPrice, units,
-                            transactionCost , requiredMargin);
+                            transactionCost);
   }
   void Account::handleTransaction(string portId, int assetIdx, double transactionPrice,
-                         double units, double transactionCost, double requiredMargin){
+                         double units, double transactionCost){
     Portfolio* port = portfolioBook_.at(portId);
     port->handleTransaction(assetIdx, transactionPrice, units,
-                            transactionCost , requiredMargin);
+                            transactionCost);
   }
 }

@@ -60,7 +60,7 @@ namespace madigan{
 
   private:
     int nAssets_{0};
-    double dX{0};
+    double dX{0.01};
     vector<double> freq;
     vector<double> mu;
     vector<double> amp;

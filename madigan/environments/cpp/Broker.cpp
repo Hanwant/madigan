@@ -69,11 +69,15 @@ namespace madigan {
     Account* acc = accountBook_.at(accID);
     defaultAccount_ = acc;
     defaultAccID_ = accID;
-    defaultPortfolio_ = acc->defaultPortfolio_;
+    setDefaultPortfolio(acc->defaultPortfolio_);
   }
 
   void Broker::setDefaultAccount(Account *account){
     setDefaultAccount(account->id());
+  }
+
+  void Broker::setDefaultPortfolio(Portfolio* portfolio){
+    defaultPortfolio_ = portfolio;
   }
 
   void Broker::addPortfolio(const Portfolio& port){
@@ -130,37 +134,31 @@ namespace madigan {
     }
   }
 
-  BrokerResponse Broker::handleEvent(AmountVector& units){
+  BrokerResponseMulti Broker::handleEvent(AmountVector& units){
     return handleAction(units);
   }
 
-  BrokerResponse Broker::handleAction(AmountVector& units){
+  BrokerResponseMulti Broker::handleAction(AmountVector& units){
     PriceVector transPrices(units.size());
     PriceVector transCosts(units.size());
-    // std::vector<>
+    std::vector<RiskInfo> riskInfo(units.size());
     if (units.size() == defaultAccount_->assets_.size()){
       for (int assetIdx=0; assetIdx<units.size(); assetIdx++){
         double unit = units[assetIdx];
-        double transPrice{0.};
-        double transCost{0.};
-        if(unit != 0. && checkRisk(assetIdx, unit)){
+        double transPrice;
+        double transCost;
+        RiskInfo _riskInfo = checkRisk(assetIdx, unit);
+        if(unit != 0. && _riskInfo==RiskInfo::green){
           auto [transPrice, transCost] = handleTransaction(assetIdx, unit);
+          transPrices(assetIdx) = transPrice;
+          transCosts(assetIdx) = transCost;
         }
-        transPrices(assetIdx) = transPrice;
-        transCosts(assetIdx) = transCost;
+        riskInfo[assetIdx] = _riskInfo;
       }
     }
-    return BrokerResponse(transPrices, transCosts);
-  }
+    else throw std::length_error("Vector of units to purchase must be same length as number of assets");
 
-  bool Broker::checkRisk(int assetIdx, double units){
-    // double currencyAmount=currentPrices_.operator()(assetIdx) * units;
-    // double currencyAmount=currentPrices_(assetIdx) * units;
-    // if (currencyAmount < defaultAccount_->availableMargin() - defaultAccount_->maintenanceMargin()){
-    //   return true;
-    // }
-    // else return false;
-    return true;
+    return BrokerResponseMulti(transPrices, transCosts, riskInfo);
   }
 
   // Private version called by all public handleTransaction overloads
@@ -168,13 +166,14 @@ namespace madigan {
                                                       int assetIdx, double units){
     double transactionPrice = applySlippage(currentPrices_(assetIdx) ,units);
     double transactionCost = getTransactionCost(units);
+    RiskInfo risk = port->checkRisk(assetIdx, units);
     port->handleTransaction(assetIdx, transactionPrice, units,
-                            transactionCost, acc->requiredMargin());
+                            transactionCost);
     return std::make_pair(transactionPrice, transactionCost);
   }
   std::pair<double, double> Broker::handleTransaction(int assetIdx, double units){
     Account* acc = defaultAccount_;
-    Portfolio* port = acc->defaultPortfolio_;
+    Portfolio* port = defaultPortfolio_;
     return handleTransaction(acc, port, assetIdx, units);
   }
   std::pair<double, double> Broker::handleTransaction(string assetCode, double units){
@@ -218,4 +217,9 @@ namespace madigan {
     return abs(units)*transactionPct_ + transactionAbs_;
 
   }
+  RiskInfo Broker::checkRisk(){ return RiskInfo::green; }
+  RiskInfo Broker::checkRisk(int assetIdx, double units){
+    return RiskInfo::green;
+  }
+
 }

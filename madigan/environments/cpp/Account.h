@@ -36,8 +36,13 @@ namespace madigan{
     void addPortfolio(pybind11::object pyport);
     void addPortfolio(string id, Assets assets, double initCash);
     void addPortfolio(Assets assets, double initCash);
+    void setDefaultPortfolio(string portId);
+    void setDefaultPortfolio(Portfolio* portfolio);
     void setDataSource(DataSource* source);
-    void setRequiredMargin(double reqMargin){ requiredMargin_=reqMargin;}
+    void setRequiredMargin(double reqMargin);
+    void setRequiredMargin(string portID, double reqMargin);
+    void setMaintenanceMargin(double maintenanceMargin);
+    void setMaintenanceMargin(string portID, double maintenanceMargin);
 
     const DataSource* dataSource() const {return dataSource_;}
     const PriceVectorMap& currentPrices() const{ return currentPrices_;}
@@ -53,8 +58,6 @@ namespace madigan{
     std::unordered_map<string, Portfolio> portfolioBookCopy() const;
     const std::vector<Portfolio>& portfolios() const {return portfolios_;}
 
-    void setDefaultPortfolio(string portId);
-    void setDefaultPortfolio(Portfolio* portfolio);
 
     int nAssets() const { return assets_.size(); }
     Assets assets() const { return assets_; }
@@ -73,21 +76,29 @@ namespace madigan{
     double equity(string portID) const;
     double availableMargin() const;
     double availableMargin(string portID) const;
-    double requiredMargin() const{return requiredMargin_;} // account wide
+    double requiredMargin() const{
+      return defaultPortfolio_->requiredMargin_;}
+    double requiredMargin(string portID) const{
+      return portfolioBook_.at(portID)->requiredMargin_;}
+    double maintenanceMargin() const{
+      return defaultPortfolio_->maintenanceMargin_;}
+    double maintenanceMargin(string portID) const{
+      return portfolioBook_.at(portID)->maintenanceMargin_;}
     // double requiredMargin(string portID) const;
     double borrowedMargin() const;
     double borrowedMargin(string portID) const;
     double borrowedCash() const;
+    double pnl() const;
 
     void handleTransaction(string assetCode, double tranactionPrice,
-                           double units, double transactionCost, double requiredMargin);
+                           double units, double transactionCost);
     void handleTransaction(int assetIdx, double tranactionPrice,
-                           double units, double transactionCost, double requiredMargin);
+                           double units, double transactionCost);
 
     void handleTransaction(string portId, string assetCode, double tranactionPrice,
-                           double units, double transactionCost, double requiredMargin);
+                           double units, double transactionCost);
     void handleTransaction(string portId, int assetIdx, double tranactionPrice,
-                           double units, double transactionCost, double requiredMargin);
+                           double units, double transactionCost);
 
     friend class Broker;
     friend class Env;
@@ -99,12 +110,12 @@ namespace madigan{
     string defaultPortID_;
     Assets assets_;
     int nAssets_;
-    double maintenanceMargin_{0.25};
-    double requiredMargin_{1.}; // default = no levarage need 100% margin
-    double borrowedMarginRatio_{1./requiredMargin_ -1.}; // defaults to 0.
-    Ledger cash_;
+    // double requiredMargin_{1.}; // default = no levarage need 100% margin
+    // double maintenanceMargin_{.25}; // reasonable default
+    // double borrowedMarginRatio_{1./1.-requiredMargin_ }; // defaults to 0.
     // Ledger usedMargin_;
-    double borrowedMargin_;
+    // double borrowedMargin_;
+    Ledger cash_;
     double balance_;
     Ledger borrowedCash_;
 

@@ -4,6 +4,7 @@
 #include <memory>
 #include <unordered_map>
 #include <any>
+#include <type_traits>
 
 #include <Eigen/Core>
 #include <pybind11/pybind11.h>
@@ -38,6 +39,10 @@ namespace madigan{
     NotImplemented(std::string message) : std::logic_error(message) { };
   };
 
+  // ================================================================
+  // ======================== Data Containers =======================
+  // ================================================================
+
   struct State{
     PriceVector price;
     Ledger portfolio;
@@ -49,11 +54,78 @@ namespace madigan{
     // TimeStamp timestamp;
   };
 
-  struct Info{
-    Info(){};
-    virtual ~Info(){};
+  enum class RiskInfo {
+    green,
+    insuff_margin,
+    margin_call,
+    blown_out
   };
 
+  inline std::ostream& operator<<(std::ostream& os, RiskInfo risk){
+    switch(risk)
+      {
+      case RiskInfo::green: os << "green"; break;
+      case RiskInfo::insuff_margin: os << "insuff_margin"; break;
+      case RiskInfo::margin_call: os << "margin_call"; break;
+      case RiskInfo::blown_out: os << "blown_out"; break;
+      }
+    return os;
+  }
+
+  inline std::ostream& operator<<(std::ostream& os, std::vector<RiskInfo> risk){
+    for (const auto& _risk: risk){
+      switch(_risk)
+        {
+        case RiskInfo::green: os << "green"; break;
+        case RiskInfo::insuff_margin: os << "insuff_margin"; break;
+        case RiskInfo::margin_call: os << "margin_call"; break;
+        case RiskInfo::blown_out: os << "blown_out"; break;
+        }
+      os << ", ";
+    }
+    return os;
+  }
+
+  // struct BrokerResponseBase;
+  template<typename T>
+  struct BrokerResponse {
+    std::string event;
+    T transactionPrice;
+    T transactionCost;
+    std::size_t timestamp;
+    typedef typename std::conditional<std::is_same<T, PriceVector>::value,
+                                      std::vector<RiskInfo>,
+                                      RiskInfo>::type RiskInfoType;
+    RiskInfoType riskInfo;
+
+    BrokerResponse(){};
+    BrokerResponse(T transPrice, T transCost):
+      event(""), transactionPrice(transPrice), transactionCost(transCost)
+      {}
+    BrokerResponse(std::string event, T transPrice, T transCost):
+      event(event), transactionPrice(transPrice), transactionCost(transCost)
+      {}
+    BrokerResponse(T transPrice, T transCost, RiskInfoType riskInfo):
+      event(""), transactionPrice(transPrice), transactionCost(transCost),
+      riskInfo(riskInfo){}
+    BrokerResponse(std::string event, T transPrice, T transCost,
+                   RiskInfoType riskInfo):
+      event(event), transactionPrice(transPrice), transactionCost(transCost),
+      riskInfo(riskInfo){}
+  };
+
+  using BrokerResponseSingle = BrokerResponse<double>;
+  using BrokerResponseMulti = BrokerResponse<PriceVector>;
+
+  template<typename T>
+  struct EnvInfo{
+    // std::unique_ptr<BrokerResponseBase> brokerResponse;
+    BrokerResponse<T> brokerResponse;
+    EnvInfo(){};
+    // EnvInfo(std::unique_ptr<BrokerResponse> brokerResp): brokerResponse(brokerResp){};
+    EnvInfo(BrokerResponse<T> brokerResp): brokerResponse(brokerResp){};
+    virtual ~EnvInfo(){};
+  };
 
   // struct SRDI{
   //   State state;
@@ -62,11 +134,11 @@ namespace madigan{
   //   std::unique_ptr<Info> info;
   // };
 
-  typedef std::tuple<State, double, bool, std::unique_ptr<Info>> SRDI;
-
-
-
-
+  // typedef std::tuple<State, double, bool, std::unique_ptr<Info>> SRDI;
+  // typedef std::tuple<State, double, bool, EnvInfo<double>> SRDI;
+  // typedef std::tuple<State, double, bool, EnvInfo<PriceVector>> SRDI;
+  template<typename T>
+  using SRDI = std::tuple<State, double, bool, EnvInfo<T>>;
 
 
 }

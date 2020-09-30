@@ -1,5 +1,5 @@
-#ifndef LEDGER_H_
-#define LEDGER_H_
+#ifndef PORTFOLIO_H_
+#define PORTFOLIO_H_
 
 #include <vector>
 #include <string>
@@ -34,6 +34,9 @@ namespace madigan{
     ~Portfolio()=default;
 
     void setDataSource(DataSource* source);
+    void setRequiredMargin(double reqMargin){ requiredMargin_=reqMargin;}
+    void setMaintenanceMargin(double maintenanceMargin){
+      maintenanceMargin_=maintenanceMargin;}
 
     string id() const { return id_;}
     Assets assets() const {return assets_;}
@@ -41,29 +44,45 @@ namespace madigan{
     unsigned int assetIdx(const string code) const;
     const DataSource* dataSource() const{ return dataSource_;}
     const PriceVectorMap& currentPrices() const { return currentPrices_;}
+    const Ledger&  meanEntryPrices() const { return meanEntryPrices_; }
 
+    double requiredMargin() const{ return requiredMargin_; }
+    double maintenanceMargin() const{ return maintenanceMargin_; }
     int nAssets() const { return assets_.size();}
     double initCash() const {return initCash_;}
     double cash() const { return cash_;}
+    double balance() const;
     const Ledger& ledger() const {return ledger_;}
     Ledger ledgerNormed() const;
-    /* double usedMargin() const { return usedmargin.sum()} */
     double assetValue() const { return ledger_.dot(currentPrices_); }
-    double equity() const;
+    double borrowedAssetValue() const;
+    Ledger  meanEntryValue() const { return ledger_.array() * meanEntryPrices_.array();}
+    double usedMargin() const;
     double availableMargin() const;
-    const double borrowedMargin() const {return borrowedMargin_;}
-    double borrowedCash() const;
+    double borrowedMargin() const;
+    const Ledger& borrowedMarginLedger() const;
+    double equity() const;
+    double pnl() const;
+    double borrowedEquity() const;
+    double borrowedMarginRatio() const { (requiredMargin_<1.)? 1./(1.-requiredMargin_): 0. ;}
+
+    RiskInfo checkRisk() const;
+    RiskInfo checkRisk(double amount_to_purchase) const;
+    RiskInfo checkRisk(int assetIdx, double units) const;
+    RiskInfo checkRisk(string assetCode, double units) const;
+
+    /* double borrowedCash() const; */
     double operator[](string code) {
-      return ledger_[assetIdx_[code]];
+      return ledger_(assetIdx_[code]);
     }
     double operator[](int assetIdx) {
-      return ledger_[assetIdx];
+      return ledger_(assetIdx);
     }
 
     void handleTransaction(string asset, double tranactionPrice,
-                           double units, double transactionCost, double requiredMargin);
+                           double units, double transactionCost);
     void handleTransaction(int assetIdx, double tranactionPrice,
-                           double units, double transactionCost, double requiredMargin);
+                           double units, double transactionCost);
 
     friend std::ostream& operator<<(std::ostream& os, const Portfolio& port);
 
@@ -75,13 +94,20 @@ namespace madigan{
     void registerAssets(Assets assets, std::vector<unsigned int> order);
 
   private:
+    // DONT FORGET TO ADD VARIABLES TO COPY CONSTRUCTORS
     string id_="ledger_default";
     double initCash_=1'000'000;
     Assets assets_;
+    bool assetsRegistered{false};
     double cash_=initCash_;
     Ledger ledger_;
-    Ledger usedMargin_;
-    double borrowedMargin_{0.};
+    /* Ledger usedMargin_; */
+    double usedMargin_{0.};
+    Ledger meanEntryPrices_;
+    Ledger borrowedMargin_;
+    double requiredMargin_{1.}; // default = no levarage need 100% margin
+    double maintenanceMargin_{.25}; // reasonable default
+    double borrowedMarginRatio_{(requiredMargin_<1.)? 1./(1.-requiredMargin_): 0. }; // defaults to 0.
 
     std::unordered_map<string, unsigned int> assetIdx_;
     bool registeredDataSource{false};
@@ -94,4 +120,4 @@ namespace madigan{
 
 } /*namespace madigan*/
 
-#endif /*  LEDGER_H_ */
+#endif /*  PORTFOLIO_H_ */

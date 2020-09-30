@@ -19,7 +19,38 @@ using namespace madigan;
 // PYBIND11_MAKE_OPAQUE(PortfolioBook);
 // PYBIND11_MAKE_OPAQUE(std::unordered_map<string, Portfolio>);
 // PYBIND11_MAKE_OPAQUE(vector<Portfolio>);
+// PYBIND11_MAKE_OPAQUE(std::tuple);
+PYBIND11_MAKE_OPAQUE(SRDI<double>);
+PYBIND11_MAKE_OPAQUE(SRDI<PriceVector>);
+// using SRDI = std::tuple<State, double, bool, EnvInfo<T>>;
 
+template<typename T>
+void declareBrokerResponse(py::module& m, const string& className){
+  using Class = BrokerResponse<T>;
+  py::class_<Class>(m, className.c_str())
+    .def_readonly("event", &Class::event)
+    .def_readonly("timestamp", &Class::timestamp)
+    .def_readonly("transactionPrice", &Class::transactionPrice)
+    .def_readonly("transactionCost", &Class::transactionCost)
+    .def_readonly("riskInfo", &Class::riskInfo)
+    .def("__repr__", [](const BrokerResponse<T>& b){
+        std::stringstream repr;
+        repr << "timestamp:        " << b.timestamp << "\n";
+        repr << "transactionPrice: \n" << b.transactionPrice << "\n";
+        repr << "transactionCost:  \n" << b.transactionCost << "\n";
+        repr << "riskInfo:         \n" << b.riskInfo << "\n";
+        return repr.str();}
+      );
+}
+
+template<typename T>
+void declareEnvInfo(py::module& m, const string& className){
+  using Class = EnvInfo<T>;
+  py::class_<Class>(m, className.c_str())
+    .def(py::init<> (), "default empty constructor")
+    .def(py::init<BrokerResponse<T>> (), py::arg("brokerResponse"))
+    .def_readonly("brokerResponse", &Class::brokerResponse);
+}
 
 PYBIND11_MODULE(env, m){
   m.doc() = "Environment Components, including Portfolio, Broker, DataGenerator and Env classes";
@@ -29,8 +60,36 @@ PYBIND11_MODULE(env, m){
     // .def(py::init<Config> (), py::arg("config"));
     // .def(py::init<py::dict> (), py::arg("dict"));
 
-  py::class_<Asset>(m, "Asset")
-    .def(py::init<string> (), py::arg("asset_name"))
+  // py::bind_vector<Assets>(m, "Assets");
+
+  py::enum_<RiskInfo> _RiskInfo(m, "RiskInfo");
+  _RiskInfo.value("green", RiskInfo::green)
+    .value("margin_call", RiskInfo::margin_call)
+    .value("insuff_margin", RiskInfo::insuff_margin)
+    .value("blown_out", RiskInfo::blown_out);
+
+  declareEnvInfo<double>(m, "EnvInfoSingle");
+  declareEnvInfo<PriceVector>(m, "EnvInfoMulti");
+  declareBrokerResponse<double>(m, "BrokerResponseSingle");
+  declareBrokerResponse<PriceVector>(m, "BrokerResponseMulti");
+
+  // Declared and defined in the same order
+  py::class_<Asset> _Asset(m, "Asset");
+  py::class_<Assets> _Assets(m, "Assets");
+  py::class_<PriceVector> _PriceVector(m, "PriceVector", py::buffer_protocol());
+  py::bind_map<std::unordered_map<string, Portfolio>>(m, "PortfolioBook");
+  py::bind_map<std::unordered_map<string, Account>>(m, "AccountBook");
+
+  py::class_<DataSource>_DataSource(m, "DataSource");
+  py::class_<Synth, DataSource>_Synth(m, "Synth");
+
+  py::class_<Portfolio>_Portfolio(m, "Portfolio");
+  py::class_<Account>_Account(m, "Account");
+  py::class_<Broker> _Broker(m, "Broker");
+  py::class_<Env> _Env(m, "Env");
+
+
+  _Asset.def(py::init<string> (), py::arg("asset_name"))
     .def(py::init<string, string> (), py::arg("asset_name"), py::arg("exchange"))
     .def_readwrite("name", &Asset::name)
     .def_readwrite("code", &Asset::code)
@@ -40,9 +99,7 @@ PYBIND11_MODULE(env, m){
       return "name: " + a.name + " code: " + a.code;
     });
 
-  // py::bind_vector<Assets>(m, "Assets");
-  py::class_<Assets>(m, "Assets")
-    .def(py::init<std::vector<string>> (), py::arg("asset_names_list"))
+  _Assets.def(py::init<std::vector<string>> (), py::arg("asset_names_list"))
     .def(py::init<std::vector<Asset>> (), py::arg("asset_names_list"))
     .def("__len__", [](const Assets &v) { return v.size(); })
     .def("__repr__", [](const Assets &v) {
@@ -62,8 +119,7 @@ PYBIND11_MODULE(env, m){
       return v[idx];
     });
 
-  py::class_<PriceVector>(m, "PriceVector", py::buffer_protocol())
-    .def_buffer([](PriceVector &v)->py::buffer_info {
+  _PriceVector.def_buffer([](PriceVector &v)->py::buffer_info {
       return py::buffer_info(
                              v.data(),
                              sizeof(double),
@@ -74,9 +130,7 @@ PYBIND11_MODULE(env, m){
                              );
     });
 
-  py::class_<DataSource>(m, "DataSource");
-  py::class_<Synth, DataSource>(m, "Synth")
-    .def(py::init<>())
+  _Synth.def(py::init<>())
     .def(py::init<py::dict>(), py::arg("config_dict"))
     .def(py::init<
          vector<double>, vector<double>,
@@ -92,41 +146,84 @@ PYBIND11_MODULE(env, m){
          "Get current data points",
          py::return_value_policy::reference);
 
-  py::class_<Portfolio>(m, "Portfolio")
     // .def(py::init<>())
-    .def(py::init<string, Assets, double> (),
+  _Portfolio.def(py::init<string, Assets, double> (),
          py::arg("id"),
          py::arg("assets"),
          py::arg("initCash")=double(1'000'000))
     .def("setDataSource", &Portfolio::setDataSource,
          "assign data source for current prices reference")
     .def_property_readonly("id", &Portfolio::id, "portfolio id")
-    .def_property_readonly("equity", &Portfolio::equity,
-                           "returns net equity")
-    .def_property_readonly("cash", &Portfolio::cash,
-                           "returns net cash")
-    .def_property_readonly("borrowedMargin", &Portfolio::borrowedMargin,
-                           "Margin currently borrowed (i.e for levaraged buy)")
-    .def_property_readonly("currentPrices", &Portfolio::currentPrices,
-                           "current prices as per registered data source", py::return_value_policy::copy)
     .def_property_readonly("nAssets", &Portfolio::nAssets,
                            "number of assets")
     .def_property_readonly("assets", (Assets(Portfolio::*)()) &Portfolio::assets,
                            "Returns list of Asset objects")
+    .def_property_readonly("cash", &Portfolio::cash,
+                           "returns current cash holdings")
+    .def_property_readonly("balance", &Portfolio::balance,
+                           "returns net cash balance")
+    .def_property_readonly("equity", &Portfolio::equity,
+                           "returns net equity")
+    .def_property_readonly("pnl", &Portfolio::pnl,
+                           "returns current net profit/loss")
+    .def_property_readonly("borrowedMargin", &Portfolio::borrowedMargin,
+                           "Total Margin currently borrowed for positions (i.e for levaraged buy)")
+    .def_property_readonly("borrowedMarginLedger", &Portfolio::borrowedMarginLedger,
+                           "Margin currently borrowed for each position (i.e for levaraged buy)")
+    .def_property_readonly("availableMargin", &Portfolio::availableMargin,
+                           "Margin available for entering positions (i.e for levaraged buy)")
+    .def_property_readonly("assetValue", &Portfolio::assetValue,
+                           "net value of current positions (long + short)")
+    .def_property_readonly("borrowedAssetValue", &Portfolio::borrowedAssetValue,
+                           "value of current short positions")
+    .def_property_readonly("usedMargin", &Portfolio::usedMargin,
+                           "Margin currently committed to long positions ")
+    .def_property_readonly("currentPrices", &Portfolio::currentPrices,
+                           "current prices as per registered data source "
+                           "\n Careful as the returned array will contain a reference"
+                           "to the datasource buffer - const is ignored",
+                           py::return_value_policy::reference)/* BE CAREFUL - CASTS AWAY CONSTNESS
+                                                                 AND CONNECTED TO DATA SOURCE*/
     .def_property_readonly("ledger", &Portfolio::ledger,
                            "vector of asset holdings",
-                           py::return_value_policy::reference) /* BE CAREFUL - CASTS AWAY CONSTNESS
-                                                                  AND CONNECTED TO DATA SOURCE*/
-    .def("handleTransaction", (void(Portfolio::*)(int, double, double, double,
-                                                  double )) &Portfolio::handleTransaction,
+                           py::return_value_policy::reference)
+    .def("setRequiredMargin", (void (Portfolio::*)(double)) &Portfolio::setRequiredMargin,
+         "set required Margin level for port, takes proportion as input"
+         " I.e 0.1 for 10% margin or 10x levarage",
+         py::arg("requiredMargin"))
+    .def("setMaintenanceMargin", (void (Portfolio::*)(double)) &Portfolio::setMaintenanceMargin,
+         "set maintenance Margin level for port, takes proportion as input"
+         " I.e 0.1 for 10% margin or 10x levarage",
+         py::arg("maintenanceMargin"))
+    .def("checkRisk", (RiskInfo (Portfolio::*) () const) &Portfolio::checkRisk,
+         "checks current risk levels and returns a RiskInfo enum object\n"
+         "I.e returns RiskInfo::green unless current equity is lower than "
+         "maintenance margin requirements ")
+    .def("checkRisk", (RiskInfo (Portfolio::*) (double) const) &Portfolio::checkRisk,
+         "checks availableMargin and compares with proposed amount_to_purchase"
+         "I.e returns RiskInfo::green unless availableMargin is lower than "
+         "initial margin requirements ",
+         py::arg("amount_to_purchase"))
+    .def("checkRisk", (RiskInfo (Portfolio::*) (int, double) const) &Portfolio::checkRisk,
+         "checks availableMargin and compares with proposed amount_to_purchase"
+         "I.e returns RiskInfo::green unless availableMargin is lower than "
+         "initial margin requirements ",
+         py::arg("assetIdx"), py::arg("units"))
+    .def("checkRisk", (RiskInfo (Portfolio::*) (string, double) const) &Portfolio::checkRisk,
+         "checks availableMargin and compares with proposed amount_to_purchase"
+         "I.e returns RiskInfo::green unless availableMargin is lower than "
+         "initial margin requirements ",
+         py::arg("assetCode"), py::arg("units"))
+    .def("handleTransaction", (void(Portfolio::*)(int, double, double, double))
+         &Portfolio::handleTransaction,
          "handle transaction given asset idx, transactionPrice, and amount of units",
          py::arg("assetIdx"), py::arg("transactionPrice"), py::arg("units"),
-         py::arg("transactionCost")=0., py::arg("requiredmargin")=1.0)
-    .def("handleTransaction", (void(Portfolio::*)(string, double, double, double,
-                                                  double )) &Portfolio::handleTransaction,
+         py::arg("transactionCost")=0.)
+    .def("handleTransaction", (void(Portfolio::*)(string, double, double, double))
+         &Portfolio::handleTransaction,
          "handle transaction given asset code str, transactionPrice, and amount of units",
          py::arg("asset"), py::arg("transactionPrice"), py::arg("units"),
-         py::arg("transactionCost")=0., py::arg("requiredmargin")=1.0)
+         py::arg("transactionCost")=0.)
     .def("__repr__", [](const Portfolio &port) {
       std::stringstream repr;
       repr << port.id() << ": {";
@@ -149,11 +246,9 @@ PYBIND11_MODULE(env, m){
     //   repr << "]\n";
     //   return repr.str();});
   // py::bind_map<PortfolioBook>(m, "PortfolioBook");
-  py::bind_map<std::unordered_map<string, Portfolio>>(m, "PortfolioBook");
 
-  py::class_<Account>(m, "Account")
     // .def(py::init<>())
-    .def(py::init<Portfolio&> (), py::arg("portfolio"))
+  _Account.def(py::init<Portfolio&> (), py::arg("portfolio"))
     .def(py::init<string, Assets, double> (), py::arg("id"),
          py::arg("assets"), py::arg("initCash")=double(1'000'000))
     .def(py::init<Assets, double> (), py::arg("assets"), py::arg("initCash")=double(1'000'000))
@@ -169,10 +264,22 @@ PYBIND11_MODULE(env, m){
          py::arg("Assets"), py::arg("initCash"))
     .def("setDataSource", &Account::setDataSource,
          "assign data source for current prices reference")
-    .def("setRequiredMargin", &Account::setRequiredMargin,
-         "set required Margin level account wide, takes proportion as input"
+    .def("setRequiredMargin", (void (Account::*)(double)) &Account::setRequiredMargin,
+         "set required Margin level for default port, takes proportion as input"
          " I.e 0.1 for 10% margin or 10x levarage",
          py::arg("requiredMargin"))
+    .def("setRequiredMargin", (void (Account::*)(string, double)) &Account::setRequiredMargin,
+         "set required Margin level for specified port, takes proportion as input"
+         " I.e 0.1 for 10% margin or 10x levarage",
+         py::arg("portID"), py::arg("requiredMargin"))
+    .def("setMaintenanceMargin", (void (Account::*)(double)) &Account::setMaintenanceMargin,
+         "set maintenance Margin level for default port, takes proportion as input"
+         " I.e 0.1 for 10% margin or 10x levarage",
+         py::arg("maintenanceMargin"))
+    .def("setMaintenanceMargin", (void (Account::*)(string, double)) &Account::setMaintenanceMargin,
+         "set maintenance Margin level for specified port, takes proportion as input"
+         " I.e 0.1 for 10% margin or 10x levarage",
+         py::arg("portID"), py::arg("maintenanceMargin"))
     .def("equity", (double(Account::*)() const) &Account::equity,
          "returns net equity")
     .def("cash", (double(Account::*)() const) &Account::cash,
@@ -191,28 +298,26 @@ PYBIND11_MODULE(env, m){
          "returns net cash")
     .def("borrowedMargin", (double(Account::*)(string) const) &Account::borrowedMargin,
          "returns net borrowedMargin")
-    .def("handleTransaction", (void(Account::*)(int, double, double, double,
-                                                  double )) &Account::handleTransaction,
+    .def("handleTransaction", (void(Account::*)(int, double, double, double))
+         &Account::handleTransaction,
          "handle transaction given asset idx, transactionPrice, and amount of units",
          py::arg("assetIdx"), py::arg("transactionPrice"), py::arg("units"),
-         py::arg("transactionCost")=0., py::arg("requiredmargin")=1.0)
-    .def("handleTransaction", (void(Account::*)(string, double, double, double,
-                                                  double )) &Account::handleTransaction,
+         py::arg("transactionCost")=0.)
+    .def("handleTransaction", (void(Account::*)(string, double, double, double))
+         &Account::handleTransaction,
          "handle transaction given asset code str, transactionPrice, and amount of units",
          py::arg("asset"), py::arg("transactionPrice"), py::arg("units"),
-         py::arg("transactionCost")=0., py::arg("requiredmargin")=1.0)
-    .def("handleTransaction", (void(Account::*)(string, int, double, double, double,
-                                                double )) &Account::handleTransaction,
+         py::arg("transactionCost")=0.)
+    .def("handleTransaction", (void(Account::*)(string, int, double, double, double))
+         &Account::handleTransaction,
          "handle transaction given asset idx, transactionPrice, and amount of units",
          py::arg("portID"), py::arg("assetIdx"), py::arg("transactionPrice"),
-         py::arg("units"), py::arg("transactionCost")=0.,
-         py::arg("requiredmargin")=1.0)
-    .def("handleTransaction", (void(Account::*)(string, string, double, double, double,
-                                                double )) &Account::handleTransaction,
+         py::arg("units"), py::arg("transactionCost")=0.)
+    .def("handleTransaction", (void(Account::*)(string, string, double, double, double))
+         &Account::handleTransaction,
          "handle transaction given asset code str, transactionPrice, and amount of units",
          py::arg("pordID"), py::arg("asset"), py::arg("transactionPrice"),
-         py::arg("units"), py::arg("transactionCost")=0.,
-         py::arg("requiredmargin")=1.0)
+         py::arg("units"), py::arg("transactionCost")=0.)
     .def("portfolio", (const Portfolio&(Account::*)() const) &Account::portfolio,
          "Return default porfolio",
          py::return_value_policy::copy)
@@ -238,9 +343,8 @@ PYBIND11_MODULE(env, m){
          "Return vector of current asset holdings",
          py::return_value_policy::copy);
 
-  py::class_<Broker>(m, "Broker")
-    // .def(py::init<>())
-    .def(py::init<Account&> (), py::arg("account"))
+
+  _Broker.def(py::init<Account&> (), py::arg("account"))
     .def(py::init<Portfolio&> (), py::arg("portfolio"))
     .def(py::init<Assets, double> (), py::arg("assets"), py::arg("initCash")=double(1'000'000))
     .def(py::init<string, Assets, double> (),
@@ -266,6 +370,26 @@ PYBIND11_MODULE(env, m){
          "takes margin level as a proprtion as input "
          "I.e 0.1 for 10% reuqired margin or 10x levarage",
          py::arg("accID"), py::arg("requiredMarginLevel"))
+    .def("setRequiredMargin", (void (Broker::*)(string, string, double)) &Broker::setRequiredMargin,
+         "set requiredMargin level for specified  port in specified Acc"
+         "takes margin level as a proprtion as input "
+         "I.e 0.1 for 10% reuqired margin or 10x levarage",
+         py::arg("accID"), py::arg("portID"), py::arg("requiredMarginLevel"))
+    .def("setMaintenanceMargin", (void (Broker::*)(double)) &Broker::setMaintenanceMargin,
+         "set maintenanceMargin level for default Acc"
+         "takes margin level as a proprtion as input "
+         "I.e 0.1 for 10% reuqired margin or 10x levarage",
+         py::arg("maintenanceMarginLevel"))
+    .def("setMaintenanceMargin", (void (Broker::*)(string, double)) &Broker::setMaintenanceMargin,
+         "set maintenanceMargin level for specified Acc"
+         "takes margin level as a proprtion as input "
+         "I.e 0.1 for 10% reuqired margin or 10x levarage",
+         py::arg("accID"), py::arg("maintenanceMarginLevel"))
+    .def("setMaintenanceMargin", (void (Broker::*)(string, string, double)) &Broker::setMaintenanceMargin,
+         "set maintenanceMargin level for specified  port in specified Acc"
+         "takes margin level as a proprtion as input "
+         "I.e 0.1 for 10% reuqired margin or 10x levarage",
+         py::arg("accID"), py::arg("portID"), py::arg("requiredMarginLevel"))
     .def("account", (const Account& (Broker::*)() const) &Broker::account,
          "Returns default account - useful if just one acc",
          py::return_value_policy::reference)
@@ -295,39 +419,43 @@ PYBIND11_MODULE(env, m){
          &Broker::portfolioBook,
          "Return dict of portfolios for specific acc", py::arg("accID"),
          py::return_value_policy::reference)
+    .def("handleAction", (BrokerResponseMulti (Broker::*)(AmountVector& units) )
+         &Broker::handleAction,
+         "handle a transaction as per the given vector of units to be purchased",
+         py::arg("units"),
+         py::return_value_policy::move)
     .def("handleTransaction", (std::pair<double, double>(Broker::*)(int, double) )
          &Broker::handleTransaction,
          "handle a transaction given asset index and units to purchase",
          py::arg("assetIdx"), py::arg("units"),
-         py::return_value_policy::copy)
+         py::return_value_policy::move)
     .def("handleTransaction", (std::pair<double, double>(Broker::*)(string, double) )
          &Broker::handleTransaction,
          "handle a transaction given asset code and units to purchase",
          py::arg("assetCode"), py::arg("units"),
-         py::return_value_policy::copy)
+         py::return_value_policy::move)
     .def("handleTransaction", (std::pair<double, double>(Broker::*)(string, int, double) )
          &Broker::handleTransaction,
          "handle a transaction given accID, asset index and units to purchase",
          py::arg("accID"), py::arg("assetIdx"), py::arg("units"),
-         py::return_value_policy::copy)
+         py::return_value_policy::move)
     .def("handleTransaction", (std::pair<double, double>(Broker::*)(string, string, double) )
          &Broker::handleTransaction,
          "handle a transaction given accID, asset code and units to purchase",
          py::arg("accID"), py::arg("assetCode"), py::arg("units"),
-         py::return_value_policy::copy)
+         py::return_value_policy::move)
     .def("handleTransaction", (std::pair<double, double>(Broker::*)(string, string, int, double) )
          &Broker::handleTransaction,
          "handle a transaction given accID, portID, asset index and units to purchase",
          py::arg("accID"), py::arg("portID"), py::arg("assetIdx"), py::arg("units"),
-         py::return_value_policy::copy)
+         py::return_value_policy::move)
     .def("handleTransaction", (std::pair<double, double>(Broker::*)(string, string, string, double) )
          &Broker::handleTransaction,
          "handle a transaction given accID, portID, asset index and units to purchase",
          py::arg("accID"), py::arg("portID"), py::arg("assetCode"), py::arg("units"),
-         py::return_value_policy::copy);
+         py::return_value_policy::move);
 
-  py::class_<Env>(m, "Env")
-    .def(py::init<string, Assets, double> (),
+  _Env.def(py::init<string, Assets, double> (),
          py::arg("dataSourceType"),
          py::arg("assets"),
          py::arg("initCash")=double(1'000'000))
@@ -335,7 +463,9 @@ PYBIND11_MODULE(env, m){
          py::arg("dataSourceType"),
          py::arg("assets"),
          py::arg("initCash"),
-         py::arg("config_dict"));
+         py::arg("config_dict"))
+    .def("step", (SRDI<double> (Env::*)()) &Env::step,
+         "take env step with no action");
 
 }
 
