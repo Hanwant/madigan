@@ -156,9 +156,10 @@ namespace madigan{
   double Portfolio::usedMargin() const{
     // return requiredMargin_ * meanEntryPrices_.dot(ledger_);
     // return (borrowedMargin_.array() * borrowedMarginRatio()).sum();
-    Eigen::ArrayXd longMask = (ledger_.array() > 0.).cast<double>();
-    auto longPrices = (meanEntryPrices_.array() * longMask).matrix();
-    return requiredMargin_ * ledger_.dot(longPrices);
+    // Eigen::ArrayXd longMask = (ledger_.array() > 0.).cast<double>();
+    // auto longPrices = (meanEntryPrices_.array() * longMask).matrix();
+    // return requiredMargin_ * ledger_.dot(longPrices);
+    return requiredMargin_ * ledger_.cwiseAbs().dot(meanEntryPrices_);
 
   }
 
@@ -182,6 +183,7 @@ namespace madigan{
 
   double Portfolio::availableMargin() const{
     return (balance()+pnl()) / requiredMargin_;
+    // return (equity() + borrowedAssetValue()) / requiredMargin_;
   }
 
   double Portfolio::borrowedEquity() const{
@@ -225,29 +227,29 @@ namespace madigan{
   }
 
   void Portfolio::handleTransaction(int assetIdx, double transactionPrice, double units,
-                                    double transactionCost){
-
+                         double transactionCost){
     // Keeping track of average entry price - for pnl/position calculation
-    double prevUnits = ledger_(assetIdx);
+    double& prevUnits = ledger_(assetIdx);
     if (std::signbit(prevUnits) != std::signbit(units)){
       if (abs(units) > abs(prevUnits)){
         meanEntryPrices_(assetIdx) = transactionPrice;
+        units += prevUnits; // take away amount required to close position
+        cash_ += prevUnits*transactionPrice; // do cash accounting first to close position
+        prevUnits = 0.; // explicitly close position by setting ledger_(assetIdx) to 0.
       }
-    }else{
+    }
+    else{
       meanEntryPrices_(assetIdx) += // volume weighted average of position entry prices
         (transactionPrice - meanEntryPrices_(assetIdx)) * (units /(units + prevUnits));
     }
-
     // Accounting
     double amount_in_base_currency = transactionPrice * units;
     double marginToUse = amount_in_base_currency * requiredMargin_;
     double marginToBorrow = amount_in_base_currency - marginToUse;
     double& borrowedMarginRef = borrowedMargin_(assetIdx);
     borrowedMarginRef += marginToBorrow;
-    // borrowedMargin_ += borrowedMargin;
-    // usedMargin_ += abs(usedMargin);
     cash_ -= (marginToUse +transactionCost);
-    ledger_(assetIdx) += units;
+    prevUnits += units;
 
     if (abs(ledger_(assetIdx)) < 0.0000001){
       meanEntryPrices_(assetIdx) = 0.;
@@ -256,15 +258,30 @@ namespace madigan{
         borrowedMarginRef = 0.;
       }
     }
-
-    // if (borrowedMargin_<0. and borrowedAssetValue() == 0.){
     if (borrowedMarginRef < 0. ){
       cash_ -= borrowedMarginRef;
       borrowedMarginRef = 0.;
-      // usedMargin_=0;
     }
   }
 
+  // void Portfolio::handleTransaction(int assetIdx, double transactionPrice, double units,
+  //                                   double transactionCost){
 
+  //   // Keeping track of average entry price - for pnl/position calculation
+  //   double& prevUnits = ledger_(assetIdx);
+  //   if(units>0.){
+  //     if (prevUnits>0.){
+  //       meanEntryPrices_(assetIdx) += // volume weighted average of position entry prices
+  //         (transactionPrice - meanEntryPrices_(assetIdx)) * (units /(units + prevUnits));
+  //       double amount_in_base_currentcy = transactionPrice*units;
+  //       double marginToUse = amount_in_base_currency*requiredMargin_;
+  //       double marginToBorrow = amount_in_base_currency - marginToUse;
+  //       double& borrowedMarginRef = borrowedMargin_(assetIdx);
+  //       borrowedMarginRef += marginToBorrow;
+  //       cash_ -= (marginToUse + transacionCost);
+  //       prevUnits
+  //     }
+  //   }
 
+  // }
 }

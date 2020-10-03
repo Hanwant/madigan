@@ -24,6 +24,8 @@ namespace madigan{
   typedef Eigen::Map<const PriceVector> PriceVectorMap;
   typedef Eigen::VectorXd AmountVector;
   typedef Eigen::VectorXd Ledger;
+  typedef Eigen::Map<const Ledger> LedgerMap;
+
   // ================================================================
   // ================== Custom Exceptions for project ===============
   // ================================================================
@@ -127,6 +129,9 @@ namespace madigan{
     virtual ~EnvInfo(){};
   };
 
+  using EnvInfoSingle = EnvInfo<double>;
+  using EnvInfoMulti = EnvInfo<PriceVector>;
+
   // struct SRDI{
   //   State state;
   //   double reward;
@@ -137,8 +142,11 @@ namespace madigan{
   // typedef std::tuple<State, double, bool, std::unique_ptr<Info>> SRDI;
   // typedef std::tuple<State, double, bool, EnvInfo<double>> SRDI;
   // typedef std::tuple<State, double, bool, EnvInfo<PriceVector>> SRDI;
+
   template<typename T>
   using SRDI = std::tuple<State, double, bool, EnvInfo<T>>;
+  using SRDISingle = std::tuple<State, double, bool, EnvInfo<double>>;
+  using SRDIMulti = std::tuple<State, double, bool, EnvInfo<PriceVector>>;
 
 
 }

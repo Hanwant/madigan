@@ -317,10 +317,20 @@ def test_broker_interface():
     broker = Broker("broker_acc", assets=assets, initCash=1_000_000)
     broker.setDataSource(synth)
     brokerResponse = broker.handleAction([10_000, -10_000, 50_000, -200_000])
-    # import ipdb; ipdb.set_trace()
+
+def test_broker_multi_trans():
+    assets = Assets(['EURUSD', 'GBPUSD', 'BTCUSD', 'ETHBTC'])
+    synth = Synth()
+    current_prices = synth.getData()
+    broker = Broker("broker_acc", assets=assets, initCash=1_000_000)
+    broker.setDataSource(synth)
+    resp1 = broker.handleTransaction([10_000, -10_000, 50_000, -200_000])
+    resp2 = broker.handleAction([-10_000, 10_000, -50_000, 200_000])
 
 
-def test_successive_accounting():
+def test_successive_accounting1():
+    # Round trip buy -> sell ->short _>buy back
+    # Buy 10_000 + 10_000 - 20_000 -20_000 + 10_000 + 10_000
     synth = Synth()
     port = Portfolio("successive", assets, 1_000_000)
     port.setDataSource(synth)
@@ -343,9 +353,46 @@ def test_successive_accounting():
     port.handleTransaction(0, prices[0], -20_000) # SELL 20_000
     assert_allclose(port.cash, 1_000_000 + prices[0]*20_000., rtol=1e-12)
     assert_allclose(port.assetValue, prices[0]*-20_000, rtol=1e-12)
-    assert_allclose(port.usedMargin, 0., rtol=1e-12)
+    assert_allclose(port.usedMargin, 0.1*prices[0]*20_000, rtol=1e-12)
     assert_allclose(port.borrowedMargin, 0.)
     assert_allclose(port.borrowedAssetValue, prices[0]*-20_000, rtol=1e-12)
+    port.handleTransaction(0, prices[0], 10_000) # BUY 10_000
+    port.handleTransaction(0, prices[0], 10_000) # BUY 10_000
+    assert_allclose(port.cash, 1_000_000., rtol=1e-12)
+    assert_allclose(port.assetValue, 0., rtol=1e-12)
+    assert_allclose(port.usedMargin, 0., rtol=1e-12)
+    assert_allclose(port.borrowedMargin, 0., rtol=1e-12)
+    assert_allclose(port.borrowedAssetValue, 0., rtol=1e-12)
+
+def test_successive_accounting2():
+    # Short 10_000 then buy 20_000 and REVERSE position to 10_000
+    synth = Synth()
+    port = Portfolio("successive", assets, 1_000_000)
+    port.setDataSource(synth)
+    port.setRequiredMargin(0.1)
+    prices = synth.getData()
+    port.handleTransaction(0, prices[0], -10_000) # SELL 10_000
+    port.handleTransaction(0, prices[0], 20_000) # BUY 20_000
+    assert port.cash == 1_000_000. - 0.1 * prices[0] * 10_000
+    assert port.assetValue == prices[0]*10_000
+    assert port.usedMargin == 0.1*prices[0]*10_000
+    assert port.borrowedMargin == 0.9*prices[0]*10_000
+    assert port.borrowedAssetValue == 0.
+
+def test_successive_accounting3():
+    # Long 10_000 then sell 20_000 and REVERSE position to -10_000
+    synth = Synth()
+    port = Portfolio("successive", assets, 1_000_000)
+    port.setDataSource(synth)
+    port.setRequiredMargin(0.1)
+    prices = synth.getData()
+    port.handleTransaction(0, prices[0], 10_000) # BUY 10_000
+    port.handleTransaction(0, prices[0], -20_000) # BUY 10_000
+    assert port.cash == 1_000_000. + prices[0] * 10_000
+    assert port.assetValue == -prices[0]*10_000
+    assert port.usedMargin == 0.1*prices[0]*10_000
+    assert port.borrowedMargin == 0.
+    assert port.borrowedAssetValue == -prices[0]*10_000
 
 def test_multiasset_accounting():
     assets = Assets(['BTCUSD', 'ETHUSD', 'BTCETH', 'EURUSD'])
@@ -365,7 +412,7 @@ def test_multiasset_accounting():
     balance = 1_000_000 - (0.1 * prices[0] * 20_000)
     assetValue = prices[0]*20_000 + prices[3]*-20_000
     # usedMargin = 0.1*(prices[0]*20_000 + prices[3]*-20_000)
-    usedMargin = 0.1*prices[0]*20_000
+    usedMargin = 0.1*prices[0]*20_000 + 0.1*prices[3]*20_000
     borrowedMargin = 0.9*prices[0]*20_000
     borrowedAssetValue = prices[3]*-20_000
     try:
@@ -379,7 +426,7 @@ def test_multiasset_accounting():
         import traceback; traceback.print_exc()
         import ipdb; ipdb.set_trace()
 
-def test_risk_handling():
+def test_port_risk_handling():
     assets = Assets(['BTCUSD', 'ETHUSD', 'BTCETH', 'EURUSD'])
     synth = Synth()
     prices = synth.getData()
@@ -411,8 +458,24 @@ def test_risk_handling():
     cash = equity
     assert_allclose(equity, port.equity, rtol=1e-12)
     assert_allclose(cash, port.cash, rtol=1e-12)
-    # import ipdb; ipdb.set_trace()
 
+def test_broker_risk_handling():
+    assets = Assets(['BTCUSD', 'ETHUSD', 'BTCETH', 'EURUSD'])
+    synth = Synth()
+    prices = synth.getData()
+    prices[1] = 4
+    price = prices[1]
+    broker = Broker("margin_call", assets, 1_000_000)
+    broker.setDataSource(synth)
+    reqM = 0.1
+    mainM = 1.
+    broker.setRequiredMargin(reqM)
+    broker.setMaintenanceMargin(mainM)
+    response = broker.handleTransaction("ETHUSD", 1_000_000)
+    assert response.timestamp
+    assert response.transactionPrice == 4
+    assert response.transactionCost == 0.
+    assert response.riskInfo == RiskInfo.green
 
 def test_env_init():
     assets = Assets(['BTCUSD', 'ETHUSD', 'BTCETH', 'EURUSD'])
@@ -422,8 +485,19 @@ def test_env_init():
 
 def test_env_interface():
     assets = Assets(['BTCUSD', 'ETHUSD', 'BTCETH', 'EURUSD'])
-    env1 = Env("Synth", assets, 1_000_000)
-    env2 = Env("Synth", assets, 1_000_000, config)
+    env = Env("Synth", assets, 1_000_000, config)
+    srdi = env.step()
+    state, reward, done, info = env.step([10000, 20000, -20000, -40000])
+
+def test_env_accounting():
+    assets = Assets(['BTCUSD', 'ETHUSD', 'BTCETH', 'EURUSD'])
+    env = Env("Synth", assets, 1_000_000, config)
+    port = Portfolio("PortRef", assets, 1_000_000)
+    port.setDataSource(env.dataSource)
+    srdi1 = env.step()
+    srdi2 = env.step(0, 10_000) # BUY 10_000
+    srdi3 = env.step(0, -20_000) # SELL -20_000
+    import ipdb; ipdb.set_trace()
 
 
 if __name__ == "__main__":
@@ -446,12 +520,18 @@ if __name__ == "__main__":
     test_broker_acc_port_routing()
     test_broker_accounting_logic()
     test_broker_interface()
+    test_broker_multi_trans()
 
-    test_successive_accounting()
+    test_successive_accounting1()
+    test_successive_accounting2()
+    test_successive_accounting3()
     test_multiasset_accounting()
-    test_risk_handling()
+
+    test_port_risk_handling()
+    test_broker_risk_handling()
 
     test_env_init()
     test_env_interface()
+    test_env_accounting()
     print("TESTS COMPLETED")
 

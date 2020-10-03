@@ -1,6 +1,8 @@
 import itertools as it
 import numpy as np
 
+from cpp import Env
+
 
 class DiscreteActionSpace:
     def __init__(self, ranges: tuple, n: int):
@@ -18,7 +20,7 @@ class DiscreteActionSpace:
     def shape(self):
         return (self.n, )
 
-class Env:
+class EnvPy:
     """
     Base Class for trading environments.
 

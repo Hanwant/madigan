@@ -40,12 +40,23 @@ namespace madigan{
     Broker& operator=(const Broker&)=delete;
     ~Broker(){};
 
+    int nAssets() const{ return assets_.size(); }
+    const Assets& assets() const{ return assets_; }
+
     void addAccount(const Account& account);
-    void addPortfolio(const Portfolio& port);
-    void addPortfolio(string accID, const Portfolio& port);
-    void setDefaultAccount(string accId);
-    void setDefaultAccount(Account*);
-    void setDefaultPortfolio(Portfolio*);
+    void addPortfolio(const Portfolio& port){
+      defaultAccount_->addPortfolio(port);
+    }
+    void addPortfolio(string accID, const Portfolio& port){
+      accountBook_.at(accID)->addPortfolio(port);
+    }
+    void setDefaultAccount(string accId); // Main logic
+    void setDefaultAccount(Account *account){
+      setDefaultAccount(account->id());
+    }
+    void setDefaultPortfolio(Portfolio* portfolio){
+      defaultPortfolio_ = portfolio;
+    }
     void setSlippage(double slippagePct=0., double slippageAbs=0.);
     void setTransactionCosts(double transactionPct=0., double transactionAbs=0.);
     void setDataSource(DataSource* source);
@@ -80,35 +91,93 @@ namespace madigan{
       return accountBook_.at(accID)->portfolioBook(); }
     std::unordered_map<string, Portfolio> portfolioBook() const;
 
-    BrokerResponseMulti handleEvent(AmountVector& units);
+    BrokerResponseMulti handleEvent(const AmountVector& units){
+      return handleTransaction(units);
+    }
+
+    BrokerResponseMulti handleAction(const AmountVector& units){
+      return handleTransaction(units);
+    }
+
     BrokerResponseSingle handleEvent(Order& order);
-    BrokerResponseMulti handleAction(AmountVector& units);
     BrokerResponseSingle handleOrder(Order& order);
 
-    std::pair<double, double> handleTransaction(int assetIdx, double units); // use default account
-    std::pair<double, double> handleTransaction(string assetCode, double units); // use default account
-    std::pair<double, double> handleTransaction(string accountID, int assetIdx,
-                                                double units); // use specific account
-    std::pair<double, double> handleTransaction(string accountID, string assetCode,
-                                                double units); // use specific account
-    std::pair<double, double> handleTransaction(string accountID, string portID,
-                                                int assetIdx, double units); // use specific account & port
-    std::pair<double, double> handleTransaction(string accountID, string portID,
-                                                string assetCode, double units); // use specific account & port
+    BrokerResponseSingle handleTransaction(int assetIdx, double units){
+      return handleTransaction(defaultPortfolio_, assetIdx, units);
+    }
+    BrokerResponseSingle handleTransaction(string assetCode, double units){
+      return handleTransaction(defaultPortfolio_, assetIdx_.at(assetCode), units);
+    }
+    BrokerResponseSingle handleTransaction(string accID, int assetIdx,
+                                           double units){
+      return handleTransaction(accountBook_.at(accID)->defaultPortfolio_,
+                               assetIdx, units);
+    }
+    BrokerResponseSingle handleTransaction(string accID, string assetCode,
+                                           double units){
+      return handleTransaction(accountBook_.at(accID)->defaultPortfolio_,
+                               assetIdx_.at(assetCode), units);
+    }
+    BrokerResponseSingle handleTransaction(string accID, string portID,
+                                                   int assetIdx, double units){
+      return handleTransaction(accountBook_.at(accID)->portfolioBook_.at(portID),
+                               assetIdx, units);
+    }
+    BrokerResponseSingle handleTransaction(string accID, string portID,
+                                                   string assetCode, double units){
+      return handleTransaction(accountBook_.at(accID)->portfolioBook_.at(portID),
+                               assetIdx_.at(assetCode), units);
+    }
+
+    BrokerResponseMulti handleTransaction(const AmountVector& units){
+      return handleTransaction(defaultPortfolio_, units);
+    }
+    BrokerResponseMulti handleTransaction(string accID, const AmountVector& units){
+      return handleTransaction(accountBook_.at(accID)->defaultPortfolio_, units);
+    }
+    BrokerResponseMulti handleTransaction(string accID, string portID,
+                                                  const AmountVector& units){
+      return handleTransaction(accountBook_.at(accID)->portfolioBook_.at(portID),
+                               units);
+    }
+
+    RiskInfo checkRisk() { return defaultPortfolio_->checkRisk();}
+    RiskInfo checkRisk(string accID){
+      return accountBook_.at(accID)->defaultPortfolio_->checkRisk();
+    }
+    RiskInfo checkRisk(string accID, string portID){
+      return accountBook_.at(accID)->portfolioBook_.at(portID)->checkRisk();
+    }
+    RiskInfo checkRisk(int assetIdx, double units){// use default  port
+      return defaultPortfolio_->checkRisk(assetIdx, units);
+    }
+    RiskInfo checkRisk(string assetCode, double units){// use default  port
+      return defaultPortfolio_->checkRisk(assetCode, units);
+    }
+    RiskInfo checkRisk(string accID, int assetIdx, double units){ // use specific account
+      return accountBook_.at(accID)->defaultPortfolio_->checkRisk(assetIdx, units);
+    }
+    RiskInfo checkRisk(string accID, string assetCode, double units){ // use specific account
+      return accountBook_.at(accID)->defaultPortfolio_->checkRisk(assetCode, units);
+    }
+    RiskInfo checkRisk(string accID, string portID, int assetIdx, double units){ // use specific account and port
+      return accountBook_.at(accID)->portfolioBook_.at(portID)->checkRisk(assetIdx, units);
+    }
+    RiskInfo checkRisk(string accID, string portID, string assetCode, double units){ // use specific account and port
+      return accountBook_.at(accID)->portfolioBook_.at(portID)->checkRisk(assetCode, units);
+    }
 
   private:
     // all public handleTransaction functions call this
-    std::pair<double, double> handleTransaction(Account* acc, Portfolio* port,
-                                                int assetIdx, double units);
-    // std::pair<double, double> handleTransaction(Account* acc, Portfolio* port,
-    //                                             string assetCode, double units);
+    BrokerResponseSingle handleTransaction(Portfolio* port, int assetIdx, double units);
+    BrokerResponseMulti handleTransaction(Portfolio* port, const AmountVector& units);
 
-    // bool checkRisk(double currencyAmount); // use default account & port
-    RiskInfo checkRisk();
-    RiskInfo checkRisk(int assetIdx, double units); // use default account & port
-    RiskInfo checkRisk(string assetCode, double units); // use default account
-    RiskInfo checkRisk(int assetIdx, double units, string accountID); // use specific account
-    RiskInfo checkRisk(string assetCode, double units, string accountID); // use specific account
+    // public checkRisk functions call one of these
+    RiskInfo checkRisk(Portfolio* port){ return port->checkRisk(); }
+    RiskInfo checkRisk(Portfolio* port, int assetIdx, double units){
+      return port->checkRisk(assetIdx, units);}
+    RiskInfo checkRisk(Portfolio* port, string assetCode, double units){
+      return port->checkRisk(assetCode, units);}
 
     double applySlippage(double price, double cash);
     double getTransactionCost(double cash);

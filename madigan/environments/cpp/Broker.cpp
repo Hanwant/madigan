@@ -12,14 +12,6 @@ namespace madigan {
     addAccount(account);
   }
 
-  std::unordered_map<string, Account> Broker::accountBookCopy() const {
-    std::unordered_map<string, Account> book;
-    for (const auto& acc: accounts_){
-      book.emplace(make_pair(acc.id(), acc));
-    }
-    return book;
-  }
-
   Broker::Broker(Assets assets, double initCash){
     string id = "acc_" + std::to_string(accounts_.size());
     Account account(id, assets, initCash);
@@ -72,20 +64,6 @@ namespace madigan {
     setDefaultPortfolio(acc->defaultPortfolio_);
   }
 
-  void Broker::setDefaultAccount(Account *account){
-    setDefaultAccount(account->id());
-  }
-
-  void Broker::setDefaultPortfolio(Portfolio* portfolio){
-    defaultPortfolio_ = portfolio;
-  }
-
-  void Broker::addPortfolio(const Portfolio& port){
-    defaultAccount_->addPortfolio(port);
-  }
-  void Broker::addPortfolio(string accID, const Portfolio& port){
-    accountBook_.at(accID)->addPortfolio(port);
-  }
 
   void Broker::setDataSource(DataSource* source){
     dataSource_ = source;
@@ -134,79 +112,32 @@ namespace madigan {
     }
   }
 
-  BrokerResponseMulti Broker::handleEvent(AmountVector& units){
-    return handleAction(units);
+  BrokerResponseSingle Broker::handleTransaction(Portfolio* port,
+                                                 int assetIdx, double units){
+    double transactionPrice;
+    double transactionCost;
+    RiskInfo risk = port->checkRisk(assetIdx, units);
+    if(risk == RiskInfo::green){
+      transactionPrice = applySlippage(currentPrices_(assetIdx) ,units);
+      transactionCost = getTransactionCost(units);
+      port->handleTransaction(assetIdx, transactionPrice, units,
+                              transactionCost);
+      return BrokerResponseSingle(transactionPrice, transactionCost, risk);
+    }
+    return BrokerResponseSingle(0., 0., risk);
   }
 
-  BrokerResponseMulti Broker::handleAction(AmountVector& units){
+  BrokerResponseMulti Broker::handleTransaction(Portfolio* port, const AmountVector& units){
     PriceVector transPrices(units.size());
     PriceVector transCosts(units.size());
     std::vector<RiskInfo> riskInfo(units.size());
-    if (units.size() == defaultAccount_->assets_.size()){
-      for (int assetIdx=0; assetIdx<units.size(); assetIdx++){
-        double unit = units[assetIdx];
-        double transPrice;
-        double transCost;
-        RiskInfo _riskInfo = checkRisk(assetIdx, unit);
-        if(unit != 0. && _riskInfo==RiskInfo::green){
-          auto [transPrice, transCost] = handleTransaction(assetIdx, unit);
-          transPrices(assetIdx) = transPrice;
-          transCosts(assetIdx) = transCost;
-        }
-        riskInfo[assetIdx] = _riskInfo;
-      }
+    for (int i=0; i<units.size(); i++){
+      auto brokerResp = handleTransaction(port, i, units[i]);
+      transPrices[i] = brokerResp.transactionPrice;
+      transCosts[i] = brokerResp.transactionCost;
+      riskInfo[i] = brokerResp.riskInfo;
     }
-    else throw std::length_error("Vector of units to purchase must be same length as number of assets");
-
     return BrokerResponseMulti(transPrices, transCosts, riskInfo);
-  }
-
-  // Private version called by all public handleTransaction overloads
-  std::pair<double, double> Broker::handleTransaction(Account* acc, Portfolio* port,
-                                                      int assetIdx, double units){
-    double transactionPrice = applySlippage(currentPrices_(assetIdx) ,units);
-    double transactionCost = getTransactionCost(units);
-    RiskInfo risk = port->checkRisk(assetIdx, units);
-    port->handleTransaction(assetIdx, transactionPrice, units,
-                            transactionCost);
-    return std::make_pair(transactionPrice, transactionCost);
-  }
-  std::pair<double, double> Broker::handleTransaction(int assetIdx, double units){
-    Account* acc = defaultAccount_;
-    Portfolio* port = defaultPortfolio_;
-    return handleTransaction(acc, port, assetIdx, units);
-  }
-  std::pair<double, double> Broker::handleTransaction(string assetCode, double units){
-    Account* acc = defaultAccount_;
-    Portfolio* port = acc->defaultPortfolio_;
-    unsigned int assetIdx = assetIdx_.at(assetCode);
-    return handleTransaction(acc, port, assetIdx, units);
-  }
-  std::pair<double, double> Broker::handleTransaction(string accID, int assetIdx,
-                                                      double units){
-    Account* acc = accountBook_.at(accID);
-    Portfolio* port = acc->defaultPortfolio_;
-    return handleTransaction(acc, port, assetIdx, units);
-  }
-  std::pair<double, double> Broker::handleTransaction(string accID, string assetCode,
-                                                      double units){
-    Account* acc = accountBook_.at(accID);
-    Portfolio* port = acc->defaultPortfolio_;
-    unsigned int assetIdx = assetIdx_.at(assetCode);
-    return handleTransaction(acc, port, assetIdx, units);
-  }
-  std::pair<double, double> Broker::handleTransaction(string accID, string portID,
-                                                      int assetIdx, double units){
-    Account* acc = accountBook_.at(accID);
-    Portfolio* port = acc->portfolioBook_.at(portID);
-    return handleTransaction(acc, port, assetIdx, units);
-  }
-  std::pair<double, double> Broker::handleTransaction(string accID, string portID,
-                                                      string assetCode, double units){
-    Account* acc = accountBook_.at(accID);
-    Portfolio* port = acc->portfolioBook_.at(portID);
-    unsigned int assetIdx = assetIdx_.at(assetCode);
-    return handleTransaction(acc, port, assetIdx, units);
   }
 
   double Broker::applySlippage(double price, double units){
@@ -217,9 +148,14 @@ namespace madigan {
     return abs(units)*transactionPct_ + transactionAbs_;
 
   }
-  RiskInfo Broker::checkRisk(){ return RiskInfo::green; }
-  RiskInfo Broker::checkRisk(int assetIdx, double units){
-    return RiskInfo::green;
+
+  std::unordered_map<string, Account> Broker::accountBookCopy() const {
+    std::unordered_map<string, Account> book;
+    for (const auto& acc: accounts_){
+      book.emplace(make_pair(acc.id(), acc));
+    }
+    return book;
   }
+
 
 }
