@@ -54,6 +54,7 @@ namespace madigan{
     double balance() const;
     const Ledger& ledger() const {return ledger_;}
     Ledger ledgerNormed() const;
+    AmountVector positionValues() const { return ledger_.cwiseProduct(currentPrices_); }
     double assetValue() const { return ledger_.dot(currentPrices_); }
     double borrowedAssetValue() const;
     Ledger  meanEntryValue() const { return ledger_.array() * meanEntryPrices_.array();}
@@ -63,6 +64,7 @@ namespace madigan{
     const Ledger& borrowedMarginLedger() const;
     double equity() const;
     double pnl() const;
+    AmountVector pnlPositions() const;
     double borrowedEquity() const;
     double borrowedMarginRatio() const { (requiredMargin_<1.)? 1./(1.-requiredMargin_): 0. ;}
 
@@ -83,6 +85,10 @@ namespace madigan{
                            double units, double transactionCost);
     void handleTransaction(int assetIdx, double tranactionPrice,
                            double units, double transactionCost);
+
+    void close(int assetIdx, double transactionPrice, double transactionCost);
+    void close(string assetCode, double transactionPrice, double transactionCost)
+    { close(assetIdx_.at(assetCode), transactionPrice, transactionCost); }
 
     friend std::ostream& operator<<(std::ostream& os, const Portfolio& port);
 

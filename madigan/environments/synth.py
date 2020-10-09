@@ -5,7 +5,7 @@ import numpy as np
 from ..synth import multi_sine_gen
 from ..utils.config import load_config, save_config
 from ..utils.data import State, SARSD
-from .env import Env
+from .env import Env, EnvPy
 
 def default_params():
     param = {'type': 'multisine'}
@@ -17,7 +17,7 @@ def default_params():
     return param
 
 
-class Synth(Env):
+class Synth(EnvPy):
     def __init__(self, generator_params=None, min_tf=1, **config):
         if generator_params is None:
             generator_params = default_params()

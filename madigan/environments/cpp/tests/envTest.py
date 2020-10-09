@@ -439,18 +439,18 @@ def test_port_risk_handling():
     port.setRequiredMargin(reqM)
     port.setMaintenanceMargin(mainM)
     port.handleTransaction("ETHUSD", price, 1_000_000)
-    assert port.checkRisk(-1. + (port.balance + port.pnl)/reqM) == RiskInfo.green
-    assert port.checkRisk( 0. + (port.balance + port.pnl)/reqM) == RiskInfo.insuff_margin
-    assert port.checkRisk( 1. + (port.balance + port.pnl)/reqM) == RiskInfo.insuff_margin
-    new_price = 3.51
+    assert port.checkRisk("ETHUSD", (-1. + (port.balance + port.pnl)/reqM)/price) == RiskInfo.green
+    assert port.checkRisk("ETHUSD", (0. + (port.balance + port.pnl)/reqM)/price) == RiskInfo.insuff_margin
+    assert port.checkRisk("ETHUSD", (1. + (port.balance + port.pnl)/reqM)/price) == RiskInfo.insuff_margin
+    new_price = 3.71
     prices[1] = new_price
     assert port.checkRisk() == RiskInfo.green
-    assert port.checkRisk(1_000_000) == RiskInfo.green
-    new_price = 3.49
+    assert port.checkRisk("ETHUSD", 1_000_000/price) == RiskInfo.green
+    new_price = 3.69
     prices[1] = new_price
     assert port.checkRisk() == RiskInfo.margin_call
-    assert port.checkRisk(-1. + (port.balance + port.pnl)/reqM) == RiskInfo.margin_call
-    assert port.checkRisk(0.) == RiskInfo.margin_call
+    assert port.checkRisk("ETHUSD", (-1. + (port.balance + port.pnl)/reqM)/price) == RiskInfo.margin_call
+    assert port.checkRisk("ETHUSD", 0.) == RiskInfo.margin_call
     loss = 1_000_000*(price-new_price)
     equity = 1_000_000 - loss
     assert_allclose(-loss, port.pnl, rtol=1e-12)
@@ -492,46 +492,64 @@ def test_env_interface():
 def test_env_accounting():
     assets = Assets(['BTCUSD', 'ETHUSD', 'BTCETH', 'EURUSD'])
     env = Env("Synth", assets, 1_000_000, config)
-    port = Portfolio("PortRef", assets, 1_000_000)
-    port.setDataSource(env.dataSource)
+    # port = Portfolio("PortRef", assets, 1_000_000)
+    # port.setDataSource(env.dataSource)
     srdi1 = env.step()
     srdi2 = env.step(0, 10_000) # BUY 10_000
     srdi3 = env.step(0, -20_000) # SELL -20_000
-    import ipdb; ipdb.set_trace()
+
+def test_env_risk_handling():
+    assets = Assets(['BTCUSD', 'ETHUSD', 'BTCETH', 'EURUSD'])
+    env = Env("Synth", assets, 1_000_000, config)
+    srdi = env.step(0, -1 +  1_000_000/env.currentPrices[0]) # BUY 10_000
 
 
 if __name__ == "__main__":
 
-    test_dataSource_init()
-    test_buffer_referencing()
-    test_assets_init()
+    tests = [
+        test_dataSource_init,
+        test_dataSource_speed,
+        test_buffer_referencing,
+        test_assets_init,
 
-    test_port_init()
-    test_port_data_ref()
-    test_port_accounting_logic()
+        test_port_init,
+        test_port_data_ref,
+        test_port_accounting_logic,
 
-    test_account_init()
-    test_acc_data_ref()
-    test_acc_port_routing()
-    test_acc_accounting_logic()
+        test_account_init,
+        test_acc_data_ref,
+        test_acc_port_routing,
+        test_acc_accounting_logic,
 
-    test_broker_init()
-    test_broker_data_ref()
-    test_broker_acc_port_routing()
-    test_broker_accounting_logic()
-    test_broker_interface()
-    test_broker_multi_trans()
+        test_broker_init,
+        test_broker_data_ref,
+        test_broker_acc_port_routing,
+        test_broker_accounting_logic,
+        test_broker_interface,
+        test_broker_multi_trans,
 
-    test_successive_accounting1()
-    test_successive_accounting2()
-    test_successive_accounting3()
-    test_multiasset_accounting()
+        test_successive_accounting1,
+        test_successive_accounting2,
+        test_successive_accounting3,
+        test_multiasset_accounting,
 
-    test_port_risk_handling()
-    test_broker_risk_handling()
+        test_port_risk_handling,
+        test_broker_risk_handling,
 
-    test_env_init()
-    test_env_interface()
-    test_env_accounting()
-    print("TESTS COMPLETED")
+        test_env_init,
+        test_env_interface,
+        test_env_accounting,
+        test_env_risk_handling
+    ]
+    completed = 0
+    total = len(tests)
+    try:
+        for test in tests:
+            test()
+            completed += 1
+    except Exception as E:
+        raise E
+
+    finally:
+        print(f"{completed}/{total} TESTS COMPLETED")
 

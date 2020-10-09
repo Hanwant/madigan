@@ -85,6 +85,7 @@ namespace madigan{
       currentData_[i] = mu[i] + amp[i] * std::sin(PI2*x[i]*freq[i]);
       x[i] += dX;
     }
+    timestamp_ += 1;
     return currentData_;
   }
 

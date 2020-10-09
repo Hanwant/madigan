@@ -112,6 +112,14 @@ namespace madigan {
     }
   }
 
+  std::unordered_map<string, Account> Broker::accountBookCopy() const {
+    std::unordered_map<string, Account> book;
+    for (const auto& acc: accounts_){
+      book.emplace(make_pair(acc.id(), acc));
+    }
+    return book;
+  }
+
   BrokerResponseSingle Broker::handleTransaction(Portfolio* port,
                                                  int assetIdx, double units){
     double transactionPrice;
@@ -122,22 +130,27 @@ namespace madigan {
       transactionCost = getTransactionCost(units);
       port->handleTransaction(assetIdx, transactionPrice, units,
                               transactionCost);
-      return BrokerResponseSingle(transactionPrice, transactionCost, risk);
+      return BrokerResponseSingle(transactionPrice, units, transactionCost, risk,
+                                  (port->checkRisk()==RiskInfo::margin_call)? true: false);
     }
-    return BrokerResponseSingle(0., 0., risk);
+    return BrokerResponseSingle(0., 0., 0., risk,
+                                (port->checkRisk()==RiskInfo::margin_call)? true: false);
   }
 
   BrokerResponseMulti Broker::handleTransaction(Portfolio* port, const AmountVector& units){
     PriceVector transPrices(units.size());
+    PriceVector transUnits(units.size());
     PriceVector transCosts(units.size());
     std::vector<RiskInfo> riskInfo(units.size());
     for (int i=0; i<units.size(); i++){
       auto brokerResp = handleTransaction(port, i, units[i]);
       transPrices[i] = brokerResp.transactionPrice;
+      transUnits[i] = brokerResp.transactionUnits;
       transCosts[i] = brokerResp.transactionCost;
       riskInfo[i] = brokerResp.riskInfo;
     }
-    return BrokerResponseMulti(transPrices, transCosts, riskInfo);
+    return BrokerResponseMulti(transPrices, units, transCosts, riskInfo,
+                               (port->checkRisk()==RiskInfo::margin_call)? true: false);
   }
 
   double Broker::applySlippage(double price, double units){
@@ -147,14 +160,6 @@ namespace madigan {
   double Broker::getTransactionCost(double units){
     return abs(units)*transactionPct_ + transactionAbs_;
 
-  }
-
-  std::unordered_map<string, Account> Broker::accountBookCopy() const {
-    std::unordered_map<string, Account> book;
-    for (const auto& acc: accounts_){
-      book.emplace(make_pair(acc.id(), acc));
-    }
-    return book;
   }
 
 

@@ -49,6 +49,13 @@ namespace madigan{
     PriceVector price;
     Ledger portfolio;
     std::size_t timestamp;
+    State(PriceVector price, Ledger portfolio):
+      price(price), portfolio(portfolio), timestamp(0){}
+    State(Eigen::Ref<const PriceVector> price, Eigen::Ref<const Ledger> portfolio):
+      price(price), portfolio(portfolio), timestamp(0){}
+    State(Eigen::Ref<const PriceVector> price, Eigen::Ref<const Ledger> portfolio,
+          std::size_t timestamp):
+      price(price), portfolio(portfolio), timestamp(timestamp){}
   };
 
   struct DataItem{
@@ -93,27 +100,35 @@ namespace madigan{
   struct BrokerResponse {
     std::string event;
     T transactionPrice;
+    T transactionUnits;
     T transactionCost;
     std::size_t timestamp;
+    bool marginCall{false};
     typedef typename std::conditional<std::is_same<T, PriceVector>::value,
                                       std::vector<RiskInfo>,
                                       RiskInfo>::type RiskInfoType;
     RiskInfoType riskInfo;
 
     BrokerResponse(){};
-    BrokerResponse(T transPrice, T transCost):
-      event(""), transactionPrice(transPrice), transactionCost(transCost)
-      {}
-    BrokerResponse(std::string event, T transPrice, T transCost):
-      event(event), transactionPrice(transPrice), transactionCost(transCost)
-      {}
-    BrokerResponse(T transPrice, T transCost, RiskInfoType riskInfo):
-      event(""), transactionPrice(transPrice), transactionCost(transCost),
-      riskInfo(riskInfo){}
-    BrokerResponse(std::string event, T transPrice, T transCost,
-                   RiskInfoType riskInfo):
-      event(event), transactionPrice(transPrice), transactionCost(transCost),
-      riskInfo(riskInfo){}
+
+    BrokerResponse(std::string event, T transPrice, T transUnits, T transCost):
+      event(event), transactionPrice(transPrice), transactionUnits(transUnits),
+      transactionCost(transCost)
+    {}
+    BrokerResponse(std::string event, T transPrice, T transUnits, T transCost, RiskInfoType riskInfo):
+      event(event), transactionPrice(transPrice), transactionUnits(transUnits),
+      transactionCost(transCost), riskInfo(riskInfo){}
+    BrokerResponse(std::string event, T transPrice, T transUnits, T transCost, RiskInfoType riskInfo,
+                   bool marginCall):
+      event(event), transactionPrice(transPrice), transactionUnits(transUnits),
+      transactionCost(transCost), riskInfo(riskInfo), marginCall(marginCall){}
+
+    BrokerResponse(T transPrice, T transUnits, T transCost):
+      BrokerResponse("", transPrice, transUnits, transCost){}
+    BrokerResponse(T transPrice, T transUnits, T transCost, RiskInfoType riskInfo):
+      BrokerResponse("", transPrice, transUnits, transCost, riskInfo){}
+    BrokerResponse(T transPrice, T transUnits, T transCost, RiskInfoType riskInfo, bool marginCall):
+      BrokerResponse("", transPrice, transUnits, transCost, riskInfo, marginCall){}
   };
 
   using BrokerResponseSingle = BrokerResponse<double>;

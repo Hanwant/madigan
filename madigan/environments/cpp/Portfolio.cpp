@@ -131,51 +131,48 @@ namespace madigan{
   std::unordered_map<string, unsigned int> Portfolio::assetIdx() const{
     return assetIdx_;
   }
+
   unsigned int Portfolio::assetIdx(const string code) const {
     return ledger_(assetIdx_.find(code)->second);
   }
 
   Ledger Portfolio::ledgerNormed() const{
-    return (ledger_.array() / equity()).matrix();
+    return (positionValues().array()/(positionValues().cwiseAbs().sum()+balance())).matrix();
   }
 
   double Portfolio::pnl() const{
-    // std::cout <<"eq: " << equity() <<"\n";
-    // std::cout <<"assetValue: " << assetValue() <<"\n";
-    // std::cout <<"borrowedMargin: " << borrowedMargin_ <<"\n";
-    // std::cout <<"borrowedMarginRatio: " << borrowedMarginRatio_ <<"\n";
-    // return assetValue() - borrowedMargin_ * borrowedMarginRatio_;
-    // double ans = assetValue() - meanEntryPrices_.dot(ledger_);
     return assetValue() - meanEntryPrices_.dot(ledger_);
   }
 
+  AmountVector Portfolio::pnlPositions() const{
+    return positionValues().array() - meanEntryPrices_.cwiseProduct(ledger_).array();
+  }
+
   double Portfolio::balance() const{
-    return cash_ + borrowedAssetValue();
+    Eigen::ArrayXd shortMask = (ledger_.array() < 0.).cast<double>();
+    auto shortPrices = (meanEntryPrices_.array() * shortMask).matrix();
+    double borrowedAssetEntryValue = ledger_.dot(shortPrices);
+    return cash_ + borrowedAssetEntryValue;
   }
 
   double Portfolio::usedMargin() const{
-    // return requiredMargin_ * meanEntryPrices_.dot(ledger_);
-    // return (borrowedMargin_.array() * borrowedMarginRatio()).sum();
-    // Eigen::ArrayXd longMask = (ledger_.array() > 0.).cast<double>();
-    // auto longPrices = (meanEntryPrices_.array() * longMask).matrix();
-    // return requiredMargin_ * ledger_.dot(longPrices);
     return requiredMargin_ * ledger_.cwiseAbs().dot(meanEntryPrices_);
 
   }
 
   double Portfolio::borrowedMargin() const{
-    // Eigen::ArrayXd longMask = (ledger_.array() > 0.).cast<double>();
-    // auto longPrices = (meanEntryPrices_.array() * longMask).matrix();
-    // return (1-requiredMargin_)*ledger_.dot(longPrices);
     return borrowedMargin_.sum();
   }
+
+  double Portfolio::equity() const{
+    return cash_ + assetValue() - borrowedMargin();
+  };
 
   const Ledger& Portfolio::borrowedMarginLedger() const{
     return borrowedMargin_;
   }
 
   double Portfolio::borrowedAssetValue() const{
-    // auto shortMask = ledger_.array() <= 0.;
     Eigen::ArrayXd shortMask = (ledger_.array() < 0.).cast<double>();
     auto shortPrices = (currentPrices_.array() * shortMask).matrix();
     return ledger_.dot(shortPrices);
@@ -183,17 +180,11 @@ namespace madigan{
 
   double Portfolio::availableMargin() const{
     return (balance()+pnl()) / requiredMargin_;
-    // return (equity() + borrowedAssetValue()) / requiredMargin_;
   }
 
   double Portfolio::borrowedEquity() const{
     return borrowedMargin() - 2*borrowedAssetValue();
   }
-
-  double Portfolio::equity() const{
-    return cash_ + assetValue() - borrowedMargin();
-  };
-
 
   void Portfolio::handleTransaction(string asset, double transactionPrice, double units,
                                     double transactionCost){
@@ -202,28 +193,40 @@ namespace madigan{
   }
 
   RiskInfo Portfolio::checkRisk() const{
-    // return (equity()<maintenanceMargin_*pnl())? RiskInfo::margin_call: RiskInfo::green
-    if (equity() <= -(maintenanceMargin_ * pnl())){
+    if ((balance()+pnl()) <= -(maintenanceMargin_ * pnl())){
       return RiskInfo::margin_call;
     }
     return RiskInfo::green;
   }
-  RiskInfo Portfolio::checkRisk(double amount) const{
-    if (equity() <= -(maintenanceMargin_ * pnl())){
-      return RiskInfo::margin_call;
-    }
-    if (availableMargin() <= abs(amount)){
-      return RiskInfo::insuff_margin;
-    }
-    return RiskInfo::green;
-  }
+
   RiskInfo Portfolio::checkRisk(int assetIdx, double units) const{
-    double amount = currentPrices_(assetIdx)*units;
-    return checkRisk(amount);
+    double cashAmount = currentPrices_(assetIdx)*units;
+    const double& currentUnits = ledger_(assetIdx);
+    if (std::signbit(units) != std::signbit(currentUnits)){
+      if (units > -1*currentUnits){ // attempting to reverse position
+        double excess = units + currentUnits;
+        if (availableMargin() <= abs(currentPrices_[assetIdx]*excess) ||
+            balance() <= 0.){
+          return RiskInfo::insuff_margin; // CANT REVERSE OR CLOSE POSITION - NO PARTIAL CLOSE
+        }
+      }
+      return RiskInfo::green;
+    }
+    else{
+      if (checkRisk() == RiskInfo::margin_call){
+        return RiskInfo::margin_call;
+      }
+      else{
+        if (availableMargin() <= abs(cashAmount)
+            || balance() <= 0.){
+          return RiskInfo::insuff_margin;
+        }
+        return RiskInfo::green;
+      }
+    }
   }
   RiskInfo Portfolio::checkRisk(string assetCode, double units) const{
-    double amount = currentPrices_(assetIdx_.at(assetCode))*units;
-    return checkRisk(amount);
+    return checkRisk(assetIdx_.at(assetCode), units);
   }
 
   void Portfolio::handleTransaction(int assetIdx, double transactionPrice, double units,
@@ -261,6 +264,15 @@ namespace madigan{
     if (borrowedMarginRef < 0. ){
       cash_ -= borrowedMarginRef;
       borrowedMarginRef = 0.;
+    }
+  }
+
+  void Portfolio::close(int assetIdx, double transactionPrice,
+                        double transactionCost){
+    double& currentUnits = ledger_(assetIdx);
+    if (currentUnits != 0.){
+      handleTransaction(assetIdx, transactionPrice, -1*currentUnits,
+                        transactionCost);
     }
   }
 

@@ -33,6 +33,7 @@ namespace madigan{
     // Data<T> nextData();
     virtual const PriceVector& getData()=0;
     virtual const PriceVector& currentData() const=0;
+    virtual std::size_t currentTime() const =0;
   };
 
 
@@ -52,6 +53,7 @@ namespace madigan{
     const PriceVector& getData() override;
     const pybind11::array_t<double> getData_np() ;
     const PriceVector& currentData() const{ return currentData_;}
+    std::size_t currentTime() const { return timestamp_; }
 
   private:
     void initParams(std::vector<double> freq, std::vector<double> mu,
@@ -66,6 +68,7 @@ namespace madigan{
     vector<double> amp;
     vector<double> initPhase;
     vector<double> x;
+    std::size_t timestamp_;
 
     PriceVector currentData_;
   };

@@ -11,6 +11,7 @@
 #include "Account.h"
 #include "Broker.h"
 #include "Env.h"
+#include "PyEnv.h"
 #include "Config.h"
 
 namespace py = pybind11;
@@ -36,14 +37,18 @@ void declareBrokerResponse(py::module& m, const string& className){
     .def_readonly("event", &Class::event)
     .def_readonly("timestamp", &Class::timestamp)
     .def_readonly("transactionPrice", &Class::transactionPrice)
+    .def_readonly("transactionUnits", &Class::transactionUnits)
     .def_readonly("transactionCost", &Class::transactionCost)
     .def_readonly("riskInfo", &Class::riskInfo)
+    .def_readonly("marginCall", &Class::marginCall)
     .def("__repr__", [](const BrokerResponse<T>& b){
         std::stringstream repr;
         repr << "timestamp:        " << b.timestamp << "\n";
         repr << "transactionPrice: \n" << b.transactionPrice << "\n";
+        repr << "transactionUnits:  \n" << b.transactionUnits << "\n";
         repr << "transactionCost:  \n" << b.transactionCost << "\n";
         repr << "riskInfo:         \n" << b.riskInfo << "\n";
+        repr << "marginCall:         \n" << b.marginCall<< "\n";
         return repr.str();}
       );
 }
@@ -93,12 +98,20 @@ PYBIND11_MODULE(env, m){
   _RiskInfo.value("green", RiskInfo::green)
     .value("margin_call", RiskInfo::margin_call)
     .value("insuff_margin", RiskInfo::insuff_margin)
-    .value("blown_out", RiskInfo::blown_out);
+    .value("blown_out", RiskInfo::blown_out)
+    .def("__str__", [] (const RiskInfo& r) {
+      std::stringstream repr;
+      repr << r;
+      return repr.str(); })
+    .def("__repr__", [] (const RiskInfo& r){
+      std::stringstream repr;
+      repr << r;
+      return repr.str(); });
 
   _State
     .def(py::init<PriceVector, Ledger, std::size_t> (),
          py::arg("prices"), py::arg("portfolio"), py::arg("timestamp"))
-    .def_readwrite("prices", &State::price)
+    .def_readwrite("price", &State::price)
     .def_readwrite("portfolio", &State::portfolio)
     .def_readwrite("timestamp", &State::timestamp);
 
@@ -117,9 +130,8 @@ PYBIND11_MODULE(env, m){
     .def_readwrite("code", &Asset::code)
     .def_readwrite("exchange", &Asset::exchange)
     .def_readwrite("bp_multiplier", &Asset::bpMultiplier)
-    .def("__repr__", [] (const Asset& a){
-      return "name: " + a.name + " code: " + a.code;
-    });
+    .def("__str__", [] (const Asset& a) { return a.code; })
+    .def("__repr__", [] (const Asset& a){ return a.code; });
 
   _Assets.def(py::init<std::vector<string>> (), py::arg("asset_names_list"))
     .def(py::init<std::vector<Asset>> (), py::arg("asset_names_list"))
@@ -161,6 +173,9 @@ PYBIND11_MODULE(env, m){
          py::arg("freq"), py::arg("mu"),
          py::arg("amp"), py::arg("phase"),
          py::arg("dx"))
+    .def_property_readonly("currentTime", &Synth::currentTime,
+                           "get the current timestamp",
+                           py::return_value_policy::move)
     .def("getData", (PriceVector& (Synth::*) ()) &Synth::getData,
          "Get Next data points",
          py::return_value_policy::reference)
@@ -178,6 +193,8 @@ PYBIND11_MODULE(env, m){
     .def_property_readonly("id", &Portfolio::id, "portfolio id")
     .def_property_readonly("requiredMargin", &Portfolio::requiredMargin,
                            "required margin level")
+    .def_property_readonly("maintenanceMargin", &Portfolio::maintenanceMargin,
+                           "maintenance margin level")
     .def_property_readonly("nAssets", &Portfolio::nAssets,
                            "number of assets")
     .def_property_readonly("assets", (Assets(Portfolio::*)()) &Portfolio::assets,
@@ -190,6 +207,9 @@ PYBIND11_MODULE(env, m){
                            "returns net equity")
     .def_property_readonly("pnl", &Portfolio::pnl,
                            "returns current net profit/loss")
+    .def_property_readonly("pnlPositions", &Portfolio::pnl,
+                           "returns current net profit/loss for each position",
+                           py::return_value_policy::move)
     .def_property_readonly("borrowedMargin", &Portfolio::borrowedMargin,
                            "Total Margin currently borrowed for positions (i.e for levaraged buy)")
     .def_property_readonly("borrowedMarginLedger", &Portfolio::borrowedMarginLedger,
@@ -198,6 +218,9 @@ PYBIND11_MODULE(env, m){
                            "Margin available for entering positions (i.e for levaraged buy)")
     .def_property_readonly("assetValue", &Portfolio::assetValue,
                            "net value of current positions (long + short)")
+    .def_property_readonly("positionValues", &Portfolio::assetValue,
+                           "vector of position values for current holdings",
+                           py::return_value_policy::move)
     .def_property_readonly("borrowedAssetValue", &Portfolio::borrowedAssetValue,
                            "value of current short positions")
     .def_property_readonly("usedMargin", &Portfolio::usedMargin,
@@ -206,6 +229,12 @@ PYBIND11_MODULE(env, m){
                            "current prices as per registered data source "
                            "\n Careful as the returned array will contain a reference"
                            "to the datasource buffer - const is ignored",
+                           py::return_value_policy::reference)/* BE CAREFUL - CASTS AWAY CONSTNESS
+                                                                 AND CONNECTED TO DATA SOURCE*/
+    .def_property_readonly("meanEntryPrices", &Portfolio::meanEntryPrices,
+                           "Mean Entry price for the current positions "
+                           "\n Careful as the returned array will contain a reference"
+                           "to the internal array- const is ignored",
                            py::return_value_policy::reference)/* BE CAREFUL - CASTS AWAY CONSTNESS
                                                                  AND CONNECTED TO DATA SOURCE*/
     .def_property_readonly("ledger", &Portfolio::ledger,
@@ -223,11 +252,6 @@ PYBIND11_MODULE(env, m){
          "checks current risk levels and returns a RiskInfo enum object\n"
          "I.e returns RiskInfo::green unless current equity is lower than "
          "maintenance margin requirements ")
-    .def("checkRisk", (RiskInfo (Portfolio::*) (double) const) &Portfolio::checkRisk,
-         "checks availableMargin and compares with proposed amount_to_purchase"
-         "I.e returns RiskInfo::green unless availableMargin is lower than "
-         "initial margin requirements ",
-         py::arg("amount_to_purchase"))
     .def("checkRisk", (RiskInfo (Portfolio::*) (int, double) const) &Portfolio::checkRisk,
          "checks availableMargin and compares with proposed amount_to_purchase"
          "I.e returns RiskInfo::green unless availableMargin is lower than "
@@ -519,7 +543,8 @@ PYBIND11_MODULE(env, m){
          py::arg("initCash"),
          py::arg("config_dict"))
     .def("reset", &Env::reset,
-         "reset dataSource and env")
+         "reset dataSource and env",
+         py::return_value_policy::move)
     .def("setRequiredMargin", (void (Env::*)(double)) &Env::setRequiredMargin,
          "set required Margin level for default port, takes proportion as input"
          " I.e 0.1 for 10% margin or 10x levarage",
@@ -529,44 +554,66 @@ PYBIND11_MODULE(env, m){
          " I.e 0.1 for 10% margin or 10x levarage",
          py::arg("maintenanceMargin"))
     .def_property_readonly("broker", &Env::broker,
-                            "Returns pointer to broker instance",
-                            py::return_value_policy::copy)
-    .def_property_readonly("account", &Env::account,
-                            "Returns pointer to default account instance",
-                            py::return_value_policy::copy)
-    .def_property_readonly("portfolio", &Env::portfolio,
-                           "Returns pointer to default portfolio instance",
-                           py::return_value_policy::copy)
+                           "Returns pointer to broker instance")
+    .def_property_readonly("account", (const Account* (Env::*)() const) &Env::account,
+                           "Returns pointer to default account instance")
+    .def_property_readonly("portfolio",(const Portfolio* (Env::*)() const) &Env::portfolio,
+                           "Returns pointer to default portfolio instance")
     .def_property_readonly("dataSource", &Env::dataSource,
                            "returns reference to current buffer for prices"
-                           ", use reference with care as constness is cast away on python side",
-                           py::return_value_policy::reference)
+                           ", use reference with care as constness is cast away on python side")
+    .def_property_readonly("requiredMargin", &Env::requiredMargin,
+                           "required margin level")
+    .def_property_readonly("maintenanceMargin", &Env::maintenanceMargin,
+                           "maintenance margin level")
     .def_property_readonly("currentPrices", &Env::currentPrices,
-         "returns reference to current buffer for prices"
-         ", use reference with care as constness is cast away on python side",
-         py::return_value_policy::reference)
+                           "returns reference to current buffer for prices"
+                           ", use reference with care as constness is cast away on python side",
+                           py::return_value_policy::reference)/* BE CAREFUL - CASTS AWAY CONSTNESS
+                                                                 AND CONNECTED TO DATA SOURCE*/
+
+    .def_property_readonly("meanEntryPrices", &Env::meanEntryPrices,
+                           "Mean Entry price for the current positions "
+                           "returns reference to current buffer for prices"
+                           ", use reference with care as constness is cast away on python side",
+                           py::return_value_policy::reference)/* BE CAREFUL - CASTS AWAY CONSTNESS
+                                                                 AND CONNECTED TO DATA SOURCE*/
     .def_property_readonly("ledger", &Env::ledger,
-         "returns reference to current ledger for the default portfolio"
-         ", use reference with care as constness is cast away on python side",
-         py::return_value_policy::reference)
+                           "returns reference to current ledger for the default portfolio"
+                           ", use reference with care as constness is cast away on python side",
+                           py::return_value_policy::reference)/* BE CAREFUL - CASTS AWAY CONSTNESS
+                                                                 AND CONNECTED TO DATA SOURCE*/
+
+    .def_property_readonly("ledgerNormed", &Env::ledgerNormed,
+                           "returns reference to current ledger for the default portfolio"
+                           ", use reference with care as constness is cast away on python side",
+                           py::return_value_policy::copy)
     .def_property_readonly("equity",  &Env::equity,
-         "returns net equity")
+                           "returns net equity")
     .def_property_readonly("cash",  &Env::cash,
-         "returns net cash")
+                           "returns net cash")
     .def_property_readonly("assetValue",  &Env::assetValue,
                            "returns net value of assets (incl lnog and short)")
+    .def_property_readonly("positionValues",  &Env::positionValues,
+                           "returns values of individual assets currently held",
+                           py::return_value_policy::move)
+    .def_property_readonly("pnl",  &Env::pnl,
+                           "returns net pnl of all positions")
+    .def_property_readonly("pnlPositions",  &Env::pnlPositions,
+                           "returns individual pnls of positions",
+                           py::return_value_policy::move)
     .def_property_readonly("usedMargin", &Env::usedMargin,
-         "returns net usedMargin")
+                           "returns net usedMargin")
     .def_property_readonly("availableMargin", &Env::availableMargin,
-         "returns net availableMargin")
+                           "returns net availableMargin")
     .def_property_readonly("borrowedMargin", &Env::borrowedMargin,
-         "returns net borrowedMargin")
+                           "returns net borrowedMargin")
     .def_property_readonly("borrowedAssetValue", &Env::borrowedAssetValue,
                            "returns net borrowed assets (i.e value of shorts)")
     .def_property_readonly("nAssets", &Env::nAssets,
-         "number of assets")
+                           "number of assets")
     .def_property_readonly("assets", &Env::assets,
-         "Returns list of Asset objects")
+                           "Returns list of Asset objects")
     .def("equity_", (double(Env::*)(string) const) &Env::equity,
          "returns net equity")
     .def("cash_", (double(Env::*)(string) const) &Env::cash,
@@ -581,6 +628,11 @@ PYBIND11_MODULE(env, m){
          "returns net borrowedMargin")
     .def("borrowedAssetValue_", (double(Env::*)(string) const) &Env::borrowedAssetValue,
          "returns net borrowedAssetValue")
+    .def("checkRisk", &Env::checkRisk,
+         "Checks for margin call, useful as when attempting to reverse a position, "
+         "a margin call will not be returned by checkRisk(asset, units) as "
+         "the transaction allowing closing of the positions will take precendence"
+         "in the return RiskInfo")
     .def("step", (SRDIMulti (Env::*)(const AmountVector&)) &Env::step,
          "take env step with given array of units to purchase",
          py::arg("units"),

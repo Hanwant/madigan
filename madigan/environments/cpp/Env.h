@@ -23,17 +23,18 @@ namespace madigan{
     //   assets = dataSource->assets;
     // };
     // inline Env(std::unique_ptr<DataSource> dataSource, Assets assets, double initCash);
-    Env(string sourceType, Assets assets, double initCash): dataSourceType(sourceType){
-      reset(); initAccountants(assets, initCash);}
+    Env(string sourceType, Assets assets, double initCash): assets_(assets), initCash_(initCash),
+                                                            dataSourceType(sourceType){
+      reset(); }
 
     Env(string sourceType, Assets assets, double initCash, Config config):
-      dataSourceType(sourceType), config(config){
-      reset(); initAccountants(assets, initCash);}
+      assets_(assets), initCash_(initCash), dataSourceType(sourceType), config(config){
+      reset(); }
     Env(string sourceType, Assets assets, double initCash, pybind11::dict py_config)
       : Env(sourceType, assets, initCash, makeConfigFromPyDict(py_config)){};
 
     Env(const Env& other)=delete;
-    virtual inline void reset();
+    virtual inline State reset();
     virtual inline SRDI<double> step(); // No action - I.e Hold
     // SRDISingle step(int action); // Single Asset;
     virtual inline SRDISingle step(int assetIdx, double units); // Multiple Assets
@@ -51,17 +52,21 @@ namespace madigan{
     const DataSource*  dataSource() const { return dataSource_.get(); }
     const Broker*  broker() const { return broker_.get(); }
     const Account*  account() const { return defaultAccount_; }
-    const Account*  account(string accID) const { return broker_->acountBook_.at(accID); }
+    const Account*  account(string accID) const { return broker_->accountBook_.at(accID); }
     const Portfolio*  portfolio() const { return defaultPortfolio_; }
     const Portfolio*  portfolio(string accID) const { return defaultAccount_->portfolioBook_.at(accID); }
+    std::size_t currentTime() const {return dataSource_->currentTime(); }
     const PriceVectorMap& currentPrices() const { return currentPrices_;}
     const LedgerMap& ledger() const { return defaultLedger_;}
     Ledger ledgerNormed() const { return defaultPortfolio_->ledgerNormed();}
+    const Ledger&  meanEntryPrices() const { return defaultPortfolio_->meanEntryPrices(); }
 
-    int nAssets() const { return broker_->nAssets(); }
-    Assets assets() const { return broker_->assets(); }
+    int nAssets() const { return assets_.size(); }
+    Assets assets() const { return assets_; }
+    double initCash() const { return initCash_; }
     double cash() const { return defaultPortfolio_->cash(); }
     double assetValue() const{ return defaultPortfolio_->assetValue(); }
+    AmountVector positionValues() const { return defaultPortfolio_->positionValues(); }
     double equity() const { return defaultPortfolio_->equity(); }
     double usedMargin() const{ return defaultPortfolio_->usedMargin();}
     double availableMargin() const{ return defaultPortfolio_->availableMargin();}
@@ -70,15 +75,20 @@ namespace madigan{
     double borrowedMargin() const { return defaultPortfolio_->borrowedMargin(); }
     double borrowedAssetValue() const { return defaultPortfolio_->borrowedAssetValue(); }
     double pnl() const { return defaultPortfolio_->pnl(); }
+    AmountVector pnlPositions() const { return defaultPortfolio_->pnlPositions(); }
 
     void setRequiredMargin(double reqM){ broker_->setRequiredMargin(reqM); }
     void setMaintenanceMargin(double mainM){ broker_->setMaintenanceMargin(mainM); }
 
+    RiskInfo checkRisk(){ return defaultPortfolio_->checkRisk(); }
+
 
   private:
-    inline void initAccountants(Assets assets, double initCash);
+    inline void initAccountants();
 
   private:
+    Assets assets_;
+    double initCash_;
     std::unique_ptr<DataSource> dataSource_;
     std::unique_ptr<Broker> broker_;
     PriceVectorMap currentPrices_{nullptr, 0};
@@ -87,9 +97,9 @@ namespace madigan{
     LedgerMap defaultLedger_{nullptr, 0};
   };
 
-  void Env::initAccountants(Assets assets, double initCash){
-    // Call after dataSource_ has been initialized
-    broker_ = std::make_unique<Broker>(assets, initCash);
+  void Env::initAccountants(){
+    // Call after assets_, initCash_ and dataSource_ have been initialized
+    broker_ = std::make_unique<Broker>(assets_, initCash_);
     broker_->setDataSource(dataSource_.get());
     defaultAccount_ = broker_->defaultAccount_;
     defaultPortfolio_ = broker_->defaultPortfolio_;
@@ -100,7 +110,7 @@ namespace madigan{
                                     defaultPortfolio_->ledger().size());
   }
 
-  void Env::reset(){
+  State Env::reset(){
     if(dataSourceType == "Synth"){
       if (config.size() > 0){
         dataSource_ = make_unique<Synth>(config);
@@ -112,6 +122,8 @@ namespace madigan{
     else{
       throw NotImplemented("Only Synth as datasource is implemented");
     }
+    initAccountants();
+    return State(currentPrices(), ledger(), currentTime());
   }
 
   SRDISingle Env::step(){
@@ -121,8 +133,8 @@ namespace madigan{
     double reward = (currentEq-prevEq) / prevEq;
     RiskInfo risk = broker_->checkRisk();
     bool done = (risk == RiskInfo::green)? true: false;
-    return std::make_tuple(State{newPrices, broker_->defaultAccount_->ledgerNormed(), 0},
-                   reward, done, EnvInfo<double>());
+    return std::make_tuple(State{newPrices, broker_->defaultAccount_->ledgerNormed(),
+                                 currentTime()}, reward, done, EnvInfo<double>());
   }
 
   SRDIMulti Env::step(const AmountVector& units){
@@ -137,13 +149,13 @@ namespace madigan{
 
     bool done{false};
     for(const auto& risk: response.riskInfo){
-      if (risk != RiskInfo::green){
+      if (risk != RiskInfo::green && risk != RiskInfo::insuff_margin){
         done = true;
       }
     }
 
-    return std::make_tuple(State{newPrices, broker_->defaultAccount_->ledgerNormed(), 0},
-                           reward, done, EnvInfoMulti(response));
+    return std::make_tuple(State{newPrices, broker_->defaultAccount_->ledgerNormed(),
+                                 currentTime()}, reward, done, EnvInfoMulti(response));
   }
 
   SRDISingle Env::step(int assetIdx, double units){
@@ -156,8 +168,8 @@ namespace madigan{
     double reward = (currentEq-prevEq) / prevEq;
     bool done = (response.riskInfo == RiskInfo::green)? false: true;
 
-    return std::make_tuple(State{newPrices, broker_->defaultAccount_->ledgerNormed(), 0},
-                           reward, done, EnvInfoSingle(response));
+    return std::make_tuple(State{newPrices, broker_->defaultAccount_->ledgerNormed(),
+                                 currentTime()}, reward, done, EnvInfoSingle(response));
   }
 
 } // namespace madigan

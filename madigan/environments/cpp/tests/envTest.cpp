@@ -156,12 +156,15 @@ void testBroker(){
   // 2 types of broker response
   // BrokerResponseSingle for single transactions
   // BrokerResponseMulti for multiple sent/executed transactions
-  BrokerResponseSingle brokerResp1(0.1, 0.1, RiskInfo::green);
+  BrokerResponseSingle brokerResp1(0.1, 10., 0.1, RiskInfo::green);
   PriceVector transPrices(1);
+  AmountVector transUnits(1);
   PriceVector transCosts(1);
   transPrices << 1.;
+  transUnits << 1.;
   transCosts << 1.;
-  BrokerResponseMulti brokerResp2(transPrices, transCosts, std::vector<RiskInfo>{RiskInfo::green});
+  BrokerResponseMulti brokerResp2(transPrices, transUnits, transCosts,
+                                  std::vector<RiskInfo>{RiskInfo::green});
 
 
 }
@@ -261,7 +264,7 @@ void testAccountingPortfolio(){
   assert(port.pnl() == 0.);
 }
 
-void testEnv(){
+void testEnvInit(){
   Assets assets{"sine1", "sine2", "sine3", "sine4"};
   // std::unique_ptr<DataSource> dataSource1 = std::make_unique<Synth>();
   Broker broker1 = Broker(assets, 1'000'000);
@@ -288,6 +291,15 @@ void testEnvConfig(){
   Env env = Env("Synth", assets, 1'000'000, config);
 }
 
+void testEnvData(){
+  Assets assets{"sine1", "sine2", "sine3", "sine4"};
+  // std::unique_ptr<DataSource> dataSource1 = std::make_unique<Synth>();
+  Broker broker1 = Broker(assets, 1'000'000);
+  Env env = Env("Synth", assets, 1'000'000);
+  SRDI<double> envResponse = env.step();
+  std::cout << env.currentPrices() << "\n";
+}
+
 
 int main(){
 
@@ -310,11 +322,14 @@ int main(){
   std::cout<< "testAccountingportfolio();\n";
   testAccountingPortfolio();
   std::cout<< "===========================================\n";
-  std::cout<< "testEnv();\n";
-  testEnv();
+  std::cout<< "testEnvInit();\n";
+  testEnvInit();
   std::cout<< "===========================================\n";
   std::cout<< "testEnvConfig();\n";
   testEnvConfig();
+  std::cout<< "===========================================\n";
+  std::cout<< "testEnvData();\n";
+  testEnvData();
   std::cout<< "===========================================\n";
   std::cout<< "TESTS COMPLETED\n";
 
