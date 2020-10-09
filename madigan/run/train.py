@@ -3,43 +3,50 @@ from pathlib import Path
 from random import random
 import logging
 from typing import Union
+import yaml
+
 from tqdm import tqdm
 import numpy as np
 import pandas as pd
 import torch
 import matplotlib.pyplot as plt
-from ..utils import SARSD, State, ReplayBuffer, make_grid, save_to_hdf, load_from_hdf
+from ..utils import SARSD, State, ReplayBuffer, save_to_hdf, load_from_hdf
+from ..utils.config import save_config
+from ..utils.plotting import make_grid
+from ..utils.preprocessor import make_preprocessor
 from ..fleet import make_agent, DQN
 from ..environments import make_env, Synth
+from ..environments.cpp import RiskInfo
 from .test import test
 
 
-def plot_train_logs(train_logs, filter_cols=('prices', )):
-    metrics = list(filter(lambda x: x not in filter_cols,
-                          train_logs.keys()))
-    fig, axs = plt.subplots(*make_grid(len(metrics)))
-    ax = axs.flatten()
-    for i, name in enumerate(metrics):
-        ax[i].plot(train_logs[name], label=name)
-        ax[i].set_title(name)
-        ax[i].legend()
-    plt.show()
+# def plot_train_logs(train_logs, filter_cols=('prices', )):
+#     metrics = list(filter(lambda x: x not in filter_cols,
+#                           train_logs.keys()))
+#     fig, axs = plt.subplots(*make_grid(len(metrics)))
+#     ax = axs.flatten()
+#     for i, name in enumerate(metrics):
+#         ax[i].plot(train_logs[name], label=name)
+#         ax[i].set_title(name)
+#         ax[i].legend()
+#     plt.show()
 
-def list_2_dict(metrics: list):
+def list_2_dict(list_of_dicts: list):
     """
     aggregates a list of dicts (all with same keys) into a dict of lists
 
     the train_loop generator yield dictionaries of metrics at each iteration.
     this allows the loop to be interoperable in different scenarios
     The expense of getting a dict (instead of directly appending to list)
-    is not too much but come back and PROFILE
+    is probably not too much but come back and profile
 
 
     """
-    if metrics is not None and len(metrics) > 0:
-        if isinstance(metrics[0], dict):
-            metrics = {k: [metric[k] for metric in metrics] for k in metrics[0].keys()}
-            return metrics
+    if list_of_dicts is not None and len(list_of_dicts) > 0:
+        if isinstance(list_of_dicts[0], dict):
+            dict_of_lists = {k: [metric[k] for metric in list_of_dicts]
+                             for k in list_of_dicts[0].keys()}
+            return dict_of_lists
     else:
         return {}
 
@@ -49,7 +56,7 @@ def reduce_train_metrics(metrics: Union[dict, pd.DataFrame], columns: list):
     returns dict/df depending on input type
     """
     if metrics is not None and len(metrics):
-        _metrics = type(metrics)() # Create a dict or pd df
+        _metrics = type(metrics)() # Create an empty dict or pd df
         for col in metrics.keys():
             if col in columns:
                 if isinstance(metrics[col][0], (np.ndarray, torch.Tensor)):
@@ -61,7 +68,7 @@ def reduce_train_metrics(metrics: Union[dict, pd.DataFrame], columns: list):
             else:
                 _metrics[col] = metrics[col] # Copy might be needed for numpy arrays / torch tensors
     else:
-        _metrics = metrics
+        return metrics
     return _metrics
 
 def reduce_test_metrics(test_metrics, cols=('returns', 'equity', 'cash', 'margin')):
@@ -106,9 +113,11 @@ class Trainer:
     Trainer.run_server() listens for jobs coming from a socket
     sending the results back
     """
-    def __init__(self, agent, env, config, print_progress=True, overwrite_logs=False):
+    def __init__(self, agent, env, preprocessor, config,
+                 print_progress=True, overwrite_logs=False):
         self.agent = agent
         self.env = env
+        self.preprocessor = preprocessor
         self.config = config
         self.logger = logging.getLogger('trainer')
         self.print_progress = print_progress
@@ -124,12 +133,26 @@ class Trainer:
                 self.logger.warning("Overwriting previous log file")
                 os.remove(self.logpath)
         self.test_metrics_cols = ('cash', 'equity', 'margin', 'returns')
+        self.config.save()
 
     @classmethod
     def from_config(cls, config, **kwargs):
         agent = make_agent(config)
         env = make_env(config)
-        return cls(agent, env, config, **kwargs)
+        preprocessor = make_preprocessor(config)
+        return cls(agent, env, preprocessor, config, **kwargs)
+
+    def __iter__(self):
+        self.train_loop = iter(self.train_loop(self.agent, self.env, self.preprocessor,
+                                               self.config, print_progress=self.print_progress))
+        return self
+
+    def __next__(self):
+        """
+        Returns a 'train_metric' which is either a dict or None:
+        """
+        return next(self.train_loop)
+
 
     def save_logs(self, train_metrics, test_metrics, append=True):
         if len(train_metrics):
@@ -149,19 +172,9 @@ class Trainer:
         test_logs = load_from_hdf(self.logpath, 'test')
         return train_logs, test_logs
 
-    def __iter__(self):
-        self.train_loop = iter(self.train_loop(self.agent, self.env, self.config, print_progress=self.print_progress))
-        return self
-
-    def __next__(self):
-        """
-        Returns a 'train_metric' which is either a dict or None:
-        """
-        return next(self.train_loop)
-
     def test(self, nsteps=None):
         nsteps = nsteps or self.config.test_steps
-        episode_metrics = test(self.agent, self.env, nsteps=nsteps)
+        episode_metrics = test(self.agent, self.env, self.preprocessor, nsteps=nsteps)
         return episode_metrics
 
     def train(self, nsteps=None):
@@ -192,14 +205,16 @@ class Trainer:
         i = 0
         try:
             self.logger.info("Starting Training")
-            test_metric = test(self.agent, self.env, self.config.test_steps)
+            test_metric = test(self.agent, self.env, self.preprocessor,
+                               self.config.test_steps)
             self.agent.save_state()
             while i < nsteps:
                 train_metric = next(self.train_loop)
 
                 if i % test_freq == 0:
                     self.logger.info("Testing Model")
-                    test_metric = test(self.agent, self.env, self.config.test_steps)
+                    test_metric = test(self.agent, self.env, self.preprocessor,
+                                       self.config.test_steps)
 
                 if i % model_save_freq == 0:
                     self.logger.info("Saving Model")
@@ -230,7 +245,8 @@ class Trainer:
             import ipdb; ipdb.set_trace()
 
         finally:
-            test_metrics.append(test(self.agent, self.env, self.config.test_steps))
+            test_metrics.append(test(self.agent, self.env, self.preprocessor,
+                                     self.config.test_steps))
             self.agent.training_steps += train_metric['training_steps']
             self.agent.total_steps += train_metric['total_steps']
             self.agent.save_state()
@@ -238,12 +254,12 @@ class Trainer:
             train_metrics, test_metrics = self.load_logs()
             return train_metrics, test_metrics
 
-def train(agent, env, config, nsteps=None):
+def train(agent, env, preprocessor, config, nsteps=None):
     """
     Skeleton for wrapping a train loop
     """
     train_loop = get_train_loop(config)
-    loop = iter(train_loop(agent, env, config))
+    loop = iter(train_loop(agent, env, preprocessor, config))
     train_metrics = []
     test_metrics = []
     test_freq = config.test_freq
@@ -255,7 +271,8 @@ def train(agent, env, config, nsteps=None):
             train_metric = next(loop)
 
             if i % test_freq == 0:
-                test_metric = test(agent, env, config.test_steps)
+                test_metric = test(agent, env, preprocessor,
+                                   config.test_steps)
 
             if i % model_save_freq == 0:
                 agent.save_state()
@@ -280,7 +297,30 @@ def train(agent, env, config, nsteps=None):
 
     return train_metrics, test_metrics
 
-def train_loop_dqn(agent, env, config, print_progress=True):
+def get_env_info(env):
+    return {
+        "riskInfo": env.checkRisk(),
+        "current_prices": env.currentPrices.tolist(),
+        "equity": env.equity,
+        "cash": env.cash,
+        "pnl": env.pnl,
+        "balance": env.portfolio.balance,
+        "availableMargin": env.availableMargin,
+        "usedMargin": env.usedMargin,
+        "borrowedAssetValue": env.borrowedAssetValue,
+        "ledger": env.ledger.tolist(),
+        "ledgerNormed": env.ledgerNormed.tolist(),
+    }
+def format_env_info(info_dict):
+    """ for printing """
+    # return yaml.dump(info_dict, default_flow_style=None, sort_keys=False)
+    formatted=""
+    for k, v in info_dict.items():
+        formatted += k + ": " + repr(v) + "\n"
+    return formatted
+
+
+def train_loop_dqn(agent, env, preprocessor, config, print_progress=True):
     """
     Encapsulates logic which affects model optimization
     Is wrapped by handlers which take care of logging etc
@@ -292,7 +332,6 @@ def train_loop_dqn(agent, env, config, print_progress=True):
     eps_min = config.expl_eps_min
     eps_decay = config.expl_eps_decay
 
-    state = env.reset()
     I = agent.total_steps
     nsteps = I + config.nsteps
     eps *= (1-eps_decay)**I
@@ -303,6 +342,7 @@ def train_loop_dqn(agent, env, config, print_progress=True):
         iterator = range(I, nsteps)
 
     min_rb_size = config.min_rb_size
+    min_tf = config.min_tf
     tgt_update_freq = config.target_update_freq
     train_freq = config.train_freq
 
@@ -311,20 +351,47 @@ def train_loop_dqn(agent, env, config, print_progress=True):
     steps_since_train = 0
     training_steps = 0
     steps_since_target_update = 0
+
+    _state = env.reset()
+    preprocessor.stream_state(_state)
+    preprocessor.initialize_history(env) # runs empty actions until enough data is accumulated
+    state = preprocessor.current_data()
+
     for i in iterator:
 
         if random() < eps:
-            action = env.action_space.sample()
+            action = agent.action_space.sample()
         else:
             action = agent(state)
         eps *= (1-eps_decay)
 
-        next_state, reward, done, info = env.step(action)
+        prev_metrics = get_env_info(env)
+        _next_state, _reward, done, info = env.step(action)
+        reward = (env.equity-prev_metrics['equity'])/prev_metrics['equity']
+        if info.brokerResponse.marginCall: # manual check required as .riskInfo contains
+            done = True                    # info for the transaction which may closing a position
+        if abs(reward) > 1.:
+            print("ABS REWARD > 1")
+            print("reward: ", reward)
+            print("done: ", done,)
+            print("margin_call: ", info.brokerResponse.marginCall)
+            print("action: ", info.brokerResponse.transactionUnits)
+            print("riskInfo: ", info.brokerResponse.riskInfo, "\n")
+            print('prev_metrics: ', format_env_info(prev_metrics))
+            print('current_metrics: ', format_env_info(get_env_info(env)))
+        reward = max(min(reward, 1.), -1.)
+        # if done:
+        #     reward = -1.
+        preprocessor.stream_state(_next_state)
+        next_state = preprocessor.current_data()
         rb.add(SARSD(state, action, reward, next_state, done))
         state = next_state
 
         if done:
-            state = env.reset()
+            _state = env.reset()
+            preprocessor.stream_state(_state)
+            preprocessor.initialize_history(env)
+            state = preprocessor.current_data()
 
         if len(rb) >= min_rb_size:
             if steps_since_train >= train_freq:
@@ -342,8 +409,8 @@ def train_loop_dqn(agent, env, config, print_progress=True):
         local_steps += 1
         yield train_metric
         train_metric = None
-    agent.training_steps += training_steps
-    agent.total_steps += i
+    # agent.training_steps += training_steps
+    # agent.total_steps += i
 
 
 
