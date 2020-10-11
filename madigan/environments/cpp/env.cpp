@@ -169,10 +169,10 @@ PYBIND11_MODULE(env, m){
     .def(py::init<
          vector<double>, vector<double>,
          vector<double>, vector<double>,
-         double> (),
+         double, double> (),
          py::arg("freq"), py::arg("mu"),
          py::arg("amp"), py::arg("phase"),
-         py::arg("dx"))
+         py::arg("dx"), py::arg("noise"))
     .def_property_readonly("currentTime", &Synth::currentTime,
                            "get the current timestamp",
                            py::return_value_policy::move)

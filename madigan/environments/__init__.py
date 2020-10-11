@@ -14,3 +14,4 @@ def make_env(config):
         return env
     else:
         raise NotImplementedError(f"Env type {config.env_type} not implemented")
+

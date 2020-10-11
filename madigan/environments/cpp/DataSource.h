@@ -4,6 +4,7 @@
 #include <cmath>
 #include <vector>
 #include <cstdint>
+#include <random>
 
 #include <Eigen/Core>
 #include <pybind11/pybind11.h>
@@ -44,7 +45,10 @@ namespace madigan{
     Synth(); // use default values for parameters
     Synth(std::vector<double> freq, std::vector<double> mu,
           std::vector<double> amp, std::vector<double> phase,
-          double dX);
+          double dX): Synth(freq, mu, amp, phase, dX, 0.){}
+    Synth(std::vector<double> freq, std::vector<double> mu,
+          std::vector<double> amp, std::vector<double> phase,
+          double dX, double noise);
     Synth(Config config);
     Synth(pybind11::dict config);
     ~Synth(){}
@@ -58,18 +62,20 @@ namespace madigan{
   private:
     void initParams(std::vector<double> freq, std::vector<double> mu,
                     std::vector<double> amp, std::vector<double> phase,
-                    double dX);
+                    double dX, double noise);
 
   private:
     int nAssets_{0};
     double dX{0.01};
+    double noise{0.};
     vector<double> freq;
     vector<double> mu;
     vector<double> amp;
     vector<double> initPhase;
     vector<double> x;
     std::size_t timestamp_;
-
+    std::default_random_engine generator;
+    std::normal_distribution<double> noiseDistribution;
     PriceVector currentData_;
   };
 

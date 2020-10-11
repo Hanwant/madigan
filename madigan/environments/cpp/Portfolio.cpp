@@ -193,7 +193,11 @@ namespace madigan{
   }
 
   RiskInfo Portfolio::checkRisk() const{
-    if ((balance()+pnl()) <= -(maintenanceMargin_ * pnl())){
+    double marginRequired = maintenanceMargin_ * pnl();
+    if (equity() <= -marginRequired){
+      return RiskInfo::margin_call;
+    }
+    if ((balance()+pnl()) <= -marginRequired){
       return RiskInfo::margin_call;
     }
     return RiskInfo::green;

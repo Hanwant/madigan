@@ -89,7 +89,9 @@ class OutputHead(nn.Module):
         super().__init__()
         self.n_assets = n_assets
         self.action_atoms = action_atoms
-        self.out = nn.Linear(d_model, n_assets*action_atoms)
+        self.out = nn.Sequential(nn.Linear(d_model, d_model),
+                                 nn.ReLU(),
+                                 nn.Linear(d_model, n_assets*action_atoms))
     def forward(self, state_emb):
         return self.out(state_emb).view(state_emb.shape[0], self.n_assets, self.action_atoms)
 
@@ -109,7 +111,7 @@ class ConvModel(Model):
             conv_layers.append(conv)
             arb_input = (min_tf)
             causal_pad = calc_pad_to_conserve(arb_input, conv, causal_dim=0) # CAUSAL_DIM=0 assumes 0 is time dimension
-            conv_layers.append(nn.ConstantPad1d(causal_pad, value=0.))
+            conv_layers.append(nn.ReplicationPad1d(causal_pad))
             conv_layers.append(self.act)
         self.conv_layers = nn.Sequential(*conv_layers)
         conv_out_shape = calc_conv_out_shape(min_tf, self.conv_layers)
@@ -118,7 +120,7 @@ class ConvModel(Model):
         self.out_head = OutputHead(n_assets, 2*d_model, action_atoms)
 
     def forward(self, state, state_emb=None, price_emb=None, port_emb=None):
-        price, port = state.price.transpose(1, -1), state.port
+        price, port = state.price.transpose(1, -1), state.portfolio
         if state_emb is None:
             state_emb = self.get_state_emb(price, port, price_emb=price_emb, port_emb=port_emb)
         return self.out_head(state_emb)
@@ -130,9 +132,10 @@ class ConvModel(Model):
         price_emb = price_emb if price_emb is not None else self.get_price_emb(price)
         port_emb = port_emb if port_emb is not None else self.get_port_emb(port)
         return torch.cat([price_emb, port_emb], dim=-1)
-        return price_emb
+        # return price_emb
 
     def get_price_emb(self, price):
+        # price_emb = self.conv_layers(torch.log(price))
         price_emb = self.conv_layers(price)
         return self.act(self.project(price_emb.view(price_emb.shape[0], -1)))
 

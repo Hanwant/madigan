@@ -4,7 +4,8 @@ import numpy as np
 @dataclass
 class State:
     price: np.ndarray
-    port: np.ndarray
+    portfolio: np.ndarray
+    timestamp: int
 
 
 @dataclass

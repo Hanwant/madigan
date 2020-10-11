@@ -28,11 +28,13 @@ class ReplayBuffer:
 
     def _batchify(self, sample):
         state_price = np.array([s.state.price for s in sample])
-        state_port = np.array([s.state.port for s in sample])
-        state = State(state_price, state_port)
+        state_port = np.array([s.state.portfolio for s in sample])
+        state_time = np.array([s.state.timestamp for s in sample])
+        state = State(state_price, state_port, state_time)
         next_state_price = np.array([s.next_state.price for s in sample])
-        next_state_port = np.array([s.next_state.port for s in sample])
-        next_state = State(next_state_price, next_state_port)
+        next_state_port = np.array([s.next_state.portfolio for s in sample])
+        next_state_time = np.array([s.next_state.timestamp for s in sample])
+        next_state = State(next_state_price, next_state_port, next_state_time)
         action = np.array([s.action for s in sample])
         reward = np.array([s.reward for s in sample])
         done = np.array([s.done for s in sample])
@@ -40,14 +42,16 @@ class ReplayBuffer:
 
     def batchify(self, sample):
         state_price = np.stack([s.state.price for s in sample])
-        state_port = np.stack([s.state.port for s in sample])
-        state = State(state_price, state_port)
+        state_port = np.stack([s.state.portfolio for s in sample])
+        state_time = np.stack([s.state.timestamp for s in sample])
+        state = State(state_price, state_port, state_time)
         next_state_price = np.stack([s.next_state.price for s in sample])
-        next_state_port = np.stack([s.next_state.port for s in sample])
-        next_state = State(next_state_price, next_state_port)
-        action = np.array([s.action for s in sample])
-        reward = np.array([s.reward for s in sample])
-        done = np.array([s.done for s in sample])
+        next_state_port = np.stack([s.next_state.portfolio for s in sample])
+        next_state_time = np.stack([s.next_state.timestamp for s in sample])
+        next_state = State(next_state_price, next_state_port, next_state_time)
+        action = np.stack([s.action for s in sample])
+        reward = np.stack([s.reward for s in sample])
+        done = np.stack([s.done for s in sample])
         return SARSD(state, action, reward, next_state, done)
 
     def __getitem__(self, item):

@@ -13,7 +13,8 @@ config = Config({'data_source_type': 'Synth',
                      'mu':[2., 2.1, 2.2, 2.3],
                      'amp':[1., 1.2, 1.3, 1.0],
                      'phase':[0., 1.0, 2., 1.],
-                     'dX':0.01
+                     'dX':0.01,
+                     'noise': 0.
                  }})
 assets = Assets(['BTCUSD', 'ETHUSD', 'BTCETH', 'EURUSD'])
 
@@ -28,7 +29,7 @@ def test_dataSource_init():
     synth1 = Synth()
     synth2 = Synth([1., 0.3, 2., 0.5], [2., 2.1, 2.2, 2.3],
                   [1., 1.2, 1.3, 1.], [0., 1., 2., 1.],
-                  dx=0.01)
+                   dx=0.01, noise=0.)
     synth3 = Synth(dict(config))
 
     prices1 = synth1.getData()

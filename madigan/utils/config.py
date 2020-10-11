@@ -1,5 +1,6 @@
 from pathlib import Path
 import json
+import yaml
 import numpy as np
 
 class Config(dict):
@@ -33,14 +34,32 @@ class Config(dict):
         else:
             raise AttributeError("No such attribute: " + name)
 
+    @classmethod
+    def from_exp(cls, exp_id, exp_path):
+        config_path = Path(exp_path)/exp_id/'config.yaml'
+        return cls(load_config(config_path))
+
+    def save(self):
+        save_config(self, Path(self.basepath)/self.experiment_id/"config.yaml")
+
+
+# def load_config(path):
+#     with open(path, 'r') as f:
+#         out = json.load(f)
+#     return Config(out)
+
+# def save_config(config, path, write_mode='w'):
+#     with open(path, write_mode) as f:
+#         json.dump(dict(config), f)
+
 def load_config(path):
     with open(path, 'r') as f:
-        out = json.load(f)
-    return Config(out)
+        conf = yaml.load(f, Loader=yaml.FullLoader)
+    return Config(conf)
 
-def save_config(obj, path, write_mode='w'):
+def save_config(config, path, write_mode='w'):
     with open(path, write_mode) as f:
-        json.dump(dict(obj), f)
+        yaml.dump(dict(config), f)
 
 def make_config(
         ##################################################################################
@@ -49,15 +68,23 @@ def make_config(
         experiment_id="", # Unique ID for each experiment
         parent_id="", # If branching from another experiment, ID of parent has to be specified
         overwrite_exp=False,
-        discrete_actions=True, # Env/Agent/Model spec
-        discrete_action_atoms=11, # Env/Agent/Model spec
-        lot_unit_value=1_000, # Env -> Accounting/Broker parameter
 
         ###################################################################################
         # ENV #############################################################################
         env_type="Synth", # Env is an abstraction (I.e could mean training/testing env or live trading env)
+        data_source_type="Synth",
+        init_cash = 1_000_000,
+        required_margin=1.,
+        maintenance_margin=0.25,
+        transaction_cost_abs=0.,
+        transaction_cost_rel=0.,
         generator_params=None, # If a training/testing environment, then settings are needed for env data
-        test_steps=1000, # number of testing steps to run each 'episode' for
+        assets = None,
+
+        ###################################################################################
+        # Preprocessor ####################################################################
+        preprocessor_type="WindowedStacker",
+        window_length=64, # global time_frames parameter
 
         # REPLAY BUFFER ####################################################################
         rb_size=100000, # Size of replay buffer
@@ -73,6 +100,9 @@ def make_config(
         model_save_freq=64000, # Save models at this freq
         reward_clip=(-1., 1.),
 
+        # Testing  #########################################################################
+        test_steps=1000, # number of testing steps to run each 'episode' for
+
         ####################################################################################
         # AGENT + MODEL ####################################################################
 
@@ -87,12 +117,14 @@ def make_config(
         batch_size=32,
         greedy_eps_testing=0.,
 
+        discrete_actions=True, # Agent/Model spec
+        discrete_action_atoms=11, # Agent/Model spec
+        lot_unit_value=1_000, # Agent parameter
+
         # MODEL ####################################################################
         model_class="ConvModel", # String of model class
         d_model=256, # dimensionality of model
         n_layers=4, # number of layer units
-        n_assets=4, # number of assets being traded - expected size of input
-        min_tf=64, # global time_frames parameter
         n_feats=1, # 1 corresponds to an input of just price
         lr=1e-3, # learning rate
         optim_eps=1e-8, # eps - parameter for torch.optim
@@ -101,16 +133,23 @@ def make_config(
         optim_wd=0, # parameter for torch.optim
 ):
     assert experiment_id != "", "must specify experiment id"
+    assert assets is not None, "Must specify list of asset names/codes"
+    preprocessor_config = {
+        "window_length": window_length
+    }
     model_config = {
         'model_class': model_class,
         'd_model': d_model,
         'n_layers': n_layers,
         'n_feats': n_feats,
         'action_atoms': discrete_action_atoms,
-        'n_assets': n_assets,
-        'min_tf': min_tf,
+        'n_assets': len(assets),
+        'min_tf': window_length,
         'dueling': dueling,
         'iqn': iqn,
+        'discrete_actions': discrete_actions,
+        'discrete_action_atoms': discrete_action_atoms,
+        'lot_unit_value': lot_unit_value,
     }
     optim_config = {
         'type': 'Adam',
@@ -138,11 +177,19 @@ def make_config(
         overwrite_exp=overwrite_exp,
 
         env_type=env_type,
+        data_source_type=data_source_type,
+        init_cash=init_cash,
+        required_margin=required_margin,
+        maintenance_margin=maintenance_margin,
         generator_params=generator_params,
+        assets=assets,
         lot_unit_value=lot_unit_value,
-        n_assets=n_assets,
+        n_assets=len(assets),
         discrete_actions=discrete_actions,
         discrete_action_atoms=discrete_action_atoms,
+
+        preprocessor_type=preprocessor_type,
+        preprocessor_config=preprocessor_config,
 
         agent_type=agent_type,
         nsteps=nsteps,
@@ -155,7 +202,7 @@ def make_config(
         log_freq=log_freq,
         model_save_freq=model_save_freq,
 
-        min_tf=min_tf,
+        min_tf=window_length,
         batch_size=batch_size,
         agent_config=agent_config,
         nstep_return=nstep_return,

@@ -1,4 +1,5 @@
 import os
+from typing import Union
 from pathlib import Path
 import numpy as np
 import torch
@@ -6,7 +7,7 @@ import torch.nn.functional as F
 from .agent import Agent
 from .conv_model import ConvModel
 from .mlp_model import MLPModel
-from ..utils import default_device
+from ..utils import default_device, DiscreteActionSpace
 from ..utils.config import Config
 from ..utils.data import State
 
@@ -35,7 +36,12 @@ class DQN(Agent):
         o_config = a_config.optim_config
         self.double_dqn = a_config['double_dqn']
         self.discount = a_config.discount
-        self.action_atoms = a_config.action_atoms
+        self.action_atoms = m_config.action_atoms
+        self.lot_unit_value = m_config.lot_unit_value
+        actions = [self.lot_unit_value*action - self.action_atoms//2 for action in range(self.action_atoms)]
+        probs = [1/len(actions) for i in actions]
+        self._action_space = DiscreteActionSpace(actions, probs, len(config.assets))
+        self.min_tf = config.min_tf
         self.savepath = Path(config.basepath)/f'{config.experiment_id}/models'
         if not self.savepath.is_dir():
             self.savepath.mkdir(parents=True)
@@ -46,9 +52,9 @@ class DQN(Agent):
         self.model_t.eval()
 
         if o_config['type'] == 'Adam':
-            self.opt = torch.optim.Adam(self.model_b.parameters(), lr=o_config.lr,
-                                        eps=o_config.eps, betas=o_config.betas)
-            # self.opt = torch.optim.Adam(self.model_b.parameters(), lr=o_config.lr)
+            # self.opt = torch.optim.Adam(self.model_b.parameters(), lr=o_config.lr,
+            #                             eps=o_config.eps, betas=o_config.betas)
+            self.opt = torch.optim.Adam(self.model_b.parameters(), lr=o_config.lr)
         else:
             raise ValueError("Only 'Adam' accepted as type of optimizer in config")
 
@@ -66,7 +72,7 @@ class DQN(Agent):
 
         # Overwrites previously saved models
         if config.overwrite_exp:
-            print('deleting')
+            print('deleting previously saved models')
             self._delete_models()
 
         saved_models = list(self.savepath.iterdir())
@@ -77,6 +83,10 @@ class DQN(Agent):
             self.training_steps = 0
             self.total_steps = 0
         super().__init__(name)
+
+    @property
+    def action_space(self):
+        return self._action_space
 
     def target_update(self):
         self.model_t.load_state_dict(self.model_b.state_dict())
@@ -117,38 +127,64 @@ class DQN(Agent):
             self.training_steps = state['training_steps']
             self.total_steps = state['total_steps']
 
+    def actions_to_transactions(self, actions):
+        transactions = actions - self.action_atoms // 2
+        transactions *= self.lot_unit_value
+        # transactions = transactions // prices
+        return transactions
+
+    def transactions_to_actions(self, transactions):
+        # actions = np.rint((prices*transactions) // self.lot_unit_value) + (self.action_atoms//2)
+        actions = np.rint(transactions // self.lot_unit_value) + (self.action_atoms//2)
+        return actions
+
+    def qvals_to_transactions(self, qvals, boltzmann=False, boltzmann_temp=1.):
+        if boltzmann:
+            distribution = torch.distributions.Categorical(logits=qvals/boltzmann_temp)
+            actions = distribution.sample()
+        else:
+            actions = qvals.max(-1)[1]
+        actions -= self.action_atoms // 2
+        actions *= self.lot_unit_value
+        actions = actions.detach().cpu().numpy()
+        return actions.astype(np.int64)
+
+    def filter_transactions(self, transactions, portfolio):
+        """
+        Doesn't allow doubling up on positions
+        """
+        for i, action in enumerate(transactions):
+            if portfolio[i] == 0.:
+                pass
+            elif np.sign(portfolio[i]) == np.sign(action):
+                    transactions[i] = 0.
+        return transactions
+
     def make_state_tensor(self, state, device):
-        price = torch.tensor(state.price, dtype=torch.float32, device=device)
-        port = torch.tensor(state.port, dtype=torch.float32, device=device)
-        return State(price, port)
+        if len(state.price.shape) == 2:
+            price = state.price[None, ...]
+            price = torch.tensor(price, dtype=torch.float32, device=device)
+        else:
+            price = torch.tensor(state.price, dtype=torch.float32, device=device)
+        port = torch.tensor(np.atleast_2d(state.portfolio), dtype=torch.float32, device=device)
+        return State(price, port, state.timestamp)
 
     def make_sarsd_tensors(self, sarsd, device=None):
         device = device or default_device()
         price = torch.as_tensor(sarsd.state.price, dtype=torch.float32, device=device)
-        port = torch.as_tensor(sarsd.state.port, dtype=torch.float32, device=device)
-        state = State(price, port)
-        action = torch.as_tensor(sarsd.action, dtype=torch.long, device=device)
+        port = torch.as_tensor(sarsd.state.portfolio, dtype=torch.float32, device=device)
+        state = State(price, port, sarsd.state.timestamp)
+        # action_model = (np.rint((sarsd.state.price[:, -1, :] *sarsd.action) // self.lot_unit_value)\
+        #                 + (self.action_atoms//2))
+        action_model = (np.rint(sarsd.action // self.lot_unit_value)\
+                        + (self.action_atoms//2))
+        action = torch.as_tensor((action_model), dtype=torch.long, device=device)
         reward = torch.as_tensor(sarsd.reward, dtype=torch.float32, device=device)
         next_price = torch.as_tensor(sarsd.next_state.price, dtype=torch.float32, device=device)
-        next_port = torch.as_tensor(sarsd.next_state.port, dtype=torch.float32, device=device)
-        next_state = State(next_price, next_port)
+        next_port = torch.as_tensor(sarsd.next_state.portfolio, dtype=torch.float32, device=device)
+        next_state = State(next_price, next_port, sarsd.next_state.timestamp)
         done = ~torch.as_tensor(sarsd.done, dtype=torch.bool, device=device)
         return state, action, reward, next_state, done
-
-    def __call__(self, state, target=True, raw_qvals=False, max_qvals=False):
-        """
-        External interface - for inference
-        takes in numpy arrays and returns greedy actions
-        """
-        if len(state.price.shape) == 2:
-            price = state.price[None, ...]
-            port = state.port[None, ...]
-        qvals = self.get_qvals(State(price, port), target=target)
-        if raw_qvals:
-            return qvals
-        # max_qvals = qvals.max(-1)[0]
-        actions = qvals.max(-1)[1]
-        return np.array(actions[0].detach().cpu())
 
     def get_qvals(self, state, target=True, device=None):
         """
@@ -162,6 +198,22 @@ class DQN(Agent):
             if target:
                 return self.model_t(state)
             return self.model_b(state)
+
+    def __call__(self, state: State, target: bool=True, raw_qvals: bool=False,
+                 max_qvals: bool=False, boltzmann: bool=False, boltzmann_temp: float = 1.):
+        """
+        External interface - for inference
+        takes in numpy arrays and returns greedy actions
+        """
+        # price = state.price[None, ...]
+        # port = state.portfolio[None, ...]
+        qvals = self.get_qvals(state, target=target)
+        if raw_qvals:
+            return qvals
+        # max_qvals = qvals.max(-1)[0]
+        transactions = self.qvals_to_transactions(qvals, boltzmann=boltzmann,
+                                                  boltzmann_temp=boltzmann_temp)
+        return self.filter_transactions(transactions[0], state.portfolio)
 
     def loss(self, Q_t, G_t):
         return F.smooth_l1_loss(Q_t, G_t)
@@ -183,11 +235,11 @@ class DQN(Agent):
         actions_mask = F.one_hot(actions, self.action_atoms).to(actions.device)
         qvals = self.model_b(states)
         Q_t = (qvals * actions_mask).sum(-1)
-        td_error = (G_t - Q_t).mean().detach().item()
+        td_error = (G_t - Q_t).mean()
         loss = self.loss(Q_t, G_t)
         loss.backward()
         self.opt.step()
         self.lr_sched.step()
-        return {'loss': loss.detach().item(), 'td_error': td_error, 'G_t': G_t.detach(), 'Q_t': Q_t.detach()}
+        return {'loss': loss.detach().item(), 'td_error': td_error.detach().item(), 'G_t': G_t.detach(), 'Q_t': Q_t.detach()}
         # return loss.detach().item(), td_error, G_t.detach(), Q_t.detach()
 

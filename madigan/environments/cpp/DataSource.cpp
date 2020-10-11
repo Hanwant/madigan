@@ -1,12 +1,13 @@
 #include <stdexcept>
 #include <iostream>
+
 #include "DataSource.h"
 
 namespace madigan{
 
   void Synth::initParams(std::vector<double> _freq, std::vector<double> _mu,
                          std::vector<double> _amp, std::vector<double> _phase,
-                         double _dX)
+                         double _dX, double _noise)
   {
     this->freq=_freq;
     this->mu=_mu;
@@ -14,6 +15,8 @@ namespace madigan{
     this->initPhase=_phase;
     this->x=_phase;
     this->dX=_dX;
+    this->noise=_noise;
+    this->noiseDistribution = std::normal_distribution<double>(0., _noise);
     for (int i=0; i < freq.size(); i++){
       std::string assetName = "sine_" + std::to_string(i);
       this->assets.push_back(Asset(assetName));
@@ -28,15 +31,15 @@ namespace madigan{
     vector<double> mu{2., 2.1, 2.2, 2.3};
     vector<double> amp{1., 1.2, 1.3, 1.};
     vector<double> phase{0., 1., 2., 1.};
-    initParams(freq, mu, amp, phase, dX);
+    initParams(freq, mu, amp, phase, dX, 0.);
   }
 
   Synth::Synth(std::vector<double> _freq, std::vector<double> _mu,
                std::vector<double> _amp, std::vector<double> _phase,
-               double _dX){
+               double _dX, double noise){
     if ((_freq.size() == _mu.size()) && (_mu.size() == _amp.size()) &&
         (_amp.size() == _phase.size())){
-      initParams(_freq, _mu, _amp, _phase, _dX);
+      initParams(_freq, _mu, _amp, _phase, _dX, noise);
     }
     else{
       throw std::length_error("parameters passed to DataSource of type Synth"
@@ -63,15 +66,21 @@ namespace madigan{
       vector<double> amp = std::any_cast<vector<double>>(params["amp"]);
       vector<double> phase = std::any_cast<vector<double>>(params["phase"]);
       double dX = std::any_cast<double>(params["dX"]);
-      initParams(freq, mu, amp, phase, dX);
+      if (params.find("noise") != params.end()){
+        noise = std::any_cast<double>(params["noise"]);
+        initParams(freq, mu, amp, phase, dX, noise);
+      }
+      else {
+        initParams(freq, mu, amp, phase, dX, 0.);
+      }
+
     }
     else{
       vector<double> freq{1., 0.3, 2., 0.5};
       vector<double> mu{2., 2.1, 2.2, 2.3};
       vector<double> amp{1., 1.2, 1.3, 1.};
       vector<double> phase{0., 1., 2., 1.};
-      double dX{0.01};
-      initParams(freq, mu, amp, phase, dX);
+      initParams(freq, mu, amp, phase, 0.01, 0.);
     }
   }
 
@@ -82,7 +91,7 @@ namespace madigan{
 
   const PriceVector& Synth::getData() {
     for (int i=0; i < nAssets_; i++){
-      currentData_[i] = mu[i] + amp[i] * std::sin(PI2*x[i]*freq[i]);
+      currentData_[i] = noiseDistribution(generator) + mu[i] + amp[i] * std::sin(PI2*x[i]*freq[i]);
       x[i] += dX;
     }
     timestamp_ += 1;
@@ -91,7 +100,7 @@ namespace madigan{
 
   const pybind11::array_t<double> Synth::getData_np(){
     for (int i=0; i < nAssets_; i++){
-      currentData_[i] = mu[i] + amp[i] * std::sin(PI2*x[i]*freq[i]);
+      currentData_[i] = noiseDistribution(generator) + mu[i] + amp[i] * std::sin(PI2*x[i]*freq[i]);
       x[i] += dX;
     }
     return pybind11::array_t<double>(

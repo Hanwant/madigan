@@ -53,7 +53,7 @@ namespace madigan{
                                            });
           if (genParamsFound != dict.end()){
             pybind11::dict genParams = dict[pybind11::str("generator_params")];
-            for (auto key: {"freq", "mu", "amp", "phase", "dX"}){
+            for (auto key: {"freq", "mu", "amp", "phase", "dX", "noise"}){
               auto keyFound=std::find_if(genParams.begin(), dict.end(),
                                          [key](const std::pair<pybind11::handle, pybind11::handle>& pair){
                                            return string(pybind11::str(pair.first)) == key;
@@ -67,6 +67,7 @@ namespace madigan{
             vector<double> mu;
             vector<double> phase;
             double dX;
+            double noise;
             for(auto& item: genParams){
               string key = string(pybind11::str(item.first));
               if(key == "freq"){
@@ -84,6 +85,9 @@ namespace madigan{
               if(key == "dX"){
                 dX = item.second.cast<double>();
               }
+              if(key == "noise"){
+                noise = item.second.cast<double>();
+              }
             }
             config=Config({
                 {"data_source_type", "Synth"},
@@ -91,7 +95,8 @@ namespace madigan{
                                             {"mu", mu},
                                             {"amp", amp},
                                             {"phase", phase},
-                                            {"dX", dX}}
+                                            {"dX", dX},
+                                            {"noise", noise}}
                 }
               });
           }

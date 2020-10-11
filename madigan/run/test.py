@@ -7,39 +7,46 @@ from ..utils.preprocessor import make_preprocessor
 from ..fleet import make_agent
 from ..environments import make_env
 
+def get_test_loop(config):
+    agent = config.agent_type
+    if agent in ("DQN", "LQN"):
+        return test_loop_dqn
+    else:
+        raise NotImplementedError(f"test loop for {config.agent_type} is not implemented")
 
-def test_loop(agent, env, preprocessor, eps=0., random_starts=0):
-    state = env.reset()
-    preprocessor.stream_state(state)
+def test_loop_dqn(agent, env, preprocessor, eps=0., random_starts=0,
+                  boltzmann=False, boltzmann_temp=1.):
     # try:
     done = False
+    default_qvals = np.array([[0.] * agent.action_atoms]*len(env.assets))
+    env.reset()
+    preprocessor.initialize_history(env)
+    state = preprocessor.current_data()
     while True:
-        if len(preprocessor) >= agent.min_tf: # if enough time series points have been accumulated
-            if random() < eps or random_starts > 0:
-                action = agent.action_space.sample()
-                random_starts -= 1
-            else:
-                action = agent(preprocessor.current_data()) # preprocessed data fed into agent
-                state, reward, done, info = env.step(action)
-                # if env.cash < 0. or env.availableMargin < 0.:
-                #     import ipdb; ipdb.set_trace()
-                preprocessor.stream_state(state)
-            if done:
-                reward = -1.
-                yield state, reward, done, info
-                break
-            yield state, reward, done, info
+        if random() < eps or random_starts > 0:
+            action = agent.action_space.sample()
+            random_starts -= 1
+            qvals = default_qvals
         else:
-            state, reward, done, info = env.step()
-            preprocessor.stream_state(state) # no action, accumulate data
-            yield None
+            current_data = preprocessor.current_data()
+            action = agent(current_data) # preprocessed data fed into agent
+            qvals = agent.get_qvals(current_data)[0].cpu().numpy()
+            state, reward, done, info = env.step(action)
+            preprocessor.stream_state(state)
+        if done:
+            # reward = -1.
+            yield state, reward, done, info, qvals
+            break
+        yield state, reward, done, info, qvals
     # except:
     #     import traceback; traceback.print_exc()
     #     import ipdb; ipdb.set_trace()
 
 def test(agent, env, preprocessor, nsteps=1000, eps=0., random_starts=0,
-         verbose=False):
-    loop = test_loop(agent, env, preprocessor, eps=eps, random_starts=random_starts)
+         boltzmann=False, boltzmann_temp=1., verbose=False):
+    test_loop = get_test_loop(agent.config)
+    loop = test_loop(agent, env, preprocessor, eps=eps, random_starts=random_starts,
+                     boltzmann=boltzmann, boltzmann_temp=boltzmann_temp)
     equity = []
     returns = []
     prices = []
@@ -47,16 +54,19 @@ def test(agent, env, preprocessor, nsteps=1000, eps=0., random_starts=0,
     cash = []
     margin = []
     actions = []
+    states = []
+    qvals=[]
     done=False
     try:
         for i in range(nsteps):
             metrics = next(loop)
             if metrics is not None:
-                state, reward, done, info = metrics
+                state, reward, done, info, qval = metrics
+                states.append(state)
+                qvals.append(qval)
                 equity.append(env.equity)
                 returns.append(reward)
                 prices.append(np.array(env.currentPrices, copy=True))
-                states.append(state)
                 # positions.append(np.array(env.ledger, copy=True))
                 positions.append(env.ledgerNormed)
                 cash.append(env.cash)
@@ -73,8 +83,10 @@ def test(agent, env, preprocessor, nsteps=1000, eps=0., random_starts=0,
                 # print("position values", env.positionValues)
                 # print("total asset valu", env.assetValue)
             print(f'Stopped at {i} steps')
-    return {'equity': equity, 'returns': returns, 'prices': np.array(prices), 'positions': positions,
-            'assets': env.assets, 'cash': cash, 'margin': margin, 'actions': actions}
+    return {'equity': equity, 'returns': returns, 'prices': np.array(prices),
+            'positions': positions, 'assets': env.assets, 'cash': cash,
+            'margin': margin, 'actions': actions, 'states': states,
+            'qvals': qvals}
 
 
 def get_int_from_user():
