@@ -65,9 +65,10 @@ public:
   int cash(){ return _cash;};
   double equity();
   double availableMargin();
-  std::vector<double> portfolio(){ return _portfolio;};
-  std::vector<double> portfolioNorm(){ return _portfolio;};
-  std::vector<double> currentPrices(){ return _currentPrices;};
+  std::vector<double> portfolio(){ return _portfolio;}
+  std::vector<double> portfolioNorm(){ return _portfolio;}
+  std::vector<double> currentPrices(){ return _currentPrices;}
+  std::size_t currentTimestamp() const { return _currentTimestamp; }
 
  private:
   std::vector<double> generate();
@@ -84,6 +85,7 @@ private:
   int discreteActionAtomsShift;
   std::vector<double> _portfolio;
   std::vector<double> _currentPrices;
+  std::size_t _currentTimestamp{0};
   double _maintenanceMargin = 0.1;
   std::unique_ptr<Generator> generator = std::make_unique<SineGenerator>();
 };

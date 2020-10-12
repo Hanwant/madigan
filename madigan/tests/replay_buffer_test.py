@@ -30,7 +30,6 @@ def test_data_structures():
         return _deque
     def np_allocate():
         _np = np.empty((1000000), dtype=object)
-        # _np = np.empty((1), dtype=object)
         for i in range(1000000):
             _np[i] = sarsd
         return _np
@@ -76,61 +75,71 @@ def test_data_structures():
 def test_replay_buffer():
     size = 100_000
     rb = ReplayBuffer(size)
-    state = State(np.random.randn(12, 64), np.random.randn(12))
+    state = State(np.random.randn(12, 64), np.random.randn(12), 0)
     sarsd = SARSD(state, 1, 2., state, False)
 
-    def sample_2(self, n):
-        idx = sample(range(self.filled), n)
-        state_price = np.array([self._buffer[i].state.price for i in idx])
-        state_port = np.array([self._buffer[i].state.port for i in idx])
-        state = State(state_price, state_port)
-        reward = np.array([self._buffer[i].reward for i in idx])
-        action = np.array([self._buffer[i].action for i in idx])
-        next_state_price = np.array([self._buffer[i].next_state.price for i in idx])
-        next_state_port = np.array([self._buffer[i].next_state.port for i in idx])
-        next_state = State(next_state_price, next_state_port)
-        done = np.array([self._buffer[i].done for i in idx])
+    def sample_2(rb, n):
+        idx = sample(range(rb.filled), n)
+        state_price = np.array([rb._buffer[i].state.price for i in idx])
+        state_portfolio = np.array([rb._buffer[i].state.portfolio for i in idx])
+        state_timestamp= np.array([rb._buffer[i].state.timestamp for i in idx])
+        state = State(state_price, state_portfolio, state_timestamp)
+        reward = np.array([rb._buffer[i].reward for i in idx])
+        action = np.array([rb._buffer[i].action for i in idx])
+        next_state_price = np.array([rb._buffer[i].next_state.price for i in idx])
+        next_state_portfolio = np.array([rb._buffer[i].next_state.portfolio for i in idx])
+        next_state_timestamp = np.array([rb._buffer[i].next_state.timestamp for i in idx])
+        next_state = State(next_state_price, next_state_portfolio, next_state_timestamp)
+        done = np.array([rb._buffer[i].done for i in idx])
         return SARSD(state, action, reward, next_state, done)
 
-    def sample_3(self, n):
-        idx = sample(range(self.filled), n)
-        state_price = torch.tensor([self._buffer[i].state.price for i in idx])
-        state_port = torch.tensor([self._buffer[i].state.port for i in idx])
-        state = State(state_price, state_port)
-        reward = torch.tensor([self._buffer[i].reward for i in idx])
-        action = torch.tensor([self._buffer[i].action for i in idx])
-        next_state_price = torch.tensor([self._buffer[i].next_state.price for i in idx])
-        next_state_port = torch.tensor([self._buffer[i].next_state.port for i in idx])
-        next_state = State(next_state_price, next_state_port)
-        done = torch.tensor([self._buffer[i].done for i in idx])
+    def sample_3(rb, n):
+        idx = sample(range(rb.filled), n)
+        state_price = torch.tensor([rb._buffer[i].state.price for i in idx])
+        state_portfolio = torch.tensor([rb._buffer[i].state.portfolio for i in idx])
+        state_timestamp = torch.tensor([rb._buffer[i].state.timestamp for i in idx])
+        state = State(state_price, state_portfolio, state_timestamp)
+        reward = torch.tensor([rb._buffer[i].reward for i in idx])
+        action = torch.tensor([rb._buffer[i].action for i in idx])
+        next_state_price = torch.tensor([rb._buffer[i].next_state.price for i in idx])
+        next_state_portfolio = torch.tensor([rb._buffer[i].next_state.portfolio for i in idx])
+        next_state_timestamp = torch.tensor([rb._buffer[i].next_state.timestamp for i in idx])
+        next_state = State(next_state_price, next_state_portfolio, next_state_timestamp)
+        done = torch.tensor([rb._buffer[i].done for i in idx])
         return SARSD(state, action, reward, next_state, done)
 
-    def sample_4(self, n):
-        sarsd = self.sample(n)
-        state = State(torch.tensor(sarsd.state.price), torch.tensor(sarsd.state.port))
+    def sample_4(rb, n):
+        sarsd = rb.sample(n)
+        state = State(torch.tensor(sarsd.state.price), torch.tensor(sarsd.state.portfolio), 
+                torch.tensor(sarsd.state.timestamp))
         action = torch.tensor(sarsd.action)
-        next_state = State(torch.tensor(sarsd.next_state.price), torch.tensor(sarsd.next_state.port))
+        next_state = State(torch.tensor(sarsd.next_state.price), torch.tensor(sarsd.next_state.portfolio), 
+                torch.tensor(sarsd.next_state.timestamp))
         reward = torch.tensor(sarsd.reward)
         done = torch.tensor(sarsd.done)
         return SARSD(state, action, reward, next_state, done)
 
-    def sample_5(self, n):
+    def sample_5(rb, n):
         sarsd = sample_2(rb, n)
-        state = State(torch.tensor(sarsd.state.price), torch.tensor(sarsd.state.port))
+        state = State(torch.tensor(sarsd.state.price), torch.tensor(sarsd.state.portfolio),
+                torch.tensor(sarsd.state.timestamp))
         action = torch.tensor(sarsd.action)
-        next_state = State(torch.tensor(sarsd.next_state.price), torch.tensor(sarsd.next_state.port))
+        next_state = State(torch.tensor(sarsd.next_state.price), torch.tensor(sarsd.next_state.portfolio), 
+                torch.tensor(sarsd.next_state.timestamp))
         reward = torch.tensor(sarsd.reward)
         done = torch.tensor(sarsd.done)
         return SARSD(state, action, reward, next_state, done)
 
-    def sample_6(self, n):
-        _sample = sample(self._buffer, n)
+    def sample_6(rb, n):
+        _sample = sample(rb._buffer, n)
         state_price = np.stack([s.state.price for s in _sample])
-        state_port = np.stack([s.state.port for s in _sample])
-        state = State(state_price, state_port)
+        state_portfolio = np.stack([s.state.portfolio for s in _sample])
+        state_timestamp = np.stack([s.state.timestamp for s in _sample])
+        state = State(state_price, state_portfolio, state_timestamp)
         next_state_price = np.stack([s.next_state.price for s in _sample])
-        next_state_port = np.stack([s.next_state.port for s in _sample])
-        next_state = State(next_state_price, next_state_port)
+        next_state_portfolio = np.stack([s.next_state.portfolio for s in _sample])
+        next_state_timestamp = np.stack([s.next_state.timestamp for s in _sample])
+        next_state = State(next_state_price, next_state_portfolio, next_state_timestamp)
         action = np.array([s.action for s in _sample])
         reward = np.array([s.reward for s in _sample])
         done = np.array([s.done for s in _sample])
