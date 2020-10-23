@@ -11,14 +11,16 @@ def calc_conv_out_shape(in_shape, layers):
     layers: list of convolution layers
     """
     shape = in_shape
-    padding_classes2d = (nn.ConstantPad2d, nn.ReflectionPad2d, nn.ReplicationPad2d)
+    padding_classes2d = (nn.ConstantPad2d, nn.ReflectionPad2d, nn.ReplicationPad2d, nn.ZeroPad2d)
     padding_classes1d = (nn.ConstantPad1d, nn.ReflectionPad1d, nn.ReplicationPad1d)
     if isinstance(shape, Iterable):
         if len(shape) == 2:
             for layer in layers:
                 if isinstance(layer, nn.Conv2d):
-                    h_out = ((shape[0] + 2*layer.padding[0] - layer.dilation[0] * (layer.kernel_size[0] - 1)-1) / layer.stride[0])+1
-                    w_out = ((shape[1] + 2*layer.padding[1] - layer.dilation[1] * (layer.kernel_size[1] - 1)-1) / layer.stride[1])+1
+                    h_out = ((shape[0] + 2*layer.padding[0] - layer.dilation[0] *
+                              (layer.kernel_size[0] - 1)-1) / layer.stride[0])+1
+                    w_out = ((shape[1] + 2*layer.padding[1] - layer.dilation[1] *
+                              (layer.kernel_size[1] - 1)-1) / layer.stride[1])+1
                     shape = (int(h_out), int(w_out))
                 elif isinstance(layer, padding_classes2d):
                     h_out = shape[0] + layer.padding[0] + layer.padding[1]
@@ -27,9 +29,10 @@ def calc_conv_out_shape(in_shape, layers):
         elif len(shape) == 1:
             for layer in layers:
                 if isinstance(layer, nn.Conv1d):
-                    out = ((shape[0] + 2*layer.padding[0] - layer.dilation[0] * (layer.kernel_size[0] - 1)-1) / layer.stride[0])+1
+                    out = ((shape[0] + 2*layer.padding[0] - layer.dilation[0] *
+                            (layer.kernel_size[0] - 1)-1) / layer.stride[0])+1
                     shape = (int(out),)
-                elif isinstance(layer,  padding_classes1d):
+                elif isinstance(layer, padding_classes1d):
                     out = shape[0] + layer.padding[0] + layer.padding[1]
                     shape = (int(out),)
     elif isinstance(shape, int):
@@ -52,7 +55,7 @@ def calc_pad_to_conserve(in_shape, layer, causal_dim=0):
     pad = []
     if isinstance(in_shape, Iterable):
         if len(in_shape) == 2:
-            for i in range(len(in_shape)):
+            for i, _ in enumerate(in_shape):
                 diff = (in_shape[i] - out_shape[i]) / 2
                 if causal_dim == i:
                     pad += [int(diff*2), 0]
@@ -72,7 +75,10 @@ def calc_pad_to_conserve(in_shape, layer, causal_dim=0):
         return calc_pad_to_conserve((in_shape, ), layer, causal_dim=causal_dim)
     else:
         raise ValueError("in_shape must be an iterable or int")
-    assert tuple(in_shape) == tuple(post_pad_output_shape)
+    # TEST HERE THAT THE PADS CONSERVE INPUT SHAPE
+    assert tuple(in_shape) == tuple(post_pad_output_shape), \
+        "padding calc unsuccessful in conserving input shape." +\
+        f" in= {in_shape}, padded={post_pad_output_shape} "
     return tuple(pad)
 
 class PortEmbed(nn.Module):
@@ -96,8 +102,8 @@ class OutputHead(nn.Module):
         return self.out(state_emb).view(state_emb.shape[0], self.n_assets, self.action_atoms)
 
 class ConvModel(Model):
-    def __init__(self, *, min_tf, n_assets, action_atoms, d_model=256, channels=[32, 64, 64], kernels=[3, 3, 3],
-                 strides=[1, 1, 1], act=nn.ReLU, **params):
+    def __init__(self, *, min_tf, n_assets, action_atoms, d_model=256, channels=[32, 64, 64],
+                 kernels=[3, 3, 3], strides=[1, 1, 1], act=nn.ReLU, **params):
         super().__init__()
         assert len(kernels) == len(strides) == len(channels)
         assert min_tf >= reduce(lambda x, y: x+y, kernels), "min_tf should be at least as long as sum of kernels"

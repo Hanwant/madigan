@@ -73,13 +73,15 @@ def make_config(
         # ENV #############################################################################
         env_type="Synth", # Env is an abstraction (I.e could mean training/testing env or live trading env)
         data_source_type="Synth",
-        init_cash = 1_000_000,
+        init_cash=1_000_000,
         required_margin=1.,
         maintenance_margin=0.25,
         transaction_cost_abs=0.,
         transaction_cost_rel=0.,
+        slippage_abs=0.,
+        slippage_rel=0.,
         generator_params=None, # If a training/testing environment, then settings are needed for env data
-        assets = None,
+        assets=None,
 
         ###################################################################################
         # Preprocessor ####################################################################
@@ -89,7 +91,8 @@ def make_config(
         # REPLAY BUFFER ####################################################################
         rb_size=100000, # Size of replay buffer
         min_rb_size=50_000, # Min size before training
-        nstep_return=1, # Agent/Model spec
+        episode_length=1024,
+        nstep_return=3, # Agent/Model spec
 
         # Training #########################################################################
         nsteps=100000, # number_of_training_steps to run for
@@ -110,7 +113,12 @@ def make_config(
         double_dqn=False, # Agent/Model spec
         dueling=False, # Agent/Model spec
         iqn=False, # Agent/Model spec
+        nTau1=32,
+        nTau2=32,
+        tau_embed_size=64,
+        k_huber=1.,
         discount=0.99, # Agent/Model spec
+        tau_soft_update=1e-4,
         expl_eps=1., # Initial eps if eps-greedy  is used for exploration
         expl_eps_min=0.1,
         expl_eps_decay=1e-6,
@@ -127,6 +135,8 @@ def make_config(
         n_layers=4, # number of layer units
         n_feats=1, # 1 corresponds to an input of just price
         lr=1e-3, # learning rate
+        lr_critic=1e-3, # learning rate
+        lr_actor=1e-4, # learning rate
         optim_eps=1e-8, # eps - parameter for torch.optim
         momentum=0.9, # parameter for torch.optim
         betas=(0.9, 0.999), # parameter for torch.optim
@@ -147,6 +157,9 @@ def make_config(
         'min_tf': window_length,
         'dueling': dueling,
         'iqn': iqn,
+        'nTau1': nTau1,
+        'nTau2': nTau2,
+        'tau_embed_size': tau_embed_size,
         'discrete_actions': discrete_actions,
         'discrete_action_atoms': discrete_action_atoms,
         'lot_unit_value': lot_unit_value,
@@ -154,6 +167,8 @@ def make_config(
     optim_config = {
         'type': 'Adam',
         'lr': lr,
+        'lr_critic': lr_critic,
+        'lr_actor': lr_actor,
         'eps': optim_eps,
         'momentum': momentum,
         'betas': betas,
@@ -162,12 +177,20 @@ def make_config(
     agent_config = {
         'type': agent_type,
         'basepath': basepath,
+        'discrete_action_atoms': discrete_action_atoms,
         'model_config': model_config,
         'optim_config': optim_config,
         'double_dqn': double_dqn,
+        'dueling': dueling,
+        'iqn': iqn,
+        'nTau1': nTau1,
+        'nTau2': nTau2,
+        'k_huber': k_huber,
+        'tau_embed_size': tau_embed_size,
         'discount': discount,
         'nstep_return': nstep_return,
         'action_atoms': discrete_action_atoms,
+        'tau_soft_update': tau_soft_update,
         'greedy_eps_testing': greedy_eps_testing,
     }
     config = dict(
@@ -175,6 +198,10 @@ def make_config(
         experiment_id=experiment_id,
         parent_id=parent_id,
         overwrite_exp=overwrite_exp,
+        transaction_cost_abs=transaction_cost_abs,
+        transaction_cost_rel=transaction_cost_rel,
+        slippage_abs=slippage_abs,
+        slippage_rel=slippage_rel,
 
         env_type=env_type,
         data_source_type=data_source_type,
@@ -192,9 +219,13 @@ def make_config(
         preprocessor_config=preprocessor_config,
 
         agent_type=agent_type,
+        agent_config=agent_config,
+        model_config=model_config,
+        optim_config=optim_config,
         nsteps=nsteps,
         test_steps=test_steps,
         rb_size=rb_size,
+        episode_length=episode_length,
         min_rb_size=min_rb_size,
         train_freq=train_freq,
         target_update_freq=target_update_freq,
@@ -204,7 +235,6 @@ def make_config(
 
         min_tf=window_length,
         batch_size=batch_size,
-        agent_config=agent_config,
         nstep_return=nstep_return,
         expl_eps=expl_eps,
         expl_eps_min=expl_eps_min,

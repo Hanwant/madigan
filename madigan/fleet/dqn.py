@@ -28,17 +28,20 @@ class DQN(Agent):
         action = dqn(state)
     The method for training a single batch is self.train_step(sarsd) where sarsd is a class with ndarray members (I.e of shape (bs, time, feats))
     """
-    def __init__(self, config, name=None, device=None):
+    def __init__(self, config, env, name=None, device=None):
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self.config = Config(config)
+        self._env = env
         a_config = config.agent_config
         m_config = a_config.model_config
         o_config = a_config.optim_config
         self.double_dqn = a_config['double_dqn']
         self.discount = a_config.discount
         self.action_atoms = m_config.action_atoms
+
         self.lot_unit_value = m_config.lot_unit_value
-        actions = [self.lot_unit_value*action - self.action_atoms//2 for action in range(self.action_atoms)]
+        actions = [self.lot_unit_value*action - self.action_atoms//2
+                   for action in range(self.action_atoms)]
         probs = [1/len(actions) for i in actions]
         self._action_space = DiscreteActionSpace(actions, probs, len(config.assets))
         self.min_tf = config.min_tf
@@ -52,8 +55,6 @@ class DQN(Agent):
         self.model_t.eval()
 
         if o_config['type'] == 'Adam':
-            # self.opt = torch.optim.Adam(self.model_b.parameters(), lr=o_config.lr,
-            #                             eps=o_config.eps, betas=o_config.betas)
             self.opt = torch.optim.Adam(self.model_b.parameters(), lr=o_config.lr)
         else:
             raise ValueError("Only 'Adam' accepted as type of optimizer in config")
@@ -62,8 +63,9 @@ class DQN(Agent):
         # SCHEDULER NOT YET IN USE
         USE_SCHED=False
         if USE_SCHED:
-            self.lr_sched = torch.optim.lr_scheduler.CyclicLR(self.opt, base_lr=o_config.lr, max_lr=1e-2,
-                                                              step_size_up=2000, mode="exp_range")
+            self.lr_sched = torch.optim.lr_scheduler.CyclicLR(self.opt, base_lr=o_config.lr,
+                                                              max_lr=1e-2, step_size_up=2000,
+                                                              mode="exp_range")
         else:
             # Dummy class for now
             class Sched:
@@ -85,11 +87,26 @@ class DQN(Agent):
         super().__init__(name)
 
     @property
+    def env(self):
+        """
+        Reference to current env - useful for current prices/availablae Margin etc
+        Be careful - don't mess with it aside from accessing properties
+        """
+        return self._env
+
+    @property
     def action_space(self):
+        """ Action space object which can be sampled from"""
         return self._action_space
 
-    def target_update(self):
+    def target_update_hard(self):
+        """ Hard update, copies weights """
         self.model_t.load_state_dict(self.model_b.state_dict())
+
+    def target_update_soft(self):
+        """ Incremental 'soft' update of target proportional to tau_soft parameter (I.e 1e-4)"""
+        for behaviour, target in zip(self.model_b.parameters(), self.model_t.parameters()):
+            target.data.copy_(self.tau_soft * behaviour.data + (1.-self.tau_soft)*target.data)
 
     def save_state(self):
         self.save_checkpoint("main")

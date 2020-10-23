@@ -68,7 +68,8 @@ def plot_test_metrics(data, include=('prices', 'equity', 'cash', 'positions',
             fig.delaxes(ax[i])
     return fig, axes
 
-def plot_train_metrics(data, include=('loss', 'td_error', 'G_t', 'Q_t', 'rewards')):
+def plot_train_metrics(data, include=('loss', 'td_error', 'G_t', 'Q_t',
+                                      'Gt', 'Qt', 'rewards')):
     assert isinstance(data, (dict, pd.DataFrame)), "expected data to be a dict or pd df"
     if 'timestamp' in data.keys():
         index = pd.to_datetime(data['timestamp'])

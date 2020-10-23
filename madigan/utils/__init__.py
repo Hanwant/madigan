@@ -59,7 +59,7 @@ class DiscreteRangeSpace:
         self.n = n
 
     def sample(self):
-        action = np.random.randint(self.low, self.high, self.n)
+        action = np.random.randint(self.low, self.high+1, self.n)
         return action
 
     @property
@@ -67,7 +67,7 @@ class DiscreteRangeSpace:
         return (self.n, )
 
 class DiscreteActionSpace:
-    def __init__(self, actions: Iterable, probs: Iterable, n: int=1):
+    def __init__(self, actions: Iterable, probs: Iterable=None, n: int=1):
         # assert len(ranges) == 2
         self.actions=actions
         self.probs = probs
@@ -75,7 +75,7 @@ class DiscreteActionSpace:
 
     def sample(self, n=None):
         n = n or self.n
-        action = np.random.choice(self.actions, self.probs, self.n)
+        action = np.random.choice(self.actions, size=self.n, p=self.probs)
         return action
 
     @property
