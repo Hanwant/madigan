@@ -57,7 +57,7 @@ namespace madigan{
     AmountVector positionValues() const { return ledger_.cwiseProduct(currentPrices_); }
     double assetValue() const { return ledger_.dot(currentPrices_); }
     double borrowedAssetValue() const;
-    Ledger  meanEntryValue() const { return ledger_.array() * meanEntryPrices_.array();}
+    Ledger  meanEntryValue() const { return ledger_.cwiseProduct(meanEntryPrices_);}
     double usedMargin() const;
     double availableMargin() const;
     double borrowedMargin() const;

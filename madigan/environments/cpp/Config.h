@@ -46,7 +46,9 @@ namespace madigan{
                                         return string(pybind11::str(pair.first)) == "data_source_type";
                                       });
     if (dataSourceFound != dict.end()){
-      if (string(pybind11::str(dataSourceFound->second)) == "Synth"){
+      std::string dataSourceType = string(pybind11::str(dataSourceFound->second));
+      if ( dataSourceType == "Synth" || dataSourceType == "SawTooth" ||
+           dataSourceType == "Triangle" || dataSourceType == "SineAdder"){
           auto genParamsFound=std::find_if(dict.begin(), dict.end(),
                                            [](const std::pair<pybind11::handle, pybind11::handle>& pair){
                                              return string(pybind11::str(pair.first)) == "generator_params";
@@ -90,7 +92,7 @@ namespace madigan{
               }
             }
             config=Config({
-                {"data_source_type", "Synth"},
+                {"data_source_type", dataSourceType},
                 {"generator_params", Config{{"freq", freq},
                                             {"mu", mu},
                                             {"amp", amp},
@@ -104,8 +106,58 @@ namespace madigan{
             throw ConfigError("config for DataSource type Synth needs generator params");
           }
       }
+      else if ( dataSourceType == "OU"){
+        auto genParamsFound=std::find_if(dict.begin(), dict.end(),
+                                         [](const std::pair<pybind11::handle, pybind11::handle>& pair){
+                                           return string(pybind11::str(pair.first)) == "generator_params";
+                                           });
+          if (genParamsFound != dict.end()){
+            pybind11::dict genParams = dict[pybind11::str("generator_params")];
+            for (auto key: {"mean", "theta", "phi", "noise_var"}){
+              auto keyFound=std::find_if(genParams.begin(), dict.end(),
+                                         [key](const std::pair<pybind11::handle, pybind11::handle>& pair){
+                                           return string(pybind11::str(pair.first)) == key;
+                                         });
+              if (keyFound == genParams.end()){
+                throw ConfigError(string(key)+" key not found in generator_params in config");
+              }
+            }
+            vector<double> mean;
+            vector<double> theta;
+            vector<double> phi;
+            vector<double> noise_var;
+            for(auto& item: genParams){
+              string key = string(pybind11::str(item.first));
+              if(key == "mean"){
+                mean= item.second.cast<vector<double>>();
+              }
+              if(key == "theta"){
+                theta= item.second.cast<vector<double>>();
+              }
+              if(key == "phi"){
+                phi = item.second.cast<vector<double>>();
+              }
+              if(key == "noise_var"){
+                noise_var = item.second.cast<vector<double>>();
+              }
+            }
+            config=Config({
+                {"data_source_type", dataSourceType},
+                {"generator_params", Config{{"mean", mean},
+                                            {"theta", theta},
+                                            {"phi", phi},
+                                            {"noise_var", noise_var}}
+                }
+              });
+          }
+          else{
+            throw ConfigError("config for DataSource type OU needs generator params");
+          }
+      }
       else{
-        throw NotImplemented("Config parsing has only been implemented for Synth");
+        std::stringstream ss;
+        ss << "(Py->C++) Config Parsing for " << dataSourceType << " has not been implemented";
+        throw NotImplemented(ss.str());
       }
     }
     else{

@@ -58,7 +58,7 @@ namespace madigan{
       defaultPortfolio_ = portfolio;
     }
     void setSlippage(double slippagePct=0., double slippageAbs=0.);
-    void setTransactionCosts(double transactionPct=0., double transactionAbs=0.);
+    void setTransactionCost(double transactionPct=0., double transactionAbs=0.);
     void setDataSource(DataSource* source);
     void setRequiredMargin(double reqMargin){
       defaultAccount_->setRequiredMargin(reqMargin); }
@@ -140,6 +140,7 @@ namespace madigan{
       return handleTransaction(accountBook_.at(accID)->portfolioBook_.at(portID),
                                units);
     }
+    BrokerResponseSingle close(int assetIdx);
 
     RiskInfo checkRisk() { return defaultPortfolio_->checkRisk();}
     RiskInfo checkRisk(string accID){

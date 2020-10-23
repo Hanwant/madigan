@@ -1,9 +1,18 @@
+import numba
 import numpy as np
 from madigan.environments.cpp import Env, State, RiskInfo, EnvInfoMulti, Assets
 from madigan.utils import time_profile
 
 
 class EnvWrap(Env):
+    def __init__(self, name, assets, init_cash):
+        Env.__init__(self, name, assets, init_cash)
+        self.new_var = 5
+
+    def reset(self):
+        super(EnvWrap, self).reset()
+        print("wrapped reset")
+
     def step(self, units: np.ndarray = None):
         """
         Exact same logic as Env.step() and Env.step(units)
@@ -40,6 +49,7 @@ def test_wrapper_logic():
     assets = Assets(["sine1", "sine2", "sine3", "sine4"])
     env_c = Env("Synth", assets, 1_000_000)
     env_py = EnvWrap("Synth", assets, 1_000_000)
+    env_py.reset()
     for i in range(100):
         action_units = 1000*np.random.randn(4)
         srdi_c = env_c.step(action_units)

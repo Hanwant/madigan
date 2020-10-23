@@ -78,7 +78,7 @@ namespace madigan {
     slippagePct_ = slippagePct;
     slippageAbs_ = slippageAbs;
   };
-  void Broker::setTransactionCosts(double transactionPct, double transactionAbs){
+  void Broker::setTransactionCost(double transactionPct, double transactionAbs){
     transactionPct_ = transactionPct;
     transactionAbs_ = transactionAbs;
   };
@@ -122,18 +122,19 @@ namespace madigan {
 
   BrokerResponseSingle Broker::handleTransaction(Portfolio* port,
                                                  int assetIdx, double units){
-    double transactionPrice;
-    double transactionCost;
-    RiskInfo risk = port->checkRisk(assetIdx, units);
-    if(risk == RiskInfo::green){
-      transactionPrice = applySlippage(currentPrices_(assetIdx) ,units);
-      transactionCost = getTransactionCost(units);
-      port->handleTransaction(assetIdx, transactionPrice, units,
-                              transactionCost);
-      return BrokerResponseSingle(transactionPrice, units, transactionCost, risk,
-                                  (port->checkRisk()==RiskInfo::margin_call)? true: false);
+    if (units != 0.){
+      RiskInfo risk = port->checkRisk(assetIdx, units);
+      if(risk == RiskInfo::green){
+        const double& currentPrice = currentPrices_(assetIdx);
+        double transactionPrice = applySlippage(currentPrice ,units);
+        double transactionCost = getTransactionCost(units*currentPrice);
+        port->handleTransaction(assetIdx, transactionPrice, units,
+                                transactionCost);
+        return BrokerResponseSingle(transactionPrice, units, transactionCost, risk,
+                                    (port->checkRisk()==RiskInfo::margin_call)? true: false);
+      }
     }
-    return BrokerResponseSingle(0., 0., 0., risk,
+    return BrokerResponseSingle(0., 0., 0., RiskInfo::green,
                                 (port->checkRisk()==RiskInfo::margin_call)? true: false);
   }
 
@@ -153,12 +154,23 @@ namespace madigan {
                                (port->checkRisk()==RiskInfo::margin_call)? true: false);
   }
 
+  BrokerResponseSingle Broker::close(int assetIdx){
+    Portfolio* port = defaultPortfolio_;
+    double units = -(port->ledger()(assetIdx));
+    const double& currentPrice = currentPrices_(assetIdx);
+    double transactionPrice = applySlippage(currentPrice, units);
+    double transactionCost = getTransactionCost(currentPrice*units);
+    port->close(assetIdx, transactionPrice, transactionCost);
+    return BrokerResponseSingle(transactionPrice, units, transactionCost, RiskInfo::green, // closing is always green
+                                (port->checkRisk()==RiskInfo::margin_call)? true: false);
+  }
+
   double Broker::applySlippage(double price, double units){
     double slippage{(price*slippagePct_) + slippageAbs_};
-    return units<0? price-slippage: price+slippage;
+    return units<0? (price-slippage): (price+slippage);
   }
-  double Broker::getTransactionCost(double units){
-    return abs(units)*transactionPct_ + transactionAbs_;
+  double Broker::getTransactionCost(double amount){
+    return abs(amount)*transactionPct_ + transactionAbs_;
 
   }
 

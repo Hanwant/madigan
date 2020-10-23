@@ -236,30 +236,59 @@ namespace madigan{
   void Portfolio::handleTransaction(int assetIdx, double transactionPrice, double units,
                          double transactionCost){
     // Keeping track of average entry price - for pnl/position calculation
-    double& prevUnits = ledger_(assetIdx);
-    if (std::signbit(prevUnits) != std::signbit(units)){
-      if (abs(units) > abs(prevUnits)){
-        meanEntryPrices_(assetIdx) = transactionPrice;
-        units += prevUnits; // take away amount required to close position
-        cash_ += prevUnits*transactionPrice; // do cash accounting first to close position
-        prevUnits = 0.; // explicitly close position by setting ledger_(assetIdx) to 0.
+    double& currentUnits = ledger_(assetIdx);
+    double& meanEntryPrice = meanEntryPrices_(assetIdx);
+
+    // std::cout << "==========================================================\n";
+    // std::cout << "----------------------------------------------------------\n";
+    // std::cout << "Pre Transaction\n";
+    // std::cout << "Current Units " << currentUnits << "\n";
+    // std::cout << "units to buy " << units << "\n";
+    // std::cout << "transactionPrice " << transactionPrice<< "\n";
+    // std::cout << "meanEntryPrice " << meanEntryPrice << "\n";
+    // std::cout << "sign bits: "<< std::signbit(currentUnits) << ", "<< std::signbit(units) << "\n";
+
+    if (std::signbit(currentUnits) != std::signbit(units)){
+      if (abs(units) > abs(currentUnits)){
+        // CLOSE POSITION
+        units += currentUnits; // take away amount required to close position
+        cash_ += currentUnits*transactionPrice; // do cash accounting first to close position
+        currentUnits = 0.; // explicitly close position by setting ledger_(assetIdx) to 0.
+        // SET NEW MEAN ENTRY PRICE
+        meanEntryPrice = transactionPrice;
+        // std::cout<< "reversed and set mean entry to new: " << meanEntryPrice << "\n";
       }
     }
     else{
-      meanEntryPrices_(assetIdx) += // volume weighted average of position entry prices
-        (transactionPrice - meanEntryPrices_(assetIdx)) * (units /(units + prevUnits));
+      // std::cout<< "accumulating trans, mean, unit, curr: ";
+      // std::cout<< transactionPrice << ", ";
+      // std::cout<< meanEntryPrice<< ", ";
+      // std::cout<< units << ", ";
+      // std::cout<< currentUnits<< ", \n";
+      meanEntryPrice += // volume weighted average of position entry prices
+        (transactionPrice - meanEntryPrice) * (units /(units + currentUnits));
+      // std::cout << "accum numer, denom : "<<(transactionPrice - meanEntryPrice) <<", "<< (units /(units + currentUnits));
+      // std::cout <<"\n";
+      // std::cout<< "accumulated and set mean entry to new: " << meanEntryPrice << "\n";
     }
     // Accounting
     double amount_in_base_currency = transactionPrice * units;
     double marginToUse = amount_in_base_currency * requiredMargin_;
     double marginToBorrow = amount_in_base_currency - marginToUse;
     double& borrowedMarginRef = borrowedMargin_(assetIdx);
+
     borrowedMarginRef += marginToBorrow;
     cash_ -= (marginToUse +transactionCost);
-    prevUnits += units;
+    currentUnits += units;
 
-    if (abs(ledger_(assetIdx)) < 0.0000001){
-      meanEntryPrices_(assetIdx) = 0.;
+    // std::cout << "----------------------------------------------------------\n";
+    // std::cout << "Post Transaction\n";
+    // std::cout << "Current Units " << currentUnits << "\n";
+    // std::cout << "units to buy " << units << "\n";
+    // std::cout << "meanEntryPrice " << meanEntryPrice << "\n";
+
+    if (abs(currentUnits) < 0.0000001){
+      meanEntryPrice = 0.;
       if (borrowedMarginRef > 0.){
         cash_ -= borrowedMarginRef;
         borrowedMarginRef = 0.;
@@ -271,9 +300,53 @@ namespace madigan{
     }
   }
 
+  // void Portfolio::handleTransaction(int assetIdx, double transactionPrice, double units,
+  //                        double transactionCost){
+  //   // Keeping track of average entry price - for pnl/position calculation
+  //   double& currentUnits = ledger_(assetIdx);
+  //   double& meanEntryPrice = meanEntryPrices_(assetIdx);
+
+  //   // std::cout << "Current Units " << currentUnits << "\n";
+  //   // std::cout << "units to buy " << units << "\n";
+  //   // std::cout << "meanEntryPrice" << meanEntryPrice << "\n";
+
+  //   if (std::signbit(currentUnits) != std::signbit(units)){
+  //     if (abs(units) > abs(currentUnits)){
+  //       units += currentUnits;
+  //       close(assetIdx, transactionPrice, 0.);
+  //     }
+  //   }
+  //   else{
+  //     meanEntryPrice += // volume weighted average of position entry prices
+  //       (transactionPrice - meanEntryPrice) * (units /(units + currentUnits));
+  //   }
+  //   // Accounting
+  //   double amount_in_base_currency = transactionPrice * units;
+  //   double marginToUse = amount_in_base_currency * requiredMargin_;
+  //   double marginToBorrow = amount_in_base_currency - marginToUse;
+  //   double& borrowedMarginRef = borrowedMargin_(assetIdx);
+  //   borrowedMarginRef += marginToBorrow;
+  //   cash_ -= (marginToUse +transactionCost);
+  //   currentUnits += units;
+
+  //   if (abs(currentUnits) < 0.0000001){
+  //     meanEntryPrice = 0.;
+  //     if (borrowedMarginRef > 0.){
+  //       cash_ -= borrowedMarginRef;
+  //       borrowedMarginRef = 0.;
+  //     }
+  //   }
+  //   if (borrowedMarginRef < 0. ){
+  //     cash_ -= borrowedMarginRef;
+  //     borrowedMarginRef = 0.;
+  //   }
+
+  // }
   void Portfolio::close(int assetIdx, double transactionPrice,
                         double transactionCost){
     double& currentUnits = ledger_(assetIdx);
+    // std::cout << "CLOSING\n";
+    // std::cout << "transPrice: " << transactionPrice << "\n";
     if (currentUnits != 0.){
       handleTransaction(assetIdx, transactionPrice, -1*currentUnits,
                         transactionCost);

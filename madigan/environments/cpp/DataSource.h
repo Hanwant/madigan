@@ -25,13 +25,14 @@ namespace madigan{
 
   class DataSource{
   public:
-    int nAssets;
     Assets assets;
+    int nAssets_;
   public:
     // DataSource(const DataSource&) =delete;
     // DataSource& operator=(const DataSource&) =delete;
     virtual ~DataSource(){}
     // Data<T> nextData();
+    int nAssets();
     virtual const PriceVector& getData()=0;
     virtual const PriceVector& currentData() const=0;
     virtual std::size_t currentTime() const =0;
@@ -41,6 +42,7 @@ namespace madigan{
   class Synth: public DataSource{
   public:
     Assets assets;
+    int nAssets_{0};
   public:
     Synth(); // use default values for parameters
     Synth(std::vector<double> freq, std::vector<double> mu,
@@ -59,13 +61,12 @@ namespace madigan{
     const PriceVector& currentData() const{ return currentData_;}
     std::size_t currentTime() const { return timestamp_; }
 
-  private:
-    void initParams(std::vector<double> freq, std::vector<double> mu,
+  protected:
+    virtual void initParams(std::vector<double> freq, std::vector<double> mu,
                     std::vector<double> amp, std::vector<double> phase,
                     double dX, double noise);
 
-  private:
-    int nAssets_{0};
+  protected:
     double dX{0.01};
     double noise{0.};
     vector<double> freq;
@@ -78,6 +79,83 @@ namespace madigan{
     std::normal_distribution<double> noiseDistribution;
     PriceVector currentData_;
   };
+  class SineAdder: public Synth{
+  public:
+    // using Synth::Synth;
+    SineAdder(); // use default values for parameters
+    SineAdder(std::vector<double> freq, std::vector<double> mu,
+          std::vector<double> amp, std::vector<double> phase,
+          double dX): SineAdder(freq, mu, amp, phase, dX, 0.){}
+    SineAdder(std::vector<double> freq, std::vector<double> mu,
+          std::vector<double> amp, std::vector<double> phase,
+          double dX, double noise);
+    SineAdder(Config config);
+    SineAdder(pybind11::dict config);
+    ~SineAdder(){}
+    const PriceVector& getData() override;
+  protected:
+    void initParams(std::vector<double> _freq, std::vector<double> _mu,
+                               std::vector<double> _amp, std::vector<double> _phase,
+                               double _dX, double _noise) override;
+  };
+  class SawTooth: public Synth{
+  public:
+    using Synth::Synth;
+    const PriceVector& getData() override;
+  };
+  class Triangle: public Synth{
+  public:
+    using Synth::Synth;
+    const PriceVector& getData() override;
+  };
+
+  class OU: public DataSource{
+  public:
+    Assets assets;
+    int nAssets_{0};
+  public:
+    OU(); // use default values for parameters
+    OU(std::vector<double> mean, std::vector<double> theta,
+       std::vector<double> phi, std::vector<double> noise_var);
+    OU(Config config);
+    OU(pybind11::dict config);
+    ~OU(){}
+    // Data<T> getData();
+    int nAssets() const { return nAssets_;}
+    const PriceVector& getData() override;
+    const pybind11::array_t<double> getData_np() ;
+    const PriceVector& currentData() const{ return currentData_;}
+    std::size_t currentTime() const { return timestamp_; }
+
+  protected:
+    virtual void initParams(std::vector<double> mean, std::vector<double> theta,
+                            std::vector<double> phi, std::vector<double> noise_var);
+
+  protected:
+    const double dT{1.};
+    vector<double> mean;
+    vector<double> theta;
+    vector<double> phi;
+    vector<double> noise_var;
+    std::size_t timestamp_;
+    std::default_random_engine generator;
+    std::vector<std::normal_distribution<double>> noiseDistribution;
+    PriceVector currentData_;
+  };
+
+  std::unique_ptr<DataSource> makeDataSource(string dataSourceType);
+  std::unique_ptr<DataSource> makeDataSource(string dataSourceType, Config config);
+
+
+  // class PySynth: public Synth{
+  // public:
+  //   using Synth::Synth;
+
+  //   const PriceVector& getData() override {
+  //     PYBIND11_OVERLOAD(const PriceVector&,
+  //                       Synth,
+  //                       getData, );
+  //   }
 
 } // namespace oadigan
 

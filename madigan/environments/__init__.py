@@ -1,17 +1,17 @@
-from .cpp import Env, Assets
-from .synth import Synth
+from .cpp.build import Env, Assets
+# from .synth import Synth
 
 def make_env(config):
-    if config.env_type == "Synth":
-        g_params = config.generator_params if config.generator_params is not None else None
+    if config.env_type in ("Synth", "SawTooth", "Triangle", "SineAdder"):
         assets = Assets(config.assets)
-        if g_params is not None:
-            env = Env("Synth", assets, config.init_cash, config)
+        if config.generator_params is not None:
+            env = Env(config.data_source_type, assets, config.init_cash, config)
         else:
-            env = Env("Synth", assets, config.init_cash)
+            env = Env(config.data_source_type, assets, config.init_cash)
         env.setRequiredMargin(config.required_margin)
         env.setMaintenanceMargin(config.maintenance_margin)
+        env.setTransactionCost(config.transaction_cost_rel, config.transaction_cost_rel)
+        env.setSlippage(config.slippage_rel, config.slippage_rel)
         return env
-    else:
-        raise NotImplementedError(f"Env type {config.env_type} not implemented")
+    raise NotImplementedError(f"Env type {config.env_type} not implemented")
 

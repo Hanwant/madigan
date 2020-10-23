@@ -89,6 +89,9 @@ PYBIND11_MODULE(env, m){
 
   py::class_<DataSource>_DataSource(m, "DataSource");
   py::class_<Synth, DataSource>_Synth(m, "Synth");
+  py::class_<SawTooth, Synth>_SawTooth(m, "SawTooth");
+  py::class_<Triangle, Synth>_Triangle(m, "Triangle");
+  py::class_<SineAdder, Synth>_SineAdder(m, "SineAdder");
 
   py::class_<Portfolio>_Portfolio(m, "Portfolio");
   py::class_<Account>_Account(m, "Account");
@@ -182,8 +185,61 @@ PYBIND11_MODULE(env, m){
     .def("currentData", (PriceVector& (Synth::*) ()) &Synth::currentData,
          "Get current data points",
          py::return_value_policy::reference);
+  _SawTooth.def(py::init<>())
+    .def(py::init<py::dict>(), py::arg("config_dict"))
+    .def(py::init<
+         vector<double>, vector<double>,
+         vector<double>, vector<double>,
+         double, double> (),
+         py::arg("freq"), py::arg("mu"),
+         py::arg("amp"), py::arg("phase"),
+         py::arg("dx"), py::arg("noise"))
+    .def_property_readonly("currentTime", &SawTooth::currentTime,
+                           "get the current timestamp",
+                           py::return_value_policy::move)
+    .def("getData", (PriceVector& (SawTooth::*) ()) &SawTooth::getData,
+         "Get Next data points",
+         py::return_value_policy::reference)
+    .def("currentData", (PriceVector& (SawTooth::*) ()) &SawTooth::currentData,
+         "Get current data points",
+         py::return_value_policy::reference);
+  _Triangle.def(py::init<>())
+    .def(py::init<py::dict>(), py::arg("config_dict"))
+    .def(py::init<
+         vector<double>, vector<double>,
+         vector<double>, vector<double>,
+         double, double> (),
+         py::arg("freq"), py::arg("mu"),
+         py::arg("amp"), py::arg("phase"),
+         py::arg("dx"), py::arg("noise"))
+    .def_property_readonly("currentTime", &Triangle::currentTime,
+                           "get the current timestamp",
+                           py::return_value_policy::move)
+    .def("getData", (PriceVector& (Triangle::*) ()) &Triangle::getData,
+         "Get Next data points",
+         py::return_value_policy::reference)
+    .def("currentData", (PriceVector& (Triangle::*) ()) &Triangle::currentData,
+         "Get current data points",
+         py::return_value_policy::reference);
+  _SineAdder.def(py::init<>())
+    .def(py::init<py::dict>(), py::arg("config_dict"))
+    .def(py::init<
+         vector<double>, vector<double>,
+         vector<double>, vector<double>,
+         double, double> (),
+         py::arg("freq"), py::arg("mu"),
+         py::arg("amp"), py::arg("phase"),
+         py::arg("dx"), py::arg("noise"))
+    .def_property_readonly("currentTime", &SineAdder::currentTime,
+                           "get the current timestamp",
+                           py::return_value_policy::move)
+    .def("getData", (PriceVector& (SineAdder::*) ()) &SineAdder::getData,
+         "Get Next data points",
+         py::return_value_policy::reference)
+    .def("currentData", (PriceVector& (SineAdder::*) ()) &SineAdder::currentData,
+         "Get current data points",
+         py::return_value_policy::reference);
 
-    // .def(py::init<>())
   _Portfolio.def(py::init<string, Assets, double> (),
          py::arg("id"),
          py::arg("assets"),
@@ -191,6 +247,8 @@ PYBIND11_MODULE(env, m){
     .def("setDataSource", &Portfolio::setDataSource,
          "assign data source for current prices reference")
     .def_property_readonly("id", &Portfolio::id, "portfolio id")
+    .def_property_readonly("initCash", &Portfolio::initCash,
+                           "initial amount of deposited cash")
     .def_property_readonly("requiredMargin", &Portfolio::requiredMargin,
                            "required margin level")
     .def_property_readonly("maintenanceMargin", &Portfolio::maintenanceMargin,
@@ -237,9 +295,16 @@ PYBIND11_MODULE(env, m){
                            "to the internal array- const is ignored",
                            py::return_value_policy::reference)/* BE CAREFUL - CASTS AWAY CONSTNESS
                                                                  AND CONNECTED TO DATA SOURCE*/
+    .def_property_readonly("meanEntryValue", &Portfolio::meanEntryValue,
+                           "Mean Entry Value for the current positions ",
+                           py::return_value_policy::move)
     .def_property_readonly("ledger", &Portfolio::ledger,
                            "vector of asset holdings",
                            py::return_value_policy::reference)
+    .def_property_readonly("ledgerNormed", &Portfolio::ledgerNormed,
+                           "returns current ledger "
+                           " normalized by position sizes and cash balance - I.e equity",
+                           py::return_value_policy::copy)
     .def("setRequiredMargin", (void (Portfolio::*)(double)) &Portfolio::setRequiredMargin,
          "set required Margin level for port, takes proportion as input"
          " I.e 0.1 for 10% margin or 10x levarage",
@@ -271,6 +336,11 @@ PYBIND11_MODULE(env, m){
          &Portfolio::handleTransaction,
          "handle transaction given asset code str, transactionPrice, and amount of units",
          py::arg("asset"), py::arg("transactionPrice"), py::arg("units"),
+         py::arg("transactionCost")=0.)
+    .def("close", (void(Portfolio::*)(int , double, double))
+         &Portfolio::close,
+         "Close Position for given asset Idx, if a position exists.",
+         py::arg("assetIdx"), py::arg("transactionPrice"),
          py::arg("transactionCost")=0.)
     .def("__repr__", [](const Portfolio &port) {
       std::stringstream repr;
@@ -408,6 +478,12 @@ PYBIND11_MODULE(env, m){
     .def("addPortfolio", (void (Broker::*)(string, const Portfolio&)) &Broker::addPortfolio,
          "add port to account specified by accID by copying given port object",
          py::arg("accID"), py::arg("port"))
+    .def("setSlippage", (void (Broker::*)(double, double)) &Broker::setSlippage,
+         "set relative and absolute slippage- for all accounts/portfolios",
+         py::arg("relativeSlippage"), py::arg("absSlippage"))
+    .def("setTransactionCost", (void (Broker::*)(double, double)) &Broker::setTransactionCost,
+         "set relative and absolute transaction costs - for all accounts/portfolios",
+         py::arg("relativeCost"), py::arg("absCost"))
     .def("setRequiredMargin", (void (Broker::*)(double)) &Broker::setRequiredMargin,
          "set requiredMargin level for default Acc"
         "takes margin level as a proprtion as input "
@@ -520,6 +596,11 @@ PYBIND11_MODULE(env, m){
          "handle a transaction given accID, portID, asset index and units to purchase",
          py::arg("accID"), py::arg("portID"), py::arg("assetCode"), py::arg("units"),
          py::return_value_policy::move)
+    .def("close", (BrokerResponseSingle(Broker::*)(int))
+         &Broker::close,
+         "Close Position for given asset Idx, if a position exists. "
+         "Applies slippage and transaction cost etc as normal",
+         py::arg("assetIdx"))
     .def("handleAction", (BrokerResponseMulti(Broker::*)(const AmountVector&) )
          &Broker::handleAction,
          "Routing to handleTransaction given array of units "
@@ -553,6 +634,14 @@ PYBIND11_MODULE(env, m){
          "set maintenance Margin level for default port, takes proportion as input"
          " I.e 0.1 for 10% margin or 10x levarage",
          py::arg("maintenanceMargin"))
+    .def("setSlippage", (void (Env::*)(double, double)) &Env::setSlippage,
+         "set relative and absolute slippage- for all accounts/portfolios",
+         py::arg("relativeSlippage"), py::arg("absSlippage"))
+    .def("setTransactionCost", (void (Env::*)(double, double)) &Env::setTransactionCost,
+         "set relative and absolute transaction costs - for all accounts/portfolios",
+         py::arg("relativeCost"), py::arg("absCost"))
+    // .def_property_readonly("initCash", &Env::defaultPortfolio::initCash,
+    //                        "initCash for the default portfolio")
     .def_property_readonly("broker", &Env::broker,
                            "Returns pointer to broker instance")
     .def_property_readonly("account", (const Account* (Env::*)() const) &Env::account,
@@ -585,8 +674,8 @@ PYBIND11_MODULE(env, m){
                                                                  AND CONNECTED TO DATA SOURCE*/
 
     .def_property_readonly("ledgerNormed", &Env::ledgerNormed,
-                           "returns reference to current ledger for the default portfolio"
-                           ", use reference with care as constness is cast away on python side",
+                           "returns current ledger for the default portfolio"
+                           " normalized by position sizes and cash balance - I.e equity",
                            py::return_value_policy::copy)
     .def_property_readonly("equity",  &Env::equity,
                            "returns net equity")

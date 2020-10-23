@@ -251,17 +251,18 @@ void testAccountingPortfolio(){
   std::cout <<std::setprecision(20)<< port.pnl() << "\n";
   assert(port.pnl() == 0.);
   port.handleTransaction(0, newPrices(0), -10'000,0.);
-  // std::cout << "Asset Value\n";
-  // std::cout <<std::setprecision(20)<< port.assetValue() << "\n";
-  // std::cout << "mean entry price\n";
-  // std::cout <<std::setprecision(20)<< port.meanEntryPrices() << "\n";
-  // std::cout << "ledger\n";
-  // std::cout <<std::setprecision(20)<< port.ledger() << "\n";
-  // std::cout << "mean entry value\n";
-  // std::cout <<std::setprecision(20)<< port.meanEntryValue() << "\n";
-  // std::cout << "pnl\n";
+  std::cout << "Asset Value\n";
+  std::cout <<std::setprecision(20)<< port.assetValue() << "\n";
+  std::cout << "mean entry price\n";
+  std::cout <<std::setprecision(20)<< port.meanEntryPrices() << "\n";
+  std::cout << "ledger\n";
+  std::cout <<std::setprecision(20)<< port.ledger() << "\n";
+  std::cout << "mean entry value\n";
+  std::cout <<std::setprecision(20)<< port.meanEntryValue() << "\n";
+  std::cout << "pnl\n";
   std::cout <<std::setprecision(20)<< port.pnl() << "\n";
   assert(port.pnl() == 0.);
+  port.close(0, newPrices(0), 0.);
 }
 
 void testEnvInit(){

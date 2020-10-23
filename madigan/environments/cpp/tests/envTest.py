@@ -3,7 +3,7 @@ import numpy as np
 from numpy import isclose
 from numpy.testing import assert_equal, assert_allclose
 from madigan.utils import time_profile, Config
-from madigan.environments import Synth as Synth_py
+from madigan.environments.synth import Synth as Synth_py
 from madigan.environments.cpp import Asset, Assets, RiskInfo
 from madigan.environments.cpp import Synth, Portfolio, Account, Broker, Env
 
@@ -482,6 +482,10 @@ def test_env_init():
     assets = Assets(['BTCUSD', 'ETHUSD', 'BTCETH', 'EURUSD'])
     env1 = Env("Synth", assets, 1_000_000)
     env2 = Env("Synth", assets, 1_000_000, config)
+    print(env1.broker.portfolio())
+    print(env1.portfolio)
+    print(env2.broker.portfolio())
+    print(env2.portfolio)
 
 
 def test_env_interface():

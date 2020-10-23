@@ -4,6 +4,7 @@
 #include <vector>
 #include <memory>
 #include <stdexcept>
+#include <math.h>
 
 #include "Assets.h"
 #include "DataSource.h"
@@ -54,7 +55,7 @@ namespace madigan{
     const Account*  account() const { return defaultAccount_; }
     const Account*  account(string accID) const { return broker_->accountBook_.at(accID); }
     const Portfolio*  portfolio() const { return defaultPortfolio_; }
-    const Portfolio*  portfolio(string accID) const { return defaultAccount_->portfolioBook_.at(accID); }
+    // const Portfolio*  portfolio(string accID) const { return defaultAccount_->portfolioBook_.at(accID); }
     std::size_t currentTime() const {return dataSource_->currentTime(); }
     const PriceVectorMap& currentPrices() const { return currentPrices_;}
     const LedgerMap& ledger() const { return defaultLedger_;}
@@ -77,8 +78,24 @@ namespace madigan{
     double pnl() const { return defaultPortfolio_->pnl(); }
     AmountVector pnlPositions() const { return defaultPortfolio_->pnlPositions(); }
 
-    void setRequiredMargin(double reqM){ broker_->setRequiredMargin(reqM); }
-    void setMaintenanceMargin(double mainM){ broker_->setMaintenanceMargin(mainM); }
+    void setRequiredMargin(double reqM){
+      requiredMargin_ = reqM;
+      broker_->setRequiredMargin(reqM);
+    }
+    void setMaintenanceMargin(double mainM){
+      maintenanceMargin_ = mainM;
+      broker_->setMaintenanceMargin(mainM);
+    }
+    void setSlippage(double slippagePct=0., double slippageAbs=0.){
+      slippagePct_ = slippagePct;
+      slippageAbs_ = slippageAbs;
+      broker_->setSlippage(slippagePct_, slippageAbs_);
+    }
+    void setTransactionCost(double transactionPct=0., double transactionAbs=0.){
+      transactionPct_ = transactionPct;
+      transactionAbs_ = transactionAbs;
+      broker_->setTransactionCost(transactionPct_, transactionAbs_);
+    }
 
     RiskInfo checkRisk(){ return defaultPortfolio_->checkRisk(); }
 
@@ -95,15 +112,25 @@ namespace madigan{
     Portfolio* defaultPortfolio_{nullptr};
     Account* defaultAccount_{nullptr};
     LedgerMap defaultLedger_{nullptr, 0};
+
+    double requiredMargin_{0};
+    double maintenanceMargin_{0};
+    double slippagePct_{0.};
+    double slippageAbs_{0.};
+    double transactionPct_{0.};
+    double transactionAbs_{0.};
   };
 
   void Env::initAccountants(){
     // Call after assets_, initCash_ and dataSource_ have been initialized
     broker_ = std::make_unique<Broker>(assets_, initCash_);
     broker_->setDataSource(dataSource_.get());
+    broker_->setRequiredMargin(requiredMargin_);
+    broker_->setMaintenanceMargin(maintenanceMargin_);
+    broker_->setTransactionCost(transactionPct_, transactionAbs_);
+    broker_->setSlippage(slippagePct_, slippageAbs_);
     defaultAccount_ = broker_->defaultAccount_;
     defaultPortfolio_ = broker_->defaultPortfolio_;
-
     const auto& prices = dataSource_->getData();
     new (&currentPrices_) PriceVectorMap(prices.data(), prices.size());
     new (&defaultLedger_) LedgerMap(defaultPortfolio_->ledger().data(),
@@ -111,28 +138,25 @@ namespace madigan{
   }
 
   State Env::reset(){
-    if(dataSourceType == "Synth"){
-      if (config.size() > 0){
-        dataSource_ = make_unique<Synth>(config);
-      }
-      else{
-        dataSource_ = make_unique<Synth>();
-      }
+    if (config.size() > 0){
+      dataSource_ = makeDataSource(dataSourceType, config);
     }
-    else{
-      throw NotImplemented("Only Synth as datasource is implemented");
-    }
+    else dataSource_ = makeDataSource(dataSourceType);
+
     initAccountants();
     return State(currentPrices(), ledger(), currentTime());
   }
 
   SRDISingle Env::step(){
-    double prevEq = broker_->defaultAccount_->equity();
+    double prevEq = defaultPortfolio_->equity();
     PriceVector newPrices = dataSource_->getData();
-    double currentEq = broker_->defaultAccount_->equity();
-    double reward = (currentEq-prevEq) / prevEq;
+    double currentEq = defaultPortfolio_->equity();
+    double reward = log(std::max(currentEq / prevEq, 0.3));
     RiskInfo risk = broker_->checkRisk();
     bool done = (risk == RiskInfo::green)? true: false;
+    if (defaultPortfolio_->equity() < 0.1*initCash_){
+      done = true;
+    }
     return std::make_tuple(State{newPrices, broker_->defaultAccount_->ledgerNormed(),
                                  currentTime()}, reward, done, EnvInfo<double>());
   }
@@ -141,17 +165,21 @@ namespace madigan{
 
     double prevEq = broker_->defaultPortfolio_->equity();
 
-    BrokerResponseMulti response = broker_->handleTransaction(units);
     PriceVector newPrices = dataSource_->getData();
 
     double currentEq = broker_->defaultPortfolio_->equity();
-    double reward = (currentEq-prevEq) / prevEq;
+    double reward = log(std::max(currentEq / prevEq, 0.3));
 
+    BrokerResponseMulti response = broker_->handleTransaction(units);
     bool done{false};
+    RiskInfo risk = broker_->checkRisk();
     for(const auto& risk: response.riskInfo){
       if (risk != RiskInfo::green && risk != RiskInfo::insuff_margin){
         done = true;
       }
+    }
+    if (risk != RiskInfo::green || defaultPortfolio_->equity() < 0.1*initCash_){
+      done = true;
     }
 
     return std::make_tuple(State{newPrices, broker_->defaultAccount_->ledgerNormed(),
@@ -161,12 +189,23 @@ namespace madigan{
   SRDISingle Env::step(int assetIdx, double units){
 
     double prevEq = broker_->defaultPortfolio_->equity();
-    BrokerResponseSingle response = broker_->handleTransaction(assetIdx, units);
+
     PriceVector newPrices = dataSource_->getData();
 
     double currentEq = broker_->defaultPortfolio_->equity();
-    double reward = (currentEq-prevEq) / prevEq;
-    bool done = (response.riskInfo == RiskInfo::green)? false: true;
+    double reward = log(std::max(currentEq / prevEq, 0.3));
+
+    BrokerResponseSingle response = broker_->handleTransaction(assetIdx, units);
+
+    RiskInfo risk = broker_->checkRisk();
+    bool done{false};
+    if (risk != RiskInfo::green ||
+        (response.riskInfo != RiskInfo::green && response.riskInfo != RiskInfo::insuff_margin)){
+      done = true;
+    }
+    if (defaultPortfolio_->equity() < 0.1*initCash_){
+      done = true;
+    }
 
     return std::make_tuple(State{newPrices, broker_->defaultAccount_->ledgerNormed(),
                                  currentTime()}, reward, done, EnvInfoSingle(response));

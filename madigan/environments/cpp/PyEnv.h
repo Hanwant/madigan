@@ -11,11 +11,11 @@ namespace madigan{
   public:
     using Env::Env;
 
-    State reset() override {
-      PYBIND11_OVERLOAD(State,
-                        Env,
-                        reset, );
-    }
+    // State reset() override {
+    //   PYBIND11_OVERLOAD(State,
+    //                     Env,
+    //                     reset, );
+    // }
     SRDISingle step() override {
       PYBIND11_OVERLOAD(SRDISingle,
                         Env,
