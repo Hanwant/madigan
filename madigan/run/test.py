@@ -2,26 +2,77 @@ from pathlib import Path
 from random import random
 import numpy as np
 import matplotlib.pyplot as plt
+from ..utils import list_2_dict
 from ..utils.plotting import make_grid
 from ..utils.preprocessor import make_preprocessor
 from ..fleet import make_agent
 from ..environments import make_env
 
-def get_test_loop(config):
-    agent = config.agent_type
-    if agent in ("DQN", "LQN"):
-        return test_loop_dqn
-    else:
-        raise NotImplementedError(f"test loop for {config.agent_type} is not implemented")
+def get_test_loop(agent, env, preprocessor, nsteps=1000, reset=False, eps=0.,
+                  random_starts=0, boltzmann=False, boltzmann_temp=1., verbose=False):
 
-def test_loop_dqn(agent, env, preprocessor, eps=0., random_starts=0,
+    config = agent.config
+    agent_type = config.agent_type
+    if agent_type in ("DQN", "LQN"):
+        test_loop = test_loop_dqn(agent, env, preprocessor, eps=eps,
+                                  random_starts=random_starts, reset=reset,
+                                  boltzmann=boltzmann, boltzmann_temp=boltzmann_temp)
+        return test_loop
+    if agent_type in ("A2C"):
+        test_loop = test_loop_actor_critic(agent, env, preprocessor, nsteps=nsteps,
+                                           reset=reset, eps=eps,
+                                           random_starts=random_starts)
+        return test_loop
+    if agent_type in ("Actor"):
+        test_loop = test_loop_actor(agent, env, preprocessor, nsteps=nsteps,
+                                           reset=reset, eps=eps,
+                                           random_starts=random_starts)
+        return test_loop
+    raise NotImplementedError(f"test loop for {config.agent_type} is not implemented")
+
+def test(agent, env, preprocessor, nsteps=1000, reset=False, eps=0., random_starts=0,
+         boltzmann=False, boltzmann_temp=1., verbose=False):
+    loop = get_test_loop(agent, env, preprocessor, eps=eps, random_starts=random_starts,
+                         reset=reset, boltzmann=boltzmann, boltzmann_temp=boltzmann_temp)
+    done=False
+    metrics = []
+    try:
+        for i in range(nsteps):
+            _metrics = next(loop)
+            if _metrics is not None:
+                _metrics['equity'] = env.equity
+                _metrics['prices'] = np.array(env.currentPrices, copy=True)
+                _metrics['reward'] = _metrics['reward']
+                _metrics['positions'] = env.ledgerNormed
+                _metrics['cash'] = env.cash
+                _metrics['margin'] = env.availableMargin
+                _metrics['transactions'] = _metrics['info'].brokerResponse.transactionUnits
+            metrics.append(_metrics)
+    except StopIteration as SE:
+        if verbose:
+            done = _metrics['done']
+            info = _metrics['info']
+            if done:
+                print('transaction risk: ', info.brokerResponse.riskInfo)
+                print('margin call: ', info.brokerResponse.marginCall)
+                # print("broker checkrisk", env.portfolio.checkRisk())
+                # print("pnl", env.pnlPositions)
+                # print("pnl total", env.pnl)
+                # print("position values", env.positionValues)
+                # print("total asset valu", env.assetValue)
+            print(f'Stopped at {i} steps')
+    return list_2_dict(metrics)
+
+def test_loop_dqn(agent, env, preprocessor, eps=0., random_starts=0, reset=False,
                   boltzmann=False, boltzmann_temp=1.):
     # try:
     done = False
-    default_qvals = np.array([[0.] * agent.action_atoms]*len(env.assets))
-    env.reset()
+    if reset:
+        env.reset()
     preprocessor.initialize_history(env)
     state = preprocessor.current_data()
+    example_qvals = agent.get_qvals(preprocessor.current_data())[0].cpu().numpy()
+    default_qvals = np.zeros_like(example_qvals)
     while True:
         if random() < eps or random_starts > 0:
             action = agent.action_space.sample()
@@ -31,63 +82,86 @@ def test_loop_dqn(agent, env, preprocessor, eps=0., random_starts=0,
             current_data = preprocessor.current_data()
             action = agent(current_data) # preprocessed data fed into agent
             qvals = agent.get_qvals(current_data)[0].cpu().numpy()
-            state, reward, done, info = env.step(action)
-            preprocessor.stream_state(state)
+        state, reward, done, info = env.step(action)
+        preprocessor.stream_state(state)
         if done:
             # reward = -1.
-            yield state, reward, done, info, qvals
+            yield {'state': state, 'reward': reward, 'done': done,
+                   'info': info, 'qvals': qvals}
             break
-        yield state, reward, done, info, qvals
-    # except:
-    #     import traceback; traceback.print_exc()
-    #     import ipdb; ipdb.set_trace()
+        yield {'state': state, 'reward': reward, 'done': done,
+                'info': info, 'qvals': qvals}
 
-def test(agent, env, preprocessor, nsteps=1000, eps=0., random_starts=0,
-         boltzmann=False, boltzmann_temp=1., verbose=False):
-    test_loop = get_test_loop(agent.config)
-    loop = test_loop(agent, env, preprocessor, eps=eps, random_starts=random_starts,
-                     boltzmann=boltzmann, boltzmann_temp=boltzmann_temp)
-    equity = []
-    returns = []
-    prices = []
-    positions = []
-    cash = []
-    margin = []
-    actions = []
-    states = []
-    qvals=[]
-    done=False
-    try:
-        for i in range(nsteps):
-            metrics = next(loop)
-            if metrics is not None:
-                state, reward, done, info, qval = metrics
-                states.append(state)
-                qvals.append(qval)
-                equity.append(env.equity)
-                returns.append(reward)
-                prices.append(np.array(env.currentPrices, copy=True))
-                # positions.append(np.array(env.ledger, copy=True))
-                positions.append(env.ledgerNormed)
-                cash.append(env.cash)
-                margin.append(env.availableMargin)
-                actions.append(info.brokerResponse.transactionUnits)
-    except StopIteration as SE:
-        if verbose:
-            if done:
-                # import ipdb; ipdb.set_trace()
-                print('transaction risk: ', info.brokerResponse.riskInfo)
-                print('margin call: ', info.brokerResponse.marginCall)
-                # print("pnl", env.pnlPositions)
-                # print("pnl total", env.pnl)
-                # print("position values", env.positionValues)
-                # print("total asset valu", env.assetValue)
-            print(f'Stopped at {i} steps')
-    return {'equity': equity, 'returns': returns, 'prices': np.array(prices),
-            'positions': positions, 'assets': env.assets, 'cash': cash,
-            'margin': margin, 'actions': actions, 'states': states,
-            'qvals': qvals}
-
+def test_loop_actor_critic(agent, env, preprocessor, eps=0., random_starts=0,
+                           reset=False, **params):
+    # try:
+    done = False
+    if reset:
+        env.reset()
+    preprocessor.initialize_history(env)
+    state = preprocessor.current_data()
+    example_state_val = agent.get_state_value(preprocessor.current_data()
+                                             )[0].detach().cpu().numpy()
+    default_state_val = np.zeros_like(example_state_val)
+    example_action_probs = agent.get_policy(preprocessor.current_data()
+                                             ).probs.detach().cpu().numpy()
+    default_probs = np.zeros_like(example_action_probs)
+    while True:
+        if random() < eps or random_starts > 0:
+            action = agent.action_space.sample()
+            random_starts -= 1
+            state_val = default_state_val
+            probs = default_probs
+        else:
+            state = preprocessor.current_data()
+            policy = agent.get_policy(state)
+            probs = policy.probs
+            action = agent(state) # preprocessed data fed into agent
+            state_val = agent.get_state_value(state
+                                              )[0].detach().cpu().numpy()
+        state, reward, done, info = env.step(action)
+        preprocessor.stream_state(state)
+        if done:
+            # reward = -1.
+            yield {'state': state, 'reward': reward, 'done': done,
+                   'info': info, 'state_val': state_val,
+                   'action_probs': probs.detach().cpu().numpy()}
+            break
+        yield {'state': state, 'reward': reward, 'done': done,
+               'info': info, 'state_val': state_val,
+               'action_probs': probs.detach().cpu().numpy()}
+def test_loop_actor(agent, env, preprocessor, eps=0., random_starts=0,
+                           reset=False, **params):
+    # try:
+    done = False
+    if reset:
+        env.reset()
+    preprocessor.initialize_history(env)
+    state = preprocessor.current_data()
+    example_action_probs = agent.get_policy(preprocessor.current_data()
+                                             ).probs.detach().cpu().numpy()
+    default_probs = np.zeros_like(example_action_probs)
+    while True:
+        if random() < eps or random_starts > 0:
+            action = agent.action_space.sample()
+            random_starts -= 1
+            probs = default_probs
+        else:
+            state = preprocessor.current_data()
+            policy = agent.get_policy(state)
+            probs = policy.probs
+            action = agent(state) # preprocessed data fed into agent
+        state, reward, done, info = env.step(action)
+        preprocessor.stream_state(state)
+        if done:
+            # reward = -1.
+            yield {'state': state, 'reward': reward,
+                   'done': done, 'info': info,
+                   'action_probs': probs.detach().cpu().numpy()}
+            break
+        yield {'state': state, 'reward': reward,
+                'done': done, 'info': info,
+                'action_probs': probs.detach().cpu().numpy()}
 
 def get_int_from_user():
     try:

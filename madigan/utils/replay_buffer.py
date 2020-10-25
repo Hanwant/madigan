@@ -5,32 +5,61 @@ from .data import SARSD, State
 
 class ReplayBuffer:
 
-    def __init__(self, size, nstep=1):
+    def __init__(self, size, nstep_return, discount):
         self.size = size
-        self.nstep = nstep
+        self.nstep_return = nstep_return
+        self.discount = discount
         self._buffer = [None] * size
-        self._nstep_buffer = deque(maxlen=nstep)
-        self.nstep_return = 0.
+        # For Small lists, pop(0) has similar performance to deque().popleft()
+        # And better performance for iteration when calculation the discounted sum
+        # self._nstep_buffer = deque(maxlen=nstep)
+        self._nstep_buffer = []
         self.filled = 0
         self.current_idx = 0
+
+    @classmethod
+    def from_config(cls, config):
+        return cls(config.rb_size, config.nstep_return, config.agent_config.discount)
 
     @property
     def buffer(self):
         return self._buffer
 
+    def get_nstep_sarsd(self):
+        """
+        Calculates nstep discounted return from the nstep buffer
+        and returns the sarsd with the adjusted return and next_state offset to t+n
+        """
+        reward = sum([(self.discount**i)*dat.reward for i, dat in enumerate(self._nstep_buffer)])
+        nstep_sarsd = self._nstep_buffer.pop(0)
+        nstep_sarsd.reward = reward
+        if len(self._nstep_buffer):
+            nstep_sarsd.next_state = self._nstep_buffer[-1].next_state
+        return nstep_sarsd
+
     def add(self, sarsd):
-        if len(self._nstep_buffer) == self.nstep:
-            # _reward = sum([dat.reward for dat in self._nstep_buffer])
-            nstep_sarsd = self._nstep_buffer.popleft()
-            reward = self.nstep_return
-            self.nstep_return -= nstep_sarsd.reward
-            nstep_sarsd.reward = reward
-            self._buffer[self.current_idx] = nstep_sarsd
-            self.current_idx = (self.current_idx + 1) % self.size
-            if self.filled < self.size:
-                self.filled += 1
+        """
+        Adds sarsd to nstep buffer.
+        If nstep buffer is full, adds to replay buffer first
+        """
+        if len(self._nstep_buffer) == self.nstep_return:
+            nstep_sarsd = self.get_nstep_sarsd()
+            self._add_to_replay(nstep_sarsd)
         self._nstep_buffer.append(sarsd)
-        self.nstep_return += sarsd.reward
+        if sarsd.done:
+            while len(self._nstep_buffer) > 0:
+                nstep_sarsd = self.get_nstep_sarsd()
+                self._add_to_replay(nstep_sarsd)
+
+    def _add_to_replay(self, sarsd):
+        """
+        Adds the given sarsd (assuming adjusted for nstep returns)
+        to  the replay buffer
+        """
+        self._buffer[self.current_idx] = sarsd
+        self.current_idx = (self.current_idx + 1) % self.size
+        if self.filled < self.size:
+            self.filled += 1
 
     def sample(self, n):
         if self.filled < self.size:
@@ -39,24 +68,39 @@ class ReplayBuffer:
             return self.batchify(sample(self._buffer, n))
 
     def batchify(self, sample):
-        state_price = np.stack([s.state.price for s in sample])
-        state_port = np.stack([s.state.portfolio for s in sample])
-        state_time = np.stack([s.state.timestamp for s in sample])
-        state = State(state_price, state_port, state_time)
-        next_state_price = np.stack([s.next_state.price for s in sample])
-        next_state_port = np.stack([s.next_state.portfolio for s in sample])
-        next_state_time = np.stack([s.next_state.timestamp for s in sample])
-        next_state = State(next_state_price, next_state_port, next_state_time)
-        action = np.stack([s.action for s in sample])
-        reward = np.stack([s.reward for s in sample])
-        done = np.stack([s.done for s in sample])
+        try:
+            state_price = np.stack([s.state.price for s in sample])
+            state_port = np.stack([s.state.portfolio for s in sample])
+            state_time = np.stack([s.state.timestamp for s in sample])
+            state = State(state_price, state_port, state_time)
+            next_state_price = np.stack([s.next_state.price for s in sample])
+            next_state_port = np.stack([s.next_state.portfolio for s in sample])
+            next_state_time = np.stack([s.next_state.timestamp for s in sample])
+            next_state = State(next_state_price, next_state_port, next_state_time)
+            action = np.stack([s.action for s in sample])
+            reward = np.stack([s.reward for s in sample])
+            done = np.stack([s.done for s in sample])
+        except:
+            import ipdb; ipdb.set_trace()
         return SARSD(state, action, reward, next_state, done)
+
+    def get_full(self):
+        return self.batchify(self._buffer[:self.filled])
 
     def get_latest(self, size):
         return self.batchify(self._buffer[self.filled-size: self.filled])
 
+    def clear(self):
+        self._buffer = [None] * self.size
+        self.filled = 0
+        self.current_idx = 0
+        self._nstep_buffer = []
+
     def __getitem__(self, item):
-        return self.batchify(self._buffer[item])
+        if isinstance(item, int):
+            return self._buffer[item]
+        elif isinstance(item, slice):
+            return self.batchify(self._buffer[item])
 
     def __len__(self):
         return self.filled

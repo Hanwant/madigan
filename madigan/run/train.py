@@ -21,17 +21,6 @@ from ..environments.cpp import RiskInfo
 from .test import test
 
 
-# def plot_train_logs(train_logs, filter_cols=('prices', )):
-#     metrics = list(filter(lambda x: x not in filter_cols,
-#                           train_logs.keys()))
-#     fig, axs = plt.subplots(*make_grid(len(metrics)))
-#     ax = axs.flatten()
-#     for i, name in enumerate(metrics):
-#         ax[i].plot(train_logs[name], label=name)
-#         ax[i].set_title(name)
-#         ax[i].legend()
-#     plt.show()
-
 def get_train_loop(config):
     if config.agent_type == "DQN":
         return train_loop_dqn

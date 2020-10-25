@@ -19,7 +19,8 @@ def make_grid(n):
 
 
 def plot_test_metrics(data, include=('prices', 'equity', 'cash', 'positions',
-                                     'margin', 'returns', 'actions', 'qvals'),
+                                     'margin', 'reward', 'actions', 'qvals',
+                                     'transactions', 'action_probs', 'state_val'),
                       assets=None):
     assert isinstance(data, (dict, pd.DataFrame)), "expected data to be a dict or pd df"
     if 'timestamp' in data.keys():
@@ -27,18 +28,23 @@ def plot_test_metrics(data, include=('prices', 'equity', 'cash', 'positions',
     else:
         index = range(len(data['equity']))
     metrics = list(filter(lambda m: m in include, data.keys()))
+    # order plots
+    ordered = ('equity', 'reward', 'prices', 'positions', 'cash', 'margin', 'transactions')
+    # metrics = list(filter(lambda m: m in include, data.keys()))
+    metrics = tuple(filter(lambda m: m not in ordered, metrics))
+    metrics = ordered + metrics
     if 'prices' in metrics and (assets is None or len(assets) != len(data['prices'][0])):
         assets = ["asset_"+str(i) for i in range(len(data['prices'][0]))]
     fig, axes = plt.subplots(*make_grid(len(metrics)), sharex=True, squeeze=False)
     ax = axes.flatten()
     for i, metric in enumerate(metrics):
-        if metric in ('prices', 'actions'):
+        if metric in ('prices', 'actions', 'transactions'):
             prices = np.array(data[metric])
             for j, asset in enumerate(assets):
                 ax[i].plot(index, prices[:, j], label=asset)
             ax[i].legend()
             ax[i].set_title(metric)
-        elif metric in ('equity', 'cash', 'margin', 'returns'):
+        elif metric in ('equity', 'cash', 'margin', 'reward', 'state_val'):
             ax[i].plot(index, data[metric], label=metric)
             ax[i].set_title(metric)
             ax[i].legend()
@@ -50,7 +56,7 @@ def plot_test_metrics(data, include=('prices', 'equity', 'cash', 'positions',
             ax[i].set_yticks(range(data_2d.shape[0]))
             ax[i].set_yticklabels(labels=assets)
             fig.colorbar(im, ax=ax[i])
-        elif metric in ('qvals', ):
+        elif metric in ('qvals', 'action_probs', 'probs'):
             assetIdx = 0
             if len(data[metric][0].shape) == 2:
                 data_2d = np.stack(data[metric]).T[:, assetIdx, :]
