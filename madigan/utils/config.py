@@ -89,8 +89,8 @@ def make_config(
         window_length=64, # global time_frames parameter
 
         # REPLAY BUFFER ####################################################################
-        rb_size=100000, # Size of replay buffer
-        min_rb_size=50_000, # Min size before training
+        replay_size=100000, # Size of replay buffer
+        replay_min_size=50_000, # Min size before training
         episode_length=1024,
         nstep_return=3, # Agent/Model spec
 
@@ -144,7 +144,9 @@ def make_config(
 ):
     assert experiment_id != "", "must specify experiment id"
     assert assets is not None, "Must specify list of asset names/codes"
+    basepath += experiment_id
     preprocessor_config = {
+        "preprocessor_type": preprocessor_type,
         "window_length": window_length
     }
     model_config = {
@@ -177,6 +179,13 @@ def make_config(
     agent_config = {
         'type': agent_type,
         'basepath': basepath,
+        'nsteps':nsteps,
+        'replay_size': replay_size,
+        'episode_length': episode_length,
+        'replay_min_size': replay_min_size,
+        'train_freq': train_freq,
+        'target_update_freq': target_update_freq,
+        'batch_size': batch_size,
         'discrete_action_atoms': discrete_action_atoms,
         'model_config': model_config,
         'optim_config': optim_config,
@@ -222,13 +231,7 @@ def make_config(
         agent_config=agent_config,
         model_config=model_config,
         optim_config=optim_config,
-        nsteps=nsteps,
         test_steps=test_steps,
-        rb_size=rb_size,
-        episode_length=episode_length,
-        min_rb_size=min_rb_size,
-        train_freq=train_freq,
-        target_update_freq=target_update_freq,
         test_freq=test_freq,
         log_freq=log_freq,
         model_save_freq=model_save_freq,

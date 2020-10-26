@@ -44,7 +44,7 @@ class StackerDiscrete(Preprocessor):
         self.price_buffer = deque(maxlen=self.k)
         self.portfolio_buffer = deque(maxlen=self.k)
         self.time_buffer = deque(maxlen=self.k)
-        self.feature_output_size = self.k
+        self.feature_output_shape = (self.k, )
 
     @classmethod
     def from_config(cls, config):
