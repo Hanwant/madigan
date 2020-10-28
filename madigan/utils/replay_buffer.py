@@ -4,7 +4,9 @@ import numpy as np
 from .data import SARSD, State
 
 class ReplayBuffer:
-
+    """
+    Generalized for n-step returns
+    """
     def __init__(self, size, nstep_return, discount):
         self.size = size
         self.nstep_return = nstep_return
@@ -81,6 +83,7 @@ class ReplayBuffer:
             reward = np.stack([s.reward for s in sample])
             done = np.stack([s.done for s in sample])
         except:
+            import traceback; traceback.print_exc()
             import ipdb; ipdb.set_trace()
         return SARSD(state, action, reward, next_state, done)
 

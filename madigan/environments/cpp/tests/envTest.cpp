@@ -282,7 +282,7 @@ void testEnvConfig(){
   double _dX = 0.01;
   Config config{
     {
-      "generator_params", Config{{"freq", _freq},
+      "data_source_config", Config{{"freq", _freq},
                                  {"mu", _mu},
                                  {"amp", _amp},
                                  {"phase", _phase},

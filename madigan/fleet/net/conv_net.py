@@ -37,11 +37,12 @@ class DuelingHead(nn.Module):
         self.adv_net = nn.Linear(d_model, self.n_assets*self.action_atoms)
     def forward(self, state_emb):
         value = self.value_net(state_emb)
-        adv = self.adv_net(state_emb)
-        qvals = value + adv - adv.mean(-1, keepdim=True)
+        adv = self.adv_net(state_emb).view(state_emb.shape[0],
+                                           self.n_assets, self.action_atoms)
+        qvals = value[..., None] + adv - adv.mean(-1, keepdim=True)
         return qvals
 
-class ConvModel(nn.Module):
+class ConvNet(nn.Module):
     def __init__(self,
                  input_shape: tuple,
                  output_shape: tuple,
@@ -53,20 +54,23 @@ class ConvModel(nn.Module):
                  preserve_window_len: bool = False,
                  **params):
         """
-        input_shape: (n_features, window_length)
+        input_shape: (window_length, n_features)
         output_shape: (n_assets, action_atoms)
         """
         super().__init__()
+
         assert len(kernels) == len(strides) == len(channels)
         assert len(input_shape) == 2
-        window_len = input_shape[-1]
+        window_len = input_shape[0]
         assert window_len >= reduce(lambda x, y: x+y, kernels), \
             "window_length should be at least as long as sum of kernels"
+
         self.input_shape = input_shape
         self.n_assets = output_shape[0]
         self.action_atoms = output_shape[1]
         self.d_model = d_model
         self.act = nn.GELU()
+        channels = [input_shape[1]] + channels
         conv_layers = []
         for i in range(len(kernels)):
             conv = nn.Conv1d(channels[i], channels[i+1], kernels[i], stride=strides[i])
@@ -87,9 +91,14 @@ class ConvModel(nn.Module):
             self.output_head = NormalHead(d_model, output_shape)
 
     def get_state_emb(self, state: State):
-        price = state.price.transpose(-1, -2)
+        """
+        Given a State object containing tensors as .price and .portfolio
+        attributes, returns an embedding of shape (bs, d_model)
+        """
+        price = state.price.transpose(-1, -2) # switch features and time dimension
         port = state.portfolio
         price_emb = self.conv_layers(price).view(price.shape[0], -1)
+        # import ipdb; ipdb.set_trace()
         price_emb = self.price_project(price_emb)
         port_emb = self.port_project(port)
         state_emb = price_emb * port_emb
@@ -97,10 +106,13 @@ class ConvModel(nn.Module):
         return out
 
     def forward(self, state: State = None, state_emb: torch.Tensor = None):
-        """ Returns qvals given either state or state_emb"""
+        """
+        Returns qvals given either state or state_emb
+        output_shape = (bs, n_assets, action_atoms)
+        """
         assert state is not None or state_emb is not None
         if state_emb is None:
-            state_emb = self.get_state_emb(state)
-        qvals = self.out_head(state_emb)
+            state_emb = self.get_state_emb(state) # (bs, d_model)
+        qvals = self.output_head(state_emb) # (bs, n_assets, action_atoms)
         return qvals
 

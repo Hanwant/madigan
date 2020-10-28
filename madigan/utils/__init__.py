@@ -64,16 +64,23 @@ class ActionSpace(ABC):
         pass
 
 class DiscreteRangeSpace(ActionSpace):
-    def __init__(self, ranges: tuple, n: int):
+    def __init__(self, ranges: Union[tuple, int], n: int = 1):
+        """
+        ranges: tuple [low, high) -> inclusive of low, exclusive of high
+        n: int -> I.e number of assets, 1st dim of sample
+        """
+        if isinstance(ranges, int):
+            ranges = (0, ranges)
         assert len(ranges) == 2
         self.ranges = ranges
+        self.n = n
         self.low = ranges[0]
         self.high = ranges[1]
-        self.n = n
+        self.action_atoms = self.high - self.low - 1
         self.action_multiplier = 1
 
     def sample(self):
-        action = np.random.randint(self.low, self.high+1, self.n)
+        action = np.random.randint(self.low, self.high, self.n)
         return action * self.action_multiplier
 
     @property

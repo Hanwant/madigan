@@ -6,18 +6,18 @@ import torch
 import torch.nn.functional as F
 from .base import OffPolicyQ
 from ...environments import make_env
-from ..net.conv_model import ConvModel
-from ..net.mlp_model import MLPModel
+from ..net.conv_net import ConvNet
+from ..net.mlp_net import MLPNet
 from ...utils import default_device, DiscreteActionSpace, DiscreteRangeSpace, ternarize_array
 from ...utils.preprocessor import make_preprocessor
 from ...utils.config import Config
 from ...utils.data import State
 
 def get_model_class(name):
-    if name == "ConvModel":
-        return ConvModel
-    elif name == "MLPModel":
-        return MLPModel
+    if name in ("ConvNet", ):
+        return ConvNet
+    elif name == ("MLPNet", ):
+        return MLPNet
     else:
         raise NotImplementedError(f"model {name} is not Implemented")
 
@@ -28,43 +28,56 @@ class DQN(OffPolicyQ):
     Implements a base DQN agent from which extensions can inherit
     The Agent instance can be called directly to get an action based on a state:
         action = dqn(state)
+    or:
+        action = dqn.get_action(state)
+    use dqn.step(n) to step through n environment interactions
     The method for training a single batch is self.train_step(sarsd) where sarsd is a class with ndarray members (I.e of shape (bs, time, feats))
     """
-    def __init__(self, env,
-                 input_space: tuple,
+    def __init__(self,
+                 env,
+                 preprocessor,
+                 input_shape: tuple,
                  action_space: tuple,
                  discount: float,
-                 nstep_return,
-                 replay_size,
-                 replay_min_size,
-                 batch_size,
+                 nstep_return: int,
+                 replay_size: int,
+                 replay_min_size: int,
+                 eps: float,
+                 eps_decay: float,
+                 eps_min: float,
+                 batch_size: int,
+                 test_steps: int,
+                 savepath: Union[Path, str],
                  double_dqn: bool,
+                 tau_soft_update: float,
                  model_class: str,
                  model_config: Union[dict, Config],
-                 savepath: Union[Path, str], lr=1e-3):
-        super().__init__(env, input_space, action_space, discount, nstep_return,
-                         replay_size, replay_min_size)
+                 lr):
+        super().__init__(env, preprocessor, input_shape, action_space, discount, nstep_return,
+                         replay_size, replay_min_size, eps, eps_decay, eps_min,
+                         batch_size, test_steps, savepath)
 
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
-
-        self._action_space = DiscreteRangeSpace(-self.action_atoms//2, self.action_atoms//2 + 1)
-        self.batch_size = batch_size
+        self._action_space = action_space
         self.double_dqn = double_dqn
         self.discount = discount
+        self.tau_soft_update = tau_soft_update
         self.model_class = get_model_class(model_class)
-        self.model_b = self.model_class(input_space, self.action_space, **model_config)
-        self.model_t = self.model_class(input_space, self.action_space, **model_config)
+        output_shape = (action_space.n, action_space.action_atoms)
+        self.model_b = self.model_class(input_shape, output_shape, **model_config)
+        self.model_t = self.model_class(input_shape, output_shape, **model_config)
         self.model_t.load_state_dict(self.model_b.state_dict())
         self.opt = torch.optim.Adam(self.model_b.parameters(), lr=lr)
-        self.savepath = savepath
 
-        self.training_steps = 0
-        self.env_steps = 0
+        if not self.savepath.is_dir():
+            self.savepath.mkdir(parents=True)
+        if (self.savepath/'main.pth').is_file():
+            self.load_state()
 
         # SCHEDULER NOT YET IN USE
         USE_SCHED=False
         if USE_SCHED:
-            self.lr_sched = torch.optim.lr_scheduler.CyclicLR(self.opt, base_lr=o_config.lr,
+            self.lr_sched = torch.optim.lr_scheduler.CyclicLR(self.opt, base_lr=lr,
                                                               max_lr=1e-2, step_size_up=2000)
         else:
             # Dummy class for now
@@ -76,44 +89,63 @@ class DQN(OffPolicyQ):
     def from_config(cls, config):
         env = make_env(config)
         preprocessor = make_preprocessor(config)
-        input_space = preprocessor.feature_output_shape
-        action_space = (config.n_assets, config.discrete_action_atoms)
+        input_shape = preprocessor.feature_output_shape
+        atoms = config.discrete_action_atoms
+        action_space = DiscreteRangeSpace((-atoms//2, atoms//2 + 1),
+                                          config.n_assets)
         aconf = config.agent_config
-        return cls(env, preprocessor, input_space, action_space, aconf.discount,
+        return cls(env, preprocessor, input_shape, action_space, aconf.discount,
                    aconf.nstep_return, aconf.replay_size, aconf.replay_min_size,
-                   aconf.batch_size, aconf.double_dqn, aconf.model_config.model_class,
-                   Path(config.basepath)/'models')
+                   aconf.eps, aconf.eps_decay, aconf.eps_min, aconf.batch_size,
+                   config.test_steps, Path(config.basepath)/'models',
+                   aconf.double_dqn, aconf.tau_soft_update,
+                   config.model_config.model_class, config.model_config,
+                   config.optim_config.lr
+                   )
 
     @property
     def env(self):
-        """
-        Reference to current env - useful for current prices/availablae Margin etc
-        Be careful - don't mess with it aside from accessing properties
-        """
         return self._env
 
     def to(self, device):
+        """
+        Sets current device for pytorch entities
+        and sends them to it
+        """
         self.device = torch.device(device)
         self.model_b.to(self.device)
         self.model_t.to(self.device)
 
     @property
-    def action_space(self):
-        """ Action space object which can be sampled from"""
+    def action_space(self) -> np.ndarray:
+        """
+        Action space object which can be sampled from
+        outputs transaction units
+        """
         units = 0.05 * self.env.availableMargin / self.env.currentPrices
         self._action_space.action_multiplier = units
         return self._action_space
 
 
-    def actions_to_transactions(self, actions):
-        transactions = actions - self.action_atoms // 2
-        transactions *= self.lot_unit_value
-        # transactions = transactions // prices
+    def actions_to_transactions(self, actions: torch.Tensor)->np.ndarray:
+        """
+        Takes output from net and converts to transaction units
+        """
+        units = 0.05 * self.env.availableMargin / self.env.currentPrices
+        transactions = actions.cpu().numpy() - self.action_atoms // 2
+        transactions *= units
         return transactions
 
-    def transactions_to_actions(self, transactions):
+    def transactions_to_actions(self, transactions: np.ndarray) -> np.ndarray:
+        """
+        takes transactions and converts them to -1, 0, 1
+        Assumes only 3 actions atm
+        """
         # actions = np.rint((prices*transactions) // self.lot_unit_value) + (self.action_atoms//2)
-        actions = ternarize_array(transactions) + self.action_atoms // 2
+        if self.action_atoms == 3:
+            actions = ternarize_array(transactions) + self.action_atoms // 2
+        else:
+            raise NotImplementedError("transaction to actions only implemented for ternary actions")
         return actions
 
     @torch.no_grad()
@@ -130,30 +162,19 @@ class DQN(OffPolicyQ):
         return self.model_b(state)
 
     @torch.no_grad()
-    def get_actions(self, state, target=True, device=None):
+    def get_action(self, state, target=True, device=None):
         """
         External interface - for inference and env interaction
         takes in numpy arrays and returns greedy actions
         """
         qvals = self.get_qvals(state, target=target, device=device)
-        actions = qvals.max(-1)[0]
+        actions = qvals.max(-1)[0][:, 0] # get rid of last dim
         return self.actions_to_transactions(actions)
 
 
     def __call__(self, state: State, target: bool = True, raw_qvals: bool = False,
                  max_qvals: bool = False):
-        return self.get_actions(state, target=target)
-
-    def filter_transactions(self, transactions, portfolio):
-        """
-        Doesn't allow doubling up on positions
-        """
-        for i, action in enumerate(transactions):
-            if portfolio[i] == 0.:
-                pass
-            elif np.sign(portfolio[i]) == np.sign(action):
-                    transactions[i] = 0.
-        return transactions
+        return self.get_action(state, target=target)
 
     def prep_state_tensors(self, state, batch=False, device=None):
         if not batch:
@@ -166,42 +187,57 @@ class DQN(OffPolicyQ):
         return State(price, port, state.timestamp)
 
     def prep_sarsd_tensors(self, sarsd, device=None):
-        state = self.prep_state(sarsd.state, batch=True)
+        state = self.prep_state_tensors(sarsd.state, batch=True)
 #         action = np.rint(sarsd.action // self.lot_unit_value) + self.action_atoms//2
-        action = self.transaction_to_actions(sarsd.action)
+        action = self.transactions_to_actions(sarsd.action)
         action = torch.as_tensor(action, dtype=torch.long, device=self.device)#[..., 0]
         reward = torch.as_tensor(sarsd.reward, dtype=torch.float32, device=self.device)
-        next_state = self.prep_state(sarsd.next_state, batch=True)
+        next_state = self.prep_state_tensors(sarsd.next_state, batch=True)
         done = torch.as_tensor(sarsd.done, dtype=torch.bool, device=self.device)
         return state, action, reward, next_state, done
 
-    def loss(self, Q_t, G_t):
+
+    def loss_fn(self, Q_t, G_t):
         return F.smooth_l1_loss(Q_t, G_t)
 
-    def train_step(self, sarsd):
-        states, actions, rewards, next_states, done_mask = self.make_sarsd_tensors(sarsd)
-        if self.reward_clip is not None:
-            rewards = rewards.clamp(min=self.reward_clip[0], max=self.reward_clip[1])
+    @torch.no_grad()
+    def calculate_Gt_target(self, next_state, reward, done):
+        """
+        Given a next_state State object, calculates the target value
+        to be used in td error and loss calculation
+        """
+        if self.double_dqn:
+            behaviour_actions = self.model_b(next_state).max(-1)[1]
+            one_hot = F.one_hot(behaviour_actions, self.action_atoms).to(self.device)
+            greedy_qvals_next = (self.model_t(next_state)*one_hot).sum(-1) # (bs, n_assets, 1)
+        else:
+            greedy_qvals_next = self.model_t(next_state).max(-1)[0] # (bs, n_assets, 1)
+        # reward and done have an extended dimension to accommodate for n_assets
+        # As actions for different assets are considered in parallel
+        Gt = reward[..., None] + (~done[..., None] *
+                                  (self.discount**self.nstep_return) *
+                                  greedy_qvals_next) # Gt = (bs, n_assets)
+        return Gt
+
+    def train_step(self, sarsd=None):
+        sarsd = sarsd or self.buffer.sample(self.batch_size)
+        state, action, reward, next_state, done = self.prep_sarsd_tensors(sarsd)
+
+        Gt = self.calculate_Gt_target(next_state, reward, done)
+        action_mask = F.one_hot(action, self.action_atoms).to(self.device)
+        qvals = self.model_b(state)
+        # import ipdb; ipdb.set_trace()
+        Qt = (qvals*action_mask).sum(-1)
+
+        loss = self.loss_fn(Qt, Gt)
         self.opt.zero_grad()
-        with torch.no_grad():
-            if self.double_dqn:
-                b_actions = self.model_b(next_states).max(-1)[1]
-                b_actions_mask = F.one_hot(b_actions, self.action_atoms).to(b_actions.device)
-                qvals_next = self.model_t(next_states)
-                greedy_qvals_next = torch.sum(qvals_next * b_actions_mask, -1)
-            else:
-                greedy_qvals_next = self.model_t(next_states).max(-1)[0]
-            G_t = rewards[..., None] + (done_mask[..., None] * self.discount * greedy_qvals_next)
-        actions_mask = F.one_hot(actions, self.action_atoms).to(actions.device)
-        qvals = self.model_b(states)
-        Q_t = (qvals * actions_mask).sum(-1)
-        td_error = (G_t - Q_t).mean()
-        loss = self.loss(Q_t, G_t)
         loss.backward()
         self.opt.step()
-        self.lr_sched.step()
-        return {'loss': loss.detach().item(), 'td_error': td_error.detach().item(), 'G_t': G_t.detach(), 'Q_t': Q_t.detach()}
-        # return loss.detach().item(), td_error, G_t.detach(), Q_t.detach()
+
+        td_error = (Gt-Qt).abs().mean().detach().item()
+        self.update_target()
+        return {'loss': loss.detach().item(), 'td_error': td_error,
+                'Qt': Qt.detach().mean().item(), 'Gt': Gt.detach().mean().item()}
 
     def target_update_hard(self):
         """ Hard update, copies weights """
@@ -214,10 +250,10 @@ class DQN(OffPolicyQ):
 
     def save_state(self, branch=None):
         branch = branch or "main"
-        self.save_checkpoint("main")
+        # self.save_checkpoint("main")
         state = {'state_dict': self.model_b.state_dict(),
                   'training_steps': self.training_steps,
-                  'env_steps': self.env_steps}
+                  'env_steps': self.env_steps, 'eps': self.eps}
         torch.save(state, self.savepath/f'{branch}.pth')
 
     def load_state(self, branch=None):
@@ -227,12 +263,31 @@ class DQN(OffPolicyQ):
         self.model_t.load_state_dict(state['state_dict'])
         self.training_steps = state['training_steps']
         self.env_steps = state['env_steps']
+        self.eps = state['eps']
 
     def _delete_models(self):
-        if self.config.overwrite_exp:
-            saved_models = list(self.savepath.iterdir())
-            if len(saved_models):
-                for model in saved_models:
-                    os.remove(model)
-        else:
-            raise NotImplementedError("Attempting to delete models when config.overwrite_exp is not set to true")
+        # if self.overwrite_exp:
+        saved_models = list(self.savepath.iterdir())
+        if len(saved_models):
+            for model in saved_models:
+                os.remove(model)
+        # else:
+        #     raise NotImplementedError("Attempting to delete models when config.overwrite_exp is not set to true")
+    def update_target(self):
+        """
+        Soft Update
+        """
+        for behaviour, target in zip(self.model_b.parameters(), self.model_t.parameters()):
+            target.data.copy_(self.tau_soft_update * behaviour.data + \
+                              (1.-self.tau_soft_update)*target.data)
+
+    def filter_transactions(self, transactions, portfolio):
+        """
+        Prevents doubling up on positions
+        """
+        for i, action in enumerate(transactions):
+            if portfolio[i] == 0.:
+                pass
+            elif np.sign(portfolio[i]) == np.sign(action):
+                    transactions[i] = 0.
+        return transactions

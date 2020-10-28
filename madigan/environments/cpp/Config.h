@@ -51,17 +51,17 @@ namespace madigan{
            dataSourceType == "Triangle" || dataSourceType == "SineAdder"){
           auto genParamsFound=std::find_if(dict.begin(), dict.end(),
                                            [](const std::pair<pybind11::handle, pybind11::handle>& pair){
-                                             return string(pybind11::str(pair.first)) == "generator_params";
+                                             return string(pybind11::str(pair.first)) == "data_source_config";
                                            });
           if (genParamsFound != dict.end()){
-            pybind11::dict genParams = dict[pybind11::str("generator_params")];
+            pybind11::dict genParams = dict[pybind11::str("data_source_config")];
             for (auto key: {"freq", "mu", "amp", "phase", "dX", "noise"}){
               auto keyFound=std::find_if(genParams.begin(), dict.end(),
                                          [key](const std::pair<pybind11::handle, pybind11::handle>& pair){
                                            return string(pybind11::str(pair.first)) == key;
                                          });
               if (keyFound == genParams.end()){
-                throw ConfigError(string(key)+" key not found in generator_params in config");
+                throw ConfigError(string(key)+" key not found in data_source_config in config");
               }
             }
             vector<double> freq;
@@ -93,7 +93,7 @@ namespace madigan{
             }
             config=Config({
                 {"data_source_type", dataSourceType},
-                {"generator_params", Config{{"freq", freq},
+                {"data_source_config", Config{{"freq", freq},
                                             {"mu", mu},
                                             {"amp", amp},
                                             {"phase", phase},
@@ -109,17 +109,17 @@ namespace madigan{
       else if ( dataSourceType == "OU"){
         auto genParamsFound=std::find_if(dict.begin(), dict.end(),
                                          [](const std::pair<pybind11::handle, pybind11::handle>& pair){
-                                           return string(pybind11::str(pair.first)) == "generator_params";
+                                           return string(pybind11::str(pair.first)) == "data_source_config";
                                            });
           if (genParamsFound != dict.end()){
-            pybind11::dict genParams = dict[pybind11::str("generator_params")];
+            pybind11::dict genParams = dict[pybind11::str("data_source_config")];
             for (auto key: {"mean", "theta", "phi", "noise_var"}){
               auto keyFound=std::find_if(genParams.begin(), dict.end(),
                                          [key](const std::pair<pybind11::handle, pybind11::handle>& pair){
                                            return string(pybind11::str(pair.first)) == key;
                                          });
               if (keyFound == genParams.end()){
-                throw ConfigError(string(key)+" key not found in generator_params in config");
+                throw ConfigError(string(key)+" key not found in data_source_config in config");
               }
             }
             vector<double> mean;
@@ -143,7 +143,7 @@ namespace madigan{
             }
             config=Config({
                 {"data_source_type", dataSourceType},
-                {"generator_params", Config{{"mean", mean},
+                {"data_source_config", Config{{"mean", mean},
                                             {"theta", theta},
                                             {"phi", phi},
                                             {"noise_var", noise_var}}
@@ -151,7 +151,7 @@ namespace madigan{
               });
           }
           else{
-            throw ConfigError("config for DataSource type OU needs generator params");
+            throw ConfigError("config for DataSource type OU needs data_source_config");
           }
       }
       else{

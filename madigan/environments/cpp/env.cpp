@@ -737,6 +737,12 @@ PYBIND11_MODULE(env, m){
     .def("step", (SRDISingle (Env::*)()) &Env::step,
          "take env step with no action",
          py::return_value_policy::move);
+    // .def("__copy__", [](const Env &self) {
+    //   return Env(self.dataSourceType(), self.assets(), self.initCash(), self.config);
+    // })
+    // .def("__deepcopy__", [](const Env &self, py::dict memo) {
+    //   return Env(self.dataSourceType(), self.assets(), self.initCash(), self.config);
+    // });
 
 }
 

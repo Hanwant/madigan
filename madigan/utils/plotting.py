@@ -18,7 +18,7 @@ def make_grid(n):
     return nrows, ncols
 
 
-def plot_test_metrics(data, include=('prices', 'equity', 'cash', 'positions',
+def plot_test_metrics(data, include=('prices', 'equity', 'cash', 'ledgerNormed',
                                      'margin', 'reward', 'actions', 'qvals',
                                      'transactions', 'action_probs', 'state_val'),
                       assets=None):
@@ -27,9 +27,10 @@ def plot_test_metrics(data, include=('prices', 'equity', 'cash', 'positions',
         index = pd.to_datetime(data['timestamp'])
     else:
         index = range(len(data['equity']))
-    metrics = list(filter(lambda m: m in include, data.keys()))
+    metrics = tuple(filter(lambda m: m in include, data.keys()))
     # order plots
-    ordered = ('equity', 'reward', 'prices', 'positions', 'cash', 'margin', 'transactions')
+    ordered = ('equity', 'reward', 'prices', 'ledgerNormed', 'cash', 'margin', 'transactions')
+    ordered = tuple(filter(lambda m: m in ordered, data.keys()))
     # metrics = list(filter(lambda m: m in include, data.keys()))
     metrics = tuple(filter(lambda m: m not in ordered, metrics))
     metrics = ordered + metrics
@@ -48,7 +49,7 @@ def plot_test_metrics(data, include=('prices', 'equity', 'cash', 'positions',
             ax[i].plot(index, data[metric], label=metric)
             ax[i].set_title(metric)
             ax[i].legend()
-        elif metric in ('positions', ):
+        elif metric in ('ledgerNormed', ):
             data_2d = np.array(data[metric]).T
             im = ax[i].imshow(data_2d) #vmin=0., vmax=1.) #, cmap='gray'
             ax[i].set_aspect(data_2d.shape[1]/data_2d.shape[0])

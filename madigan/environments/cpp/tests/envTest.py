@@ -8,7 +8,7 @@ from madigan.environments.cpp import Asset, Assets, RiskInfo
 from madigan.environments.cpp import Synth, Portfolio, Account, Broker, Env
 
 config = Config({'data_source_type': 'Synth',
-                 'generator_params': {
+                 'data_source_config': {
                      'freq':[1., 0.3, 2., 0.5],
                      'mu':[2., 2.1, 2.2, 2.3],
                      'amp':[1., 1.2, 1.3, 1.0],

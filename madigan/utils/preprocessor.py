@@ -4,7 +4,7 @@ from collections import deque
 import numpy as np
 
 from ..utils.data import State
-from ..environments.cpp import State as StateA
+# from ..environments.cpp import State as StateA
 
 def make_preprocessor(config):
     if config.preprocessor_type in ("WindowedStacker", "StackerDiscrete"):
@@ -44,7 +44,7 @@ class StackerDiscrete(Preprocessor):
         self.price_buffer = deque(maxlen=self.k)
         self.portfolio_buffer = deque(maxlen=self.k)
         self.time_buffer = deque(maxlen=self.k)
-        self.feature_output_shape = (self.k, )
+        self.feature_output_shape = (self.k, 1)
 
     @classmethod
     def from_config(cls, config):
@@ -62,7 +62,7 @@ class StackerDiscrete(Preprocessor):
     def stream(self, data):
         if isinstance(data, tuple):
             self.stream_state(data[0]) # assume srdi
-        elif isinstance(data, (StateA, State)):
+        else: # assume data is State
             self.stream_state(data)
 
     def current_data(self):
@@ -74,6 +74,11 @@ class StackerDiscrete(Preprocessor):
         while len(self) < self.k:
             _state, reward, done, info = env.step()
             self.stream_state(_state)
+
+    def reset_state(self):
+        self.price_buffer.clear()
+        self.portfolio_buffer.clear()
+        self.time_buffer.clear()
 
 class StackerContinuous(StackerDiscrete):
     def __init__(self, window_len):

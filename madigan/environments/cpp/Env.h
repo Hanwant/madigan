@@ -18,23 +18,29 @@ namespace madigan{
   class Env{
   public:
     Config config;
-    string dataSourceType;
   public:
     // Env(DataSource* dataSource): dataSource(dataSource){
     //   assets = dataSource->assets;
     // };
     // inline Env(std::unique_ptr<DataSource> dataSource, Assets assets, double initCash);
     Env(string sourceType, Assets assets, double initCash): assets_(assets), initCash_(initCash),
-                                                            dataSourceType(sourceType){
+                                                            dataSourceType_(sourceType){
       reset(); }
 
     Env(string sourceType, Assets assets, double initCash, Config config):
-      assets_(assets), initCash_(initCash), dataSourceType(sourceType), config(config){
+      assets_(assets), initCash_(initCash), dataSourceType_(sourceType), config(config){
       reset(); }
     Env(string sourceType, Assets assets, double initCash, pybind11::dict py_config)
       : Env(sourceType, assets, initCash, makeConfigFromPyDict(py_config)){};
 
     Env(const Env& other)=delete;
+    // Env(const Env& other){
+    //   if (other.config.size() > 0){
+    //     return Env(other.dataSourceType, other._assets, other._initCash);
+    //     }
+    //   return Env(other.dataSourceType, other.assets, other.initCash, other.config);
+    // }
+
     virtual inline State reset();
     virtual inline SRDI<double> step(); // No action - I.e Hold
     // SRDISingle step(int action); // Single Asset;
@@ -62,6 +68,7 @@ namespace madigan{
     Ledger ledgerNormed() const { return defaultPortfolio_->ledgerNormed();}
     const Ledger&  meanEntryPrices() const { return defaultPortfolio_->meanEntryPrices(); }
 
+    string dataSourceType() const { return dataSourceType_; }
     int nAssets() const { return assets_.size(); }
     Assets assets() const { return assets_; }
     double initCash() const { return initCash_; }
@@ -104,6 +111,7 @@ namespace madigan{
     inline void initAccountants();
 
   private:
+    string dataSourceType_;
     Assets assets_;
     double initCash_;
     std::unique_ptr<DataSource> dataSource_;
@@ -139,9 +147,9 @@ namespace madigan{
 
   State Env::reset(){
     if (config.size() > 0){
-      dataSource_ = makeDataSource(dataSourceType, config);
+      dataSource_ = makeDataSource(dataSourceType_, config);
     }
-    else dataSource_ = makeDataSource(dataSourceType);
+    else dataSource_ = makeDataSource(dataSourceType_);
 
     initAccountants();
     return State(currentPrices(), ledger(), currentTime());
@@ -153,7 +161,7 @@ namespace madigan{
     double currentEq = defaultPortfolio_->equity();
     double reward = log(std::max(currentEq / prevEq, 0.3));
     RiskInfo risk = broker_->checkRisk();
-    bool done = (risk == RiskInfo::green)? true: false;
+    bool done = (risk == RiskInfo::green)? false: true;
     if (defaultPortfolio_->equity() < 0.1*initCash_){
       done = true;
     }

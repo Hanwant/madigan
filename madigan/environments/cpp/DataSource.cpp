@@ -96,11 +96,11 @@ namespace madigan{
 
   Synth::Synth(Config config){
     bool allParamsPresent{true};
-    if (config.find("generator_params") == config.end()){
+    if (config.find("data_source_config") == config.end()){
       throw ConfigError("config passed but doesn't contain generator params");
       allParamsPresent = false;
     }
-    Config params = std::any_cast<Config>(config["generator_params"]);
+    Config params = std::any_cast<Config>(config["data_source_config"]);
     for (auto key: {"freq", "mu", "amp", "phase", "dX"}){
       if (params.find(key) == params.end()){
         allParamsPresent=false;
@@ -206,11 +206,11 @@ namespace madigan{
 
   SineAdder::SineAdder(Config config){
     bool allParamsPresent{true};
-    if (config.find("generator_params") == config.end()){
+    if (config.find("data_source_config") == config.end()){
       throw ConfigError("config passed but doesn't contain generator params");
       allParamsPresent = false;
     }
-    Config params = std::any_cast<Config>(config["generator_params"]);
+    Config params = std::any_cast<Config>(config["data_source_config"]);
     for (auto key: {"freq", "mu", "amp", "phase", "dX"}){
       if (params.find(key) == params.end()){
         allParamsPresent=false;
@@ -308,11 +308,11 @@ namespace madigan{
 
   OU::OU(Config config){
     bool allParamsPresent{true};
-    if (config.find("generator_params") == config.end()){
+    if (config.find("data_source_config") == config.end()){
       throw ConfigError("config passed but doesn't contain generator params");
       allParamsPresent = false;
     }
-    Config params = std::any_cast<Config>(config["generator_params"]);
+    Config params = std::any_cast<Config>(config["data_source_config"]);
     for (auto key: {"mean", "theta", "phi", "noise_var"}){
       if (params.find(key) == params.end()){
         allParamsPresent=false;

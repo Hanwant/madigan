@@ -35,12 +35,21 @@ class Config(dict):
             raise AttributeError("No such attribute: " + name)
 
     @classmethod
-    def from_exp(cls, exp_id, exp_path):
-        config_path = Path(exp_path)/exp_id/'config.yaml'
+    def from_path(cls, exp_path):
+        config_path = Path(exp_path)/'config.yaml'
         return cls(load_config(config_path))
 
-    def save(self):
-        save_config(self, Path(self.basepath)/self.experiment_id/"config.yaml")
+    def save(self, path=None):
+        """ Saves to experiment basepath as well as additional local path is provided"""
+        if path is not None:
+            path = Path(path)
+            if not path.parent.is_dir():
+                path.mkdir(parents=True)
+            save_config(self, path)
+        exp_path = Path(self.basepath)
+        if not exp_path.is_dir():
+            exp_path.mkdir(parents=True)
+        save_config(self, exp_path/"config.yaml")
 
 
 # def load_config(path):
@@ -57,9 +66,18 @@ def load_config(path):
         conf = yaml.load(f, Loader=yaml.FullLoader)
     return Config(conf)
 
+def config_to_dict(config: Config):
+    "recursively converts config objects to dict"
+    config = dict(config)
+    for k, v in config.items():
+        if isinstance(v, Config):
+            config[k] = config_to_dict(v)
+    return config
+
 def save_config(config, path, write_mode='w'):
+    config = config_to_dict(config)
     with open(path, write_mode) as f:
-        yaml.dump(dict(config), f)
+        yaml.dump(config, f)
 
 def make_config(
         ##################################################################################
@@ -67,12 +85,12 @@ def make_config(
         basepath="/media/hemu/Data/Markets/farm", # Path where experiments are stored
         experiment_id="", # Unique ID for each experiment
         parent_id="", # If branching from another experiment, ID of parent has to be specified
-        overwrite_exp=False,
 
         ###################################################################################
         # ENV #############################################################################
         env_type="Synth", # Env is an abstraction (I.e could mean training/testing env or live trading env)
         data_source_type="Synth",
+        data_source_config=None, # If a training/testing environment, then settings are needed for env data
         init_cash=1_000_000,
         required_margin=1.,
         maintenance_margin=0.25,
@@ -80,7 +98,6 @@ def make_config(
         transaction_cost_rel=0.,
         slippage_abs=0.,
         slippage_rel=0.,
-        generator_params=None, # If a training/testing environment, then settings are needed for env data
         assets=None,
 
         ###################################################################################
@@ -96,6 +113,7 @@ def make_config(
 
         # Training #########################################################################
         nsteps=100000, # number_of_training_steps to run for
+        train_steps = 100_000,
         train_freq=4, # Train every k steps
         log_freq=10000, # Log data/results at this freq
         test_freq=32000, # Run test episodes at this freq
@@ -144,7 +162,7 @@ def make_config(
 ):
     assert experiment_id != "", "must specify experiment id"
     assert assets is not None, "Must specify list of asset names/codes"
-    basepath += experiment_id
+    basepath += '/'+experiment_id
     preprocessor_config = {
         "preprocessor_type": preprocessor_type,
         "window_length": window_length
@@ -187,8 +205,6 @@ def make_config(
         'target_update_freq': target_update_freq,
         'batch_size': batch_size,
         'discrete_action_atoms': discrete_action_atoms,
-        'model_config': model_config,
-        'optim_config': optim_config,
         'double_dqn': double_dqn,
         'dueling': dueling,
         'iqn': iqn,
@@ -201,28 +217,35 @@ def make_config(
         'action_atoms': discrete_action_atoms,
         'tau_soft_update': tau_soft_update,
         'greedy_eps_testing': greedy_eps_testing,
+        'eps': expl_eps,
+        'eps_min': expl_eps_min,
+        'eps_decay': expl_eps_decay,
+        'reward_clip': reward_clip,
     }
     config = dict(
         basepath=basepath,
         experiment_id=experiment_id,
         parent_id=parent_id,
-        overwrite_exp=overwrite_exp,
+        # overwrite_exp=overwrite_exp,
         transaction_cost_abs=transaction_cost_abs,
         transaction_cost_rel=transaction_cost_rel,
         slippage_abs=slippage_abs,
         slippage_rel=slippage_rel,
 
         env_type=env_type,
-        data_source_type=data_source_type,
         init_cash=init_cash,
         required_margin=required_margin,
         maintenance_margin=maintenance_margin,
-        generator_params=generator_params,
         assets=assets,
         lot_unit_value=lot_unit_value,
         n_assets=len(assets),
         discrete_actions=discrete_actions,
         discrete_action_atoms=discrete_action_atoms,
+
+
+        data_source_type=data_source_type,
+        data_source_config=data_source_config,
+
 
         preprocessor_type=preprocessor_type,
         preprocessor_config=preprocessor_config,
@@ -231,18 +254,15 @@ def make_config(
         agent_config=agent_config,
         model_config=model_config,
         optim_config=optim_config,
+
+        train_steps=train_steps,
+        reward_clip=reward_clip,
         test_steps=test_steps,
         test_freq=test_freq,
         log_freq=log_freq,
         model_save_freq=model_save_freq,
 
         min_tf=window_length,
-        batch_size=batch_size,
-        nstep_return=nstep_return,
-        expl_eps=expl_eps,
-        expl_eps_min=expl_eps_min,
-        expl_eps_decay=expl_eps_decay,
-        reward_clip=reward_clip,
     )
     return Config(config)
 
