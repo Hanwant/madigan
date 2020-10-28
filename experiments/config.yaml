@@ -1,0 +1,97 @@
+agent_config:
+  action_atoms: 11
+  basepath: /media/hemu/Data/Markets/farm/default
+  batch_size: 32
+  discount: 0.99
+  discrete_action_atoms: 11
+  double_dqn: false
+  dueling: false
+  episode_length: 1024
+  greedy_eps_testing: 0.0
+  iqn: false
+  k_huber: 1.0
+  nTau1: 32
+  nTau2: 32
+  nstep_return: 3
+  nsteps: 100000
+  replay_min_size: 50000
+  replay_size: 100000
+  target_update_freq: 32000
+  tau_embed_size: 64
+  tau_soft_update: 0.0001
+  train_freq: 4
+  type: DQN
+agent_type: DQN
+assets:
+- '0'
+- '1'
+- '2'
+- '3'
+- '4'
+- '5'
+- '6'
+- '7'
+- '8'
+- '9'
+basepath: /media/hemu/Data/Markets/farm/default
+batch_size: 32
+data_source_type: Synth
+discrete_action_atoms: 11
+discrete_actions: true
+env_type: Synth
+experiment_id: default
+expl_eps: 1.0
+expl_eps_decay: 1.0e-06
+expl_eps_min: 0.1
+generator_params: null
+init_cash: 1000000
+log_freq: 10000
+lot_unit_value: 1000
+maintenance_margin: 0.25
+min_tf: 64
+model_config:
+  action_atoms: 11
+  d_model: 256
+  discrete_action_atoms: 11
+  discrete_actions: true
+  dueling: false
+  iqn: false
+  lot_unit_value: 1000
+  min_tf: 64
+  model_class: ConvModel
+  nTau1: 32
+  nTau2: 32
+  n_assets: 10
+  n_feats: 1
+  n_layers: 4
+  tau_embed_size: 64
+model_save_freq: 64000
+n_assets: 10
+nstep_return: 3
+optim_config:
+  betas: !!python/tuple
+  - 0.9
+  - 0.999
+  eps: 1.0e-08
+  lr: 0.001
+  lr_actor: 0.0001
+  lr_critic: 0.001
+  momentum: 0.9
+  type: Adam
+  weight_decay: 0
+overwrite_exp: false
+parent_id: ''
+preprocessor_config:
+  preprocessor_type: WindowedStacker
+  window_length: 64
+preprocessor_type: WindowedStacker
+required_margin: 1.0
+reward_clip: !!python/tuple
+- -1.0
+- 1.0
+slippage_abs: 0.0
+slippage_rel: 0.0
+test_freq: 32000
+test_steps: 1000
+transaction_cost_abs: 0.0
+transaction_cost_rel: 0.0
