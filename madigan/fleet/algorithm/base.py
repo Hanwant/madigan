@@ -143,6 +143,7 @@ class OffPolicyQ(Agent):
             sarsd = SARSD(state, action, reward, next_state, done)
             self.buffer.add(sarsd)
 
+            print('step: ', self.env_steps, 'buffer size: ', len(self.buffer), end='\r', flush=True)
             if done:
                 self.reset_state()
                 state = self._preprocessor.current_data()
@@ -156,11 +157,14 @@ class OffPolicyQ(Agent):
                 trn_metrics.append(_trn_metrics)
                 self.training_steps += 1
 
-            if self.env_steps % log_freq == 0:
-                yield trn_metrics
-                trn_metrics.clear()
-            if self.env_steps > max_steps:
-                break
+                if self.env_steps % log_freq == 0:
+                    yield trn_metrics
+                    trn_metrics.clear()
+
+                if self.env_steps > max_steps:
+                    yield trn_metrics
+                    break
+
             self.env_steps += 1
 
     def explore(self, state)-> np.ndarray:

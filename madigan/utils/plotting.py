@@ -39,8 +39,8 @@ def plot_test_metrics(data, include=('prices', 'equity', 'cash', 'ledgerNormed',
     fig, axes = plt.subplots(*make_grid(len(metrics)), sharex=True, squeeze=False)
     ax = axes.flatten()
     for i, metric in enumerate(metrics):
-        if metric in ('prices', 'actions', 'transactions'):
-            prices = np.array(data[metric])
+        if metric in ('prices', 'actions', 'transactions'): # 2d - cols for assets
+            prices = np.array(data[metric].tolist())
             for j, asset in enumerate(assets):
                 ax[i].plot(index, prices[:, j], label=asset)
             ax[i].legend()
@@ -49,8 +49,8 @@ def plot_test_metrics(data, include=('prices', 'equity', 'cash', 'ledgerNormed',
             ax[i].plot(index, data[metric], label=metric)
             ax[i].set_title(metric)
             ax[i].legend()
-        elif metric in ('ledgerNormed', ):
-            data_2d = np.array(data[metric]).T
+        elif metric in ('ledgerNormed', ): # 2d - cols for assets
+            data_2d = np.array(data[metric].tolist()).T
             im = ax[i].imshow(data_2d) #vmin=0., vmax=1.) #, cmap='gray'
             ax[i].set_aspect(data_2d.shape[1]/data_2d.shape[0])
             ax[i].set_title(metric)
@@ -60,9 +60,9 @@ def plot_test_metrics(data, include=('prices', 'equity', 'cash', 'ledgerNormed',
         elif metric in ('qvals', 'action_probs', 'probs'):
             assetIdx = 0
             if len(data[metric][0].shape) == 2:
-                data_2d = np.stack(data[metric]).T[:, assetIdx, :]
+                data_2d = np.stack(data[metric].tolist()).T[:, assetIdx, :]
             else:
-                data_2d = np.stack(data[metric]).T
+                data_2d = np.stack(data[metric].tolist()).T
             im = ax[i].imshow(data_2d) #vmin=0., vmax=1.) #, cmap='gray'
             ax[i].set_aspect(data_2d.shape[1]/data_2d.shape[0])
             ax[i].set_title(metric)
@@ -78,10 +78,10 @@ def plot_test_metrics(data, include=('prices', 'equity', 'cash', 'ledgerNormed',
 def plot_train_metrics(data, include=('loss', 'td_error', 'G_t', 'Q_t',
                                       'Gt', 'Qt', 'rewards')):
     assert isinstance(data, (dict, pd.DataFrame)), "expected data to be a dict or pd df"
-    if 'timestamp' in data.keys():
-        index = pd.to_datetime(data['timestamp'])
-    else:
-        index = range(len(data['loss']))
+    # if 'timestamp' in data.keys():
+    #     index = pd.to_datetime(data['timestamp'])
+    # else:
+    index = range(len(data['loss']))
     metrics = list(filter(lambda m: m in include, data.keys()))
     fig, axes = plt.subplots(*make_grid(len(metrics)), sharex=True, squeeze=False)
     ax = axes.flatten()

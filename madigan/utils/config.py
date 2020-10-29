@@ -51,6 +51,9 @@ class Config(dict):
             exp_path.mkdir(parents=True)
         save_config(self, exp_path/"config.yaml")
 
+    def to_dict(self):
+        return config_to_dict(self)
+
 
 # def load_config(path):
 #     with open(path, 'r') as f:

@@ -4,6 +4,30 @@ import numpy as np
 import pandas as pd
 import torch
 
+def list_2_dict(list_of_dicts: list):
+    """
+    aggregates a list of dicts (all with same keys) into a dict of lists
+
+    the train_loop generator yield dictionaries of metrics at each iteration.
+    this allows the loop to be interoperable in different scenarios
+    The expense of getting a dict (instead of directly appending to list)
+    is probably not too much but come back and profile
+
+
+    """
+    if isinstance(list_of_dicts, dict):
+        return list_of_dicts
+    if list_of_dicts is not None and len(list_of_dicts) > 0:
+        if isinstance(list_of_dicts[0], dict):
+            dict_of_lists = {k: [metric[k] for metric in list_of_dicts]
+                             for k in list_of_dicts[0].keys()}
+            return dict_of_lists
+        else:
+            raise ValueError('list passed to list_2_dict does not contain dicts')
+    else:
+        return {}
+
+
 def reduce_train_metrics(metrics: Union[dict, pd.DataFrame],
                          columns: list)-> Union[dict, pd.DataFrame]:
     """
@@ -33,7 +57,8 @@ def test_summary(test_metrics: Union[dict, pd.DataFrame])->pd.DataFrame:
             'mean_reward': df['reward'].mean(),
             'mean_transaction_cost': df['transaction_cost'].mean(),
             'total_transaction_cost': df['transaction_cost'].sum(),
-            'mean_qvals': df['qvals'].mean()}
+            'mean_qvals': df['qvals'].mean(),
+           'nsteps': len(df)}
 
     return pd.DataFrame(out)
 

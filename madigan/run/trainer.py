@@ -11,7 +11,7 @@ import pandas as pd
 import torch
 import matplotlib.pyplot as plt
 from ..utils import SARSD, State, ReplayBuffer, save_to_hdf, load_from_hdf
-from ..utils import list_2_dict, reduce_test_metrics, reduce_train_metrics
+from ..utils.metrics import list_2_dict, reduce_train_metrics, test_summary
 from ..utils.config import save_config
 from ..utils.plotting import make_grid
 from ..utils.preprocessor import make_preprocessor
@@ -41,21 +41,22 @@ class Trainer:
         self.preprocessor = agent.preprocessor
         self.config = config
         self.train_steps = config.train_steps
-        self.logger = logging.getLogger('trainer')
+        self.logger = logging.getLogger(__name__)
         self.log_freq = config.log_freq
         self.test_freq = config.test_freq
         self.print_progress = print_progress
         self.logdir = Path(config.basepath) / 'logs'
         self.logfile = self.logdir/'log.h5'
         if not self.logdir.is_dir():
-            self.logger.info(f"Making New Experiment Directory {self.logdir}")
+            self.logger.info("Making New Experiment Directory %s", self.logdir)
             self.logdir.mkdir(parents=True, exist_ok=True)
         # iter(self)
         if not continue_exp:
             if self.logfile.is_file():
                 self.logger.warning("Overwriting previous log file")
                 os.remove(self.logfile)
-        self.test_metrics_cols = ('cash', 'equity', 'margin', 'returns')
+        # self.test_metrics_cols = ('cash', 'equity', 'margin', 'returns')
+        self.test_metrics_cols = None # equivalent to saving all mertrics
         self.config.save()
 
     @classmethod
@@ -78,27 +79,40 @@ class Trainer:
     def save_logs(self, train_metrics, test_metrics, append=True):
         if len(train_metrics):
             train_metrics = list_2_dict(train_metrics)
-            train_metrics = reduce_train_metrics(train_metrics, ['G_t', 'Q_t', 'rewards'])
+            train_metrics = reduce_train_metrics(train_metrics, ['Gt', 'Qt', 'rewards'])
             train_df = pd.DataFrame(train_metrics)
             # self.save_train_logs(train_df)
-            save_to_hdf(self.logfile, 'train', train_df, append_if_exists=append)
+            save_to_hdf(self.logdir/'train.hdf5', 'train', train_df, append_if_exists=append)
         if len(test_metrics):
-            test_metrics = reduce_test_metrics(test_metrics)
-            test_metrics = dict(filter(lambda x: x[0] in self.test_metrics_cols,
-                                       list_2_dict(test_metrics).items()))
-            test_df = pd.DataFrame(test_metrics)
-            save_to_hdf(self.logfile, 'test', test_df, append_if_exists=append)
+            # test_metrics = reduce_test_metrics(test_metrics)
+            # if self.test_metrics_cols is not None:
+            #     test_metrics = dict(filter(lambda x: x[0] in self.test_metrics_cols,
+            #                                list_2_dict(test_metrics).items()))
+            print(len(test_metrics))
+            for (env_step, test_run) in test_metrics:
+                test_df = pd.DataFrame(test_run)
+                test_filename = self.logdir/(f'test_env_steps_{env_step}'+\
+                    f'_episode_steps_{len(test_df)}.hdf5')
+                # save_to_hdf(test_filename, 'full_run', test_df, append_if_exists=False)
+                test_df.to_hdf(test_filename, 'full_run', append=False)
+                # save_to_hdf(test_filename, 'run_summary', test_summary(test_df), append_if_exists=False)
 
     def load_logs(self):
-        train_logs = load_from_hdf(self.logfile, 'train')
-        test_logs = load_from_hdf(self.logfile, 'test')
+        train_logs = pd.read_hdf(self.logdir/'train.hdf5', 'train')
+        test_logs = self.load_latest_test_run()
         return train_logs, test_logs
+
+    def load_latest_test_run(self):
+        files = list(filter(lambda x: 'test' in x.stem, self.logdir.iterdir()))
+        files = sorted([(f.stem.split('_')[3], f) for f in files])
+        return pd.read_hdf(files[-1][1], key='full_run')
+
 
     def test(self, test_steps=None, reset=True):
         test_steps = test_steps or self.config.test_steps
         # episode_metrics = test(self.agent, self.env, self.preprocessor, nsteps=nsteps)
         test_metrics = self.agent.test_episode(test_steps=test_steps, reset=reset)
-        return test_metrics
+        return pd.DataFrame(test_metrics)
 
     def train(self, nsteps=None):
         """
@@ -119,7 +133,7 @@ class Trainer:
         returns tuple of pandas df (train_logs, test_logs)
 
         """
-        log_freq = self.log_freq
+        flush_freq = self.log_freq
         test_freq = self.test_freq
         model_save_freq = self.config.model_save_freq
         nsteps = nsteps or self.train_steps
@@ -128,38 +142,32 @@ class Trainer:
         i = self.agent.env_steps
 
         # fill replay buffer up to replay_min_size before training
-        print('filling replay buffer before training')
-        burn_in_train_loop = self.agent.step(self.agent.replay_min_size)
-        empty_train_metrics = next(burn_in_train_loop)
-        assert len(empty_train_metrics) == 0
+        self.logger.info('filling replay buffer before training')
+        burn_in_train_loop = iter(self.agent.step(self.agent.replay_min_size))
+        train_metrics.extend(next(burn_in_train_loop))
+        test_metrics.append((i, self.agent.test_episode()))
+
+        self.logger.info("Starting Training")
+        train_loop = self.agent.step(nsteps)
 
         progress_bar = tqdm(total=nsteps, colour='#00ff00')
         progress_bar.update(i)
         try:
-            self.logger.info("Starting Training")
-            test_metric = self.agent.test_episode()
-            train_loop = self.agent.step(nsteps)
             while True:
                 train_metric = next(train_loop)
+                train_metrics.extend(train_metric)
                 progress_bar.update(self.agent.env_steps - i)
                 i = self.agent.env_steps
 
                 if i % test_freq == 0:
                     self.logger.info("Testing Model")
-                    test_metric = self.agent.test_episode()
+                    test_metrics.append((i, self.agent.test_episode()))
 
                 if i % model_save_freq == 0:
                     self.logger.info("Saving Agent State")
                     self.agent.save_state()
 
-                if train_metric is not None:
-                    train_metrics.append(train_metric)
-
-                if test_metric is not None:
-                    test_metrics.append(test_metric)
-                    test_metric=None
-
-                if i % log_freq == 0:
+                if i % flush_freq == 0:
                     self.logger.info("Saving Log Metrics")
                     self.save_logs(train_metrics, test_metrics)
                     train_metrics, test_metrics = [], []
@@ -178,7 +186,7 @@ class Trainer:
             import ipdb; ipdb.set_trace()
 
         finally:
-            test_metrics.append(self.agent.test_episode())
+            test_metrics.append((i, self.agent.test_episode()))
             self.agent.save_state()
             self.save_logs(train_metrics, test_metrics)
             train_metrics, test_metrics = self.load_logs()
@@ -211,10 +219,10 @@ def train(agent, env, preprocessor, config, nsteps=None):
                 agent.save_state()
 
             if train_metric is not None:
-                train_metrics.append(train_metric)
+                train_metrics.extend(train_metric)
 
             if test_metric is not None:
-                test_metrics.append(test_metric)
+                test_metrics.extend(test_metric)
                 test_metric=None
             i += 1
 
