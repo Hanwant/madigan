@@ -6,7 +6,7 @@ __all__ = ["load_config", "save_config", "default_device",
 import time
 import sys
 from pathlib import Path
-from typing import Union, Iterable
+from typing import Union, Iterable, List
 from abc import ABC, abstractmethod
 
 import numba
@@ -24,9 +24,14 @@ from .metrics import *
 ####################################################################################
 ################################      GENERAL     ##################################
 ####################################################################################
-def time_profile(repeats, out_results=False, **kwargs):
+def time_profile(repeats: int, out_results=False, **kwargs):
     """
     Time functions by passing callables as keyword arguments
+    Timings are printed
+    repeats = number of times to call each function
+    out_results = whether to return the results of the functions
+    If repeats > 1, the most recent results is returned and if number of functions>1
+    a dict of results is returned
     """
     times = {}
     out = {}
@@ -89,7 +94,7 @@ class DiscreteRangeSpace(ActionSpace):
         return (self.n, )
 
 class DiscreteActionSpace(ActionSpace):
-    def __init__(self, actions: Iterable, probs: Iterable=None, n: int=1):
+    def __init__(self, actions: Union[tuple, list], probs: Union[tuple, list]=None, n: int=1):
         # assert len(ranges) == 2
         self.actions = actions
         self.probs = probs
@@ -122,7 +127,7 @@ def ternarize_array(val):
 ####################################################################################
 ################################      NETS        ##################################
 ####################################################################################
-def calc_conv_out_shape(in_shape: Union[tuple, int], layers: list):
+def calc_conv_out_shape(in_shape: Union[tuple, int], layers: List[nn.Module]):
     """
     Calculates output shape of input_shape going through a list of pytorch convolutional layers
     in_shape: (H, W)
