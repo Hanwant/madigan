@@ -143,7 +143,8 @@ class OffPolicyQ(Agent):
             sarsd = SARSD(state, action, reward, next_state, done)
             self.buffer.add(sarsd)
 
-            print('step: ', self.env_steps, 'buffer size: ', len(self.buffer), end='\r', flush=True)
+            # print('step: ', self.env_steps, 'buffer size: ',
+            # len(self.buffer), end='\r', flush=True)
             if done:
                 self.reset_state()
                 state = self._preprocessor.current_data()

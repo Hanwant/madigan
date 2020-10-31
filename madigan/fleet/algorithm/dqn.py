@@ -228,7 +228,7 @@ class DQN(OffPolicyQ):
         qvals = self.model_b(state)
         # import ipdb; ipdb.set_trace()
         Qt = (qvals*action_mask).sum(-1)
-
+        assert Qt.shape == Gt.shape
         loss = self.loss_fn(Qt, Gt)
         self.opt.zero_grad()
         loss.backward()
@@ -239,14 +239,9 @@ class DQN(OffPolicyQ):
         return {'loss': loss.detach().item(), 'td_error': td_error,
                 'Qt': Qt.detach().mean().item(), 'Gt': Gt.detach().mean().item()}
 
-    def target_update_hard(self):
+    def update_target_hard(self):
         """ Hard update, copies weights """
         self.model_t.load_state_dict(self.model_b.state_dict())
-
-    def target_update_soft(self):
-        """ Incremental 'soft' update of target proportional to tau_soft parameter (I.e 1e-4)"""
-        for behaviour, target in zip(self.model_b.parameters(), self.model_t.parameters()):
-            target.data.copy_(self.tau_soft * behaviour.data + (1.-self.tau_soft)*target.data)
 
     def save_state(self, branch=None):
         branch = branch or "main"

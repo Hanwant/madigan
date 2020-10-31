@@ -122,7 +122,7 @@ def ternarize_array(val):
 ####################################################################################
 ################################      NETS        ##################################
 ####################################################################################
-def calc_conv_out_shape(in_shape, layers):
+def calc_conv_out_shape(in_shape: Union[tuple, int], layers: list):
     """
     Calculates output shape of input_shape going through a list of pytorch convolutional layers
     in_shape: (H, W)
@@ -159,11 +159,15 @@ def calc_conv_out_shape(in_shape, layers):
         raise ValueError("in_shape must be an iterable or int (for conv1d)")
     return shape
 
-def calc_pad_to_conserve(in_shape, layer, causal_dim=0):
+def calc_pad_to_conserve(in_shape: tuple, layer: nn.Module, causal_dim=0)->tuple:
     """
-    Outputs a 4 item tuple for a 2d conv for (H_up, H_down, W_left, W_right)
-    if causal_dim is specified, the padding is assymetric for that dim of the shape
-    The padding is applied to the first element of the pair for that dimenion
+    Outputs the required padding on the input to conserve its shape, after passing
+    through the given convolutional layers.
+    If in_shape is 2d and layers are Conv2D, output tuple is (H_up, H_down, W_left, W_right)
+
+    #### Important for causal dim
+    If causal_dim is specified, the padding is assymmetric for that dim of the shape
+    and the padding is applied to the first element of the pair for that dimenion
     I.e
     in_shape = (64, 64), layer.kernel = (3, 3)
     with asymmetric causal padding (dim 0):

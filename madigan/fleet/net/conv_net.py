@@ -43,15 +43,9 @@ class DuelingHead(nn.Module):
         return qvals
 
 class ConvNet(nn.Module):
-    def __init__(self,
-                 input_shape: tuple,
-                 output_shape: tuple,
-                 d_model=512,
-                 channels=[32, 32],
-                 kernels=[5, 5],
-                 strides=[1, 1],
-                 dueling=True,
-                 preserve_window_len: bool = False,
+    def __init__(self, input_shape: tuple, output_shape: tuple, d_model=512,
+                 channels=[32, 32], kernels=[5, 5], strides=[1, 1],
+                 dueling=True, preserve_window_len: bool = False,
                  **params):
         """
         input_shape: (window_length, n_features)

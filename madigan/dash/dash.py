@@ -65,7 +65,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.SaveConfigButton.clicked.connect(self.save_config)
 
         # self.exp_config = load_config(self.config_path)
-        save_config(self.exp_config, self.config_path)
+        # save_config(self.exp_config, self.config_path)
         self.ParamsEdit.setText(str(yaml.safe_dump(self.exp_config.to_dict())))
         self.ParamsEdit.textChanged.connect(self.update_config)
 
@@ -136,6 +136,11 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             del self.trainer
             self.trainer=None
 
+    def set_datapath(self, path):
+        self.datapath = path
+        self.train_plots.set_datapath(path)
+        self.test_episode_plots.set_datapath(path)
+        # self.test_history_plots.set_datapath(path)
 
     def compSourceToggle(self):
         if self.LocalRadio.isChecked():
@@ -150,21 +155,31 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         # print(self.exp_config)
 
     def load_config(self):
-        self.config_path = self.get_file(load=True)
+        self.config_path = Path(self.get_file(load=True))
         self.exp_config = Config(load_config(self.config_path))
         self.ParamsEdit.setText(str(yaml.safe_dump(self.exp_config.to_dict())))
+        self.set_datapath(Path(self.exp_config.basepath)/'logs')
+        print()
+        self.FilenameLabel.setText('/'.join(self.config_path.parts[-2:]))
 
     def save_config(self):
         self.config_path = self.get_file(save=True)
         save_config(self.exp_config, self.config_path, write_mode='w')
+        self.load_config()
 
     def get_file(self, load=False, save=False):
         assert load != save, "specify either load=True or save=True"
         if load:
-            fname = QtGui.QFileDialog.getOpenFileName(self, 'Choose config file', '/home/hemu/madigan/')[0]
+            fname = QtGui.QFileDialog.getOpenFileName(self, 'Choose config file',
+                                                      '/home/hemu/madigan/')[0]
         if save:
-            fname = QtGui.QFileDialog.getSaveFileName(self, 'Choose config file', '/home/hemu/madigan/')[0]
+            fname = QtGui.QFileDialog.getSaveFileName(self, 'Choose config file',
+                                                      '/home/hemu/madigan/')[0]
         return fname
+
+    def __del__(self):
+        """ Save local settings to pkl here """
+        super().__del__()
 
 def run_dash():
 

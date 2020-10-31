@@ -18,8 +18,8 @@ def make_grid(n):
     return nrows, ncols
 
 
-def plot_test_metrics(data, include=('prices', 'equity', 'cash', 'ledgerNormed',
-                                     'margin', 'reward', 'actions', 'qvals',
+def plot_test_metrics(data, include=('prices', 'equity', 'cash', 'ledgerNormed', 'margin',
+                                     'reward', 'actions', 'qvals', "positions",
                                      'transactions', 'action_probs', 'state_val'),
                       assets=None):
     assert isinstance(data, (dict, pd.DataFrame)), "expected data to be a dict or pd df"
@@ -40,7 +40,10 @@ def plot_test_metrics(data, include=('prices', 'equity', 'cash', 'ledgerNormed',
     ax = axes.flatten()
     for i, metric in enumerate(metrics):
         if metric in ('prices', 'actions', 'transactions'): # 2d - cols for assets
-            prices = np.array(data[metric].tolist())
+            if isinstance(data[metric], (pd.Series, pd.DataFrame)):
+                prices = np.array(data[metric].tolist())
+            else:
+                prices = np.array(data[metric])
             for j, asset in enumerate(assets):
                 ax[i].plot(index, prices[:, j], label=asset)
             ax[i].legend()
@@ -49,8 +52,11 @@ def plot_test_metrics(data, include=('prices', 'equity', 'cash', 'ledgerNormed',
             ax[i].plot(index, data[metric], label=metric)
             ax[i].set_title(metric)
             ax[i].legend()
-        elif metric in ('ledgerNormed', ): # 2d - cols for assets
-            data_2d = np.array(data[metric].tolist()).T
+        elif metric in ('ledgerNormed', "positions" ): # 2d - cols for assets
+            if isinstance(data[metric], (pd.Series, pd.DataFrame)):
+                data_2d = np.array(data[metric].tolist()).T
+            else:
+                data_2d = np.array(data[metric]).T
             im = ax[i].imshow(data_2d) #vmin=0., vmax=1.) #, cmap='gray'
             ax[i].set_aspect(data_2d.shape[1]/data_2d.shape[0])
             ax[i].set_title(metric)
@@ -59,10 +65,13 @@ def plot_test_metrics(data, include=('prices', 'equity', 'cash', 'ledgerNormed',
             fig.colorbar(im, ax=ax[i])
         elif metric in ('qvals', 'action_probs', 'probs'):
             assetIdx = 0
-            if len(data[metric][0].shape) == 2:
-                data_2d = np.stack(data[metric].tolist()).T[:, assetIdx, :]
-            else:
+            if isinstance(data[metric], (pd.Series, pd.DataFrame)):
                 data_2d = np.stack(data[metric].tolist()).T
+            else:
+                data_2d = np.stack(data[metric]).T
+            if len(data_2d.shape) == 3:
+                print("plotting only first asset - need to implement multi-asset")
+                data_2d = data_2d[:, assetIdx, :]
             im = ax[i].imshow(data_2d) #vmin=0., vmax=1.) #, cmap='gray'
             ax[i].set_aspect(data_2d.shape[1]/data_2d.shape[0])
             ax[i].set_title(metric)
