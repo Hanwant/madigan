@@ -58,30 +58,30 @@ if __name__ == "__main__":
     trainer.logger.setLevel(logging.INFO)
     agent, env = trainer.agent, trainer.env
 
-    pre = trainer.test()
+    # pre = trainer.test()
 
     train_logs, test_logs = trainer.train(nsteps=nsteps)
 
 
-    print('Done')
-    print(f"Mean equity over 1000 steps: pre/post training  {np.mean(pre['equity'])}, {np.mean(test_logs['equity'])}")
-    print(f"End equity after 1000 steps: pre/post training  {pre['equity'].iloc[-1]}, {test_logs['equity'].iloc[-1]}")
+    # print('Done')
+    # print(f"Mean equity over 1000 steps: pre/post training  {np.mean(pre['equity'])}, {np.mean(test_logs['equity'])}")
+    # print(f"End equity after 1000 steps: pre/post training  {pre['equity'].iloc[-1]}, {test_logs['equity'].iloc[-1]}")
 
 
-    fig1, ax1 = plot_test_metrics(pre, assets=config.assets)
-    fig2, ax2 = plot_test_metrics(test_logs, assets=config.assets)
-    fig, ax = plot_train_metrics(train_logs)
+    # fig1, ax1 = plot_test_metrics(pre, assets=config.assets)
+    # fig2, ax2 = plot_test_metrics(test_logs, assets=config.assets)
+    # fig, ax = plot_train_metrics(train_logs)
 
-    if arg.wandb:
-        wandb.log({'pre training test_episode': fig1})
-        wandb.log({'post training test episode': fig1})
-        wandb.log({'training': fig})
+    # if arg.wandb:
+    #     wandb.log({'pre training test_episode': fig1})
+    #     wandb.log({'post training test episode': fig1})
+    #     wandb.log({'training': fig})
 
 
-    # fig1.show()
-    # fig2.show()
-    plt.show()
-    # sys.exit()
+    # # fig1.show()
+    # # fig2.show()
+    # plt.show()
+    # # sys.exit()
 
 
 
