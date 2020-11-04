@@ -1,7 +1,9 @@
 from functools import reduce
 from collections.abc import Iterable
+
 import torch
 import torch.nn as nn
+
 from .base import QNetwork
 from ...utils.data import State
 from ...utils import calc_conv_out_shape, calc_pad_to_conserve
@@ -46,7 +48,7 @@ class ConvNet(nn.Module):
     def __init__(self, input_shape: tuple, output_shape: tuple, d_model=512,
                  channels=[32, 32], kernels=[5, 5], strides=[1, 1],
                  dueling=True, preserve_window_len: bool = False,
-                 **params):
+                 **extra):
         """
         input_shape: (window_length, n_features)
         output_shape: (n_assets, action_atoms)

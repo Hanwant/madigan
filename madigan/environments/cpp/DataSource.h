@@ -5,6 +5,7 @@
 #include <vector>
 #include <cstdint>
 #include <random>
+#include <chrono> 
 
 #include <Eigen/Core>
 #include <pybind11/pybind11.h>
@@ -141,6 +142,46 @@ namespace madigan{
     std::default_random_engine generator;
     std::vector<std::normal_distribution<double>> noiseDistribution;
     PriceVector currentData_;
+  };
+
+  class SimpleTrend: public DataSource{
+  public:
+    SimpleTrend();
+    SimpleTrend(std::vector<double> trendProb, std::vector<int> minPeriod,
+                std::vector<int> maxPeriod, std::vector<double> noise,
+                std::vector<double> dY, std::vector<double> start);
+    SimpleTrend(Config config);
+    SimpleTrend(pybind11::dict config);
+    ~SimpleTrend(){}
+
+    int nAssets() const { return nAssets_;}
+    const PriceVector& getData() override;
+    const PriceVector& currentData() const{ return currentData_;}
+    std::size_t currentTime() const { return timestamp_; }
+
+  protected:
+    virtual void initParams(std::vector<double> trendProb, std::vector<int> minPeriod,
+                             std::vector<int> maxPeriod, std::vector<double> noise,
+                             std::vector<double> dY, std::vector<double> start);
+
+  protected:
+    const double dT{1.};
+    std::vector<double> trendProb;
+    vector<int> minPeriod;
+    vector<int> maxPeriod;
+    vector<double> noise;
+    vector<double> dY;
+    std::size_t timestamp_;
+    std::default_random_engine generator;
+    std::vector<std::uniform_int_distribution<int>> trendLenPicker;
+    std::vector<std::normal_distribution<double>> noiseDist;
+    std::uniform_real_distribution<double> uniformDist{0., 1.};
+    PriceVector currentData_;
+
+    std::vector<bool> trending;
+    std::vector<int> currentDirection;
+    std::vector<int> currentTrendLen;
+
   };
 
   std::unique_ptr<DataSource> makeDataSource(string dataSourceType);

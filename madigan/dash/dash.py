@@ -158,7 +158,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.config_path = Path(self.get_file(load=True))
         self.exp_config = Config(load_config(self.config_path))
         self.ParamsEdit.setText(str(yaml.safe_dump(self.exp_config.to_dict())))
-        self.set_datapath(Path(self.exp_config.basepath)/'logs')
+        self.set_datapath(Path(self.exp_config.experiment_path)/'logs')
         print()
         self.FilenameLabel.setText('/'.join(self.config_path.parts[-2:]))
 

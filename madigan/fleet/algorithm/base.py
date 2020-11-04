@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from copy import deepcopy
 from random import random
+from typing import List
 
 import numpy as np
 import torch
@@ -10,17 +11,25 @@ from ...utils.replay_buffer import ReplayBuffer
 from ...utils.data import SARSD, State
 from ...utils import list_2_dict, DiscreteRangeSpace
 
+
 class Agent(ABC):
     """
     Base class for all agents
     """
-    def __init__(self, env, preprocessor, input_shape, action_space, discount,
+    def __init__(self,
+                 env,
+                 preprocessor,
+                 input_shape: tuple,
+                 action_space,
+                 discount: float,
+                 nstep_return: int,
                  savepath=None):
         self._env = env
         self._preprocessor = preprocessor
         self.input_shape = input_shape
         self._action_space = action_space
         self.discount = discount
+        self.nstep_return = nstep_return
         self.savepath = savepath
         self.training_steps = 0
         self.env_steps = 0
@@ -47,23 +56,47 @@ class Agent(ABC):
         pass
 
     @abstractmethod
-    def get_action(self, state):
+    def get_action(self, state: State) -> np.ndarray:
+        """
+        Fundamental function.
+        Returns vector of units to purchase (+/-) for each asset
+        """
         pass
 
     @abstractmethod
-    def train_step(self, sarsd=None):
+    def train_step(self, sarsd=None) -> dict:
+        """
+        May use provided sarsd or may sample from own internal buffer
+        to perform a batched training step
+        Returns a dict of metrics I.e {'loss': loss, 'td_error': td_error}
+        """
         pass
 
     @abstractmethod
-    def step(self, n):
+    def step(self, n: int) -> List[dict]:
+        """
+        Generator which must be initialized by calling loop = iter(agent.step(n)).
+        Fundamental loop in which the agent accumulates experiences via env interaction
+        and trains at the designated interval.
+        Performs n training steps
+        and yields a list of training metrics at the interval specified by config
+        """
         pass
 
     @abstractmethod
     def explore(self, state):
+        """
+        For interacting with the environment in training phase
+        I.e may implement an eps-greedy exploration policy
+        """
         pass
 
     @abstractmethod
     def test_episode(self, test_steps=None, reset=False):
+        """
+        To test agent performance, the agent interacts with the env
+        until either test_steps has been reached or done is returned
+        """
         pass
 
     def __call__(self, *args, **kw):
@@ -78,35 +111,36 @@ class Agent(ABC):
         pass
 
 
-
 class OffPolicyQ(Agent):
     """
     Base class for all off policy agents with experience replay buffers
     """
     def __init__(self, env, preprocessor, input_shape, action_space, discount,
-                 nstep_return, replay_size, replay_min_size, eps, eps_decay, eps_min,
-                 batch_size, test_steps, savepath):
-        super().__init__(env, preprocessor, input_shape, action_space, discount,
-                         savepath)
-        self.nstep_return = nstep_return
+                 nstep_return, replay_size, replay_min_size, eps, eps_decay,
+                 eps_min, batch_size, test_steps, unit_size, savepath):
+        super().__init__(env, preprocessor, input_shape, action_space,
+                         discount, nstep_return, savepath)
         self.eps = eps
-        self.eps_decay = max(eps_decay, 1-eps_decay) # to make sure we use 0.99999 not 1e-5
+        self.eps_decay = max(eps_decay, 1 -
+                             eps_decay)  # to make sure we use 0.99999 not 1e-5
         self.eps_min = eps_min
         self.buffer = ReplayBuffer(replay_size, nstep_return, discount)
         self.replay_min_size = replay_min_size
         self.batch_size = batch_size
         self.test_steps = test_steps
+        self.unit_size = unit_size
         self.action_atoms = self.action_space.action_atoms
-        self.nassets = self.action_space.n
-        self.centered_actions = np.arange(self.action_atoms) - self.action_atoms // 2
+        self.n_assets = self.action_space.n
+        self.centered_actions = np.arange(
+            self.action_atoms) - self.action_atoms // 2
         self.log_freq = 10000
 
     @abstractmethod
-    def get_qvals(self, state):
+    def get_qvals(self, state, target=False):
         pass
 
     @abstractmethod
-    def get_action(self, state):
+    def get_action(self, state, target=False):
         pass
 
     def reset_state(self) -> State:
@@ -125,9 +159,9 @@ class OffPolicyQ(Agent):
         if reset:
             self.reset_state()
         state = self._preprocessor.current_data()
-        log_freq = min(self.log_freq, n) # freq at which to yield train_metrics
-        running_reward = 0. # for logging
-        running_cost = 0. # for logging
+        log_freq = min(self.log_freq, n)
+        running_reward = 0.  # for logging
+        running_cost = 0.  # for logging
         # i = 0
         max_steps = self.env_steps + n
         while True:
@@ -148,6 +182,7 @@ class OffPolicyQ(Agent):
             if done:
                 self.reset_state()
                 state = self._preprocessor.current_data()
+                running_reward = 0.
             else:
                 state = next_state
 
@@ -168,41 +203,39 @@ class OffPolicyQ(Agent):
 
             self.env_steps += 1
 
-    def explore(self, state)-> np.ndarray:
+    def explore(self, state) -> np.ndarray:
         if random() < self.eps:
             action = self.action_space.sample()
         else:
-            action = self.get_action(state)
-        self.eps = max(self.eps_min, self.eps*self.eps_decay)
+            action = self.get_action(state, target=False)
+        self.eps = max(self.eps_min, self.eps * self.eps_decay)
         return action
-
 
     @torch.no_grad()
     def test_episode(self, test_steps=None, reset=True):
         test_steps = test_steps or self.test_steps
         if reset:
             self.reset_state()
-        self._preprocessor.initialize_history(self._env) # probably already initialized
+        self._preprocessor.initialize_history(
+            self._env)  # probably already initialized
         state = self._preprocessor.current_data()
         tst_metrics = []
         i = 0
         while i <= test_steps:
             _tst_metrics = {}
-            qvals = self.get_qvals(state)[0].cpu().numpy()
-            action = self.get_action(state)
+            qvals = self.get_qvals(state, target=False)[0].cpu().numpy()
+            action = self.get_action(state, target=False)
             state, reward, done, info = self._env.step(action)
             self._preprocessor.stream_state(state)
             state = self._preprocessor.current_data()
             _tst_metrics['qvals'] = qvals
             _tst_metrics['reward'] = reward
             _tst_metrics['transaction'] = info.brokerResponse.transactionUnits
-            _tst_metrics['transaction_cost'] = info.brokerResponse.transactionCost
+            _tst_metrics[
+                'transaction_cost'] = info.brokerResponse.transactionCost
+            # _tst_metrics['info'] = info
             tst_metrics.append({**_tst_metrics, **get_env_info(self._env)})
             if done:
                 break
             i += 1
         return list_2_dict(tst_metrics)
-
-
-
-

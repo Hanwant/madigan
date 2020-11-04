@@ -1,4 +1,5 @@
 from collections import deque
+import math
 from random import sample
 import numpy as np
 from .data import SARSD, State
@@ -11,6 +12,7 @@ class ReplayBuffer:
         self.size = size
         self.nstep_return = nstep_return
         self.discount = discount
+        self.discounts = [math.pow(self.discount, i) for i in range(nstep_return)]
         self._buffer = [None] * size
         # For Small lists, pop(0) has similar performance to deque().popleft()
         # And better performance for iteration when calculation the discounted sum
@@ -32,7 +34,8 @@ class ReplayBuffer:
         Calculates nstep discounted return from the nstep buffer
         and returns the sarsd with the adjusted return and next_state offset to t+n
         """
-        reward = sum([(self.discount**i)*dat.reward for i, dat in enumerate(self._nstep_buffer)])
+        reward = sum([self.discounts[i]*dat.reward for i, dat in
+                      enumerate(self._nstep_buffer)])
         nstep_sarsd = self._nstep_buffer.pop(0)
         nstep_sarsd.reward = reward
         if len(self._nstep_buffer):
@@ -98,6 +101,11 @@ class ReplayBuffer:
         self.filled = 0
         self.current_idx = 0
         self._nstep_buffer = []
+
+    def flush_nstep_buffer(self):
+        """
+        """
+        pass
 
     def __getitem__(self, item):
         if isinstance(item, int):

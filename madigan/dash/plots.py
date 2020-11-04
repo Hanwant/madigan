@@ -52,6 +52,12 @@ class TrainPlots(QGridLayout):
 
         self.lines['loss'] = self.plots['loss'].plot(y=[])
         self.lines['running_reward'] = self.plots['running_reward'].plot(y=[])
+        self.link_x_axes()
+
+    def link_x_axes(self):
+        for name, plot in self.plots.items():
+            if name != "loss":
+                plot.setXLink(self.plots['loss'])
 
     def clear_data(self):
         for line in self.lines.values():
@@ -87,6 +93,8 @@ class TrainPlotsDQN(TrainPlots):
         self.lines['Gt'] = self.plots['values'].plot(y=[], name='Gt')
         self.lines['Qt'] = self.plots['values'].plot(y=[], name='Qt')
         self.plots['values'].setLabels()
+
+        self.link_x_axes()
 
     def set_data(self, data):
         super().set_data(data)
@@ -173,6 +181,18 @@ class TestEpisodePlots(QGridLayout):
             lambda: self.load_from_hdf(self.datapath/self.episode_table.currentItem().text())
         )
 
+        self.link_x_axes()
+        # self.unlink_x_axes()
+
+    def link_x_axes(self):
+        for name, plot in self.plots.items():
+            if name != "equity":
+                plot.setXLink(self.plots['equity'])
+
+    def unlink_x_axes(self):
+        for plot in self.plots.values():
+            plot.setXLink(plot)
+
     def set_datapath(self, path):
         self.datapath = Path(path)
         self.load_episode_list()
@@ -231,18 +251,18 @@ class TestEpisodePlots(QGridLayout):
             prices = np.array(data['prices'])
             transactions = np.array(data['transaction'])
             ledger = np.array(data['ledgerNormed'])
-        assert len(prices.shape) ==  len(transactions.shape) == len(ledger.shape) == 2
+            assert len(prices.shape) ==  len(transactions.shape) == len(ledger.shape) == 2
         for asset in range(prices.shape[1]):
             self.lines['prices'][asset] = self.plots['prices'].plot(y=prices[:, asset],
-                                                                  pen=(asset, prices.shape[1]))
+                                                                    pen=(asset, prices.shape[1]))
             self.lines['transactions'][asset] = self.plots['transactions'].plot(y=transactions[:, asset],
-                                                                  pen=(asset, transactions.shape[1]))
-        self.lines['ledgerNormed'].setImage(ledger, axes={'x': 0, 'y': 1})
-        self.current_pos_line.setValue(len(data['equity'])-1)
-        self.current_pos_line.setBounds((0, len(data['equity'])-1))
-        self.update_accounting_table()
-        self.positions_table.setRowCount(ledger.shape[1])
-        self.update_positions_table()
+                                                                                pen=(asset, transactions.shape[1]))
+            self.lines['ledgerNormed'].setImage(ledger, axes={'x': 0, 'y': 1})
+            self.current_pos_line.setValue(len(data['equity'])-1)
+            self.current_pos_line.setBounds((0, len(data['equity'])-1))
+            self.update_accounting_table()
+            self.positions_table.setRowCount(ledger.shape[1])
+            self.update_positions_table()
 
     def update_accounting_table(self):
         current_timepoint = int(self.current_pos_line.value())
@@ -261,7 +281,8 @@ class TestEpisodePlots(QGridLayout):
             for asset in range(n_assets):
                 for i, metric in enumerate(['ledger', 'ledgerNormed']):
                     val = self.data[metric][current_timepoint][asset]
-                    self.positions_table.setItem(asset, i, QTableWidgetItem(str(val)))
+                    val = QTableWidgetItem(f"{val: 0.3f}")
+                    self.positions_table.setItem(asset, i, val)
         except IndexError:
             import traceback
             traceback.print_exc()
@@ -275,6 +296,8 @@ class TestEpisodePlotsDQN(TestEpisodePlots):
         self.plots['qvals'] = self.graphs.addPlot(title="qvals", row=1, col=3)
         self.plots['qvals'].addItem(self.lines['qvals'])
         self.plots['qvals'].showGrid(1, 1)
+
+        self.link_x_axes()
 
     def set_data(self, data):
         super().set_data(data)

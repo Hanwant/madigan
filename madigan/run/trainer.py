@@ -45,7 +45,7 @@ class Trainer:
         self.log_freq = config.log_freq
         self.test_freq = config.test_freq
         self.print_progress = print_progress
-        self.logdir = Path(config.basepath) / 'logs'
+        self.logdir = Path(config.experiment_path) / 'logs'
         self.logfile = self.logdir/'log.h5'
         if not self.logdir.is_dir():
             self.logger.info("Making New Experiment Directory %s", self.logdir)
@@ -64,38 +64,30 @@ class Trainer:
         agent = make_agent(config)
         return cls(agent, config, device=device, **kwargs)
 
-    # def __iter__(self):
-    #     self.train_loop = iter(self.train_loop(self.agent, self.env, self.preprocessor,
-    #                                            self.config, print_progress=self.print_progress))
-    #     return self
-
-    # def __next__(self):
-    #     """
-    #     Returns a 'train_metric' which is either a dict or None:
-    #     """
-    #     return next(self.train_loop)
-
-
     def save_logs(self, train_metrics, test_metrics, append=True):
         if len(train_metrics):
             train_metrics = list_2_dict(train_metrics)
             train_metrics = reduce_train_metrics(train_metrics, ['Gt', 'Qt', 'rewards'])
             train_df = pd.DataFrame(train_metrics)
-            # self.save_train_logs(train_df)
-            save_to_hdf(self.logdir/'train.hdf5', 'train', train_df, append_if_exists=append)
+            save_to_hdf(self.logdir/'train.hdf5', 'train', train_df,
+                        append_if_exists=append)
         if len(test_metrics):
-            # test_metrics = reduce_test_metrics(test_metrics)
             # if self.test_metrics_cols is not None:
             #     test_metrics = dict(filter(lambda x: x[0] in self.test_metrics_cols,
             #                                list_2_dict(test_metrics).items()))
-            print(len(test_metrics))
+            self.logger.info(f'logging {len(test_metrics)} test runs')
             for (env_step, test_run) in test_metrics:
                 test_df = pd.DataFrame(test_run)
                 test_filename = self.logdir/(f'test_env_steps_{env_step}'+\
                     f'_episode_steps_{len(test_df)}.hdf5')
-                # save_to_hdf(test_filename, 'full_run', test_df, append_if_exists=False)
                 test_df.to_hdf(test_filename, 'full_run', append=False)
-                # save_to_hdf(test_filename, 'run_summary', test_summary(test_df), append_if_exists=False)
+                summary = test_summary(test_df)
+                summary['env_steps'] = [self.agent.env_steps]
+                summary['training_steps'] = [self.agent.training_steps]
+                # save_to_hdf(self.logdir/'test.hdf5', 'run_history',
+                #             summary, append_if_exists=True)
+                summary.to_hdf(self.logdir/'test.hdf5', 'run_history',
+                               append=True)
 
     def load_logs(self):
         train_logs = pd.read_hdf(self.logdir/'train.hdf5', 'train')
@@ -104,7 +96,7 @@ class Trainer:
 
     def load_latest_test_run(self):
         files = list(filter(lambda x: 'test' in x.stem, self.logdir.iterdir()))
-        files = sorted([(f.stem.split('_')[3], f) for f in files])
+        files = sorted([(int(f.stem.split('_')[3]), f) for f in files])
         return pd.read_hdf(files[-1][1], key='full_run')
 
 
@@ -139,10 +131,13 @@ class Trainer:
         nsteps = nsteps or self.train_steps
         train_metrics = []
         test_metrics = []
-        i = self.agent.env_steps
+        i = self.agent.training_steps
+        steps_since_test = 0
+        steps_since_save = 0
+        steps_since_flush = 0
 
         # fill replay buffer up to replay_min_size before training
-        self.logger.info('filling replay buffer before training')
+        self.logger.info('filling replay buffer to min size before training')
         burn_in_train_loop = iter(self.agent.step(self.agent.replay_min_size))
         train_metrics.extend(next(burn_in_train_loop))
         test_metrics.append((i, self.agent.test_episode()))
@@ -150,27 +145,35 @@ class Trainer:
         self.logger.info("Starting Training")
         train_loop = self.agent.step(nsteps)
 
-        progress_bar = tqdm(total=nsteps, colour='#00ff00')
+        progress_bar = tqdm(total=i+nsteps, colour='#9fc693')
         progress_bar.update(i)
         try:
             while True:
                 train_metric = next(train_loop)
                 train_metrics.extend(train_metric)
-                progress_bar.update(self.agent.env_steps - i)
-                i = self.agent.env_steps
+                training_steps_taken = self.agent.training_steps - i
+                progress_bar.update(training_steps_taken)
+                i = self.agent.training_steps
 
-                if i % test_freq == 0:
+                if steps_since_test > test_freq:
                     self.logger.info("Testing Model")
                     test_metrics.append((i, self.agent.test_episode()))
+                    steps_since_test = 0
 
-                if i % model_save_freq == 0:
+                if steps_since_save > model_save_freq:
                     self.logger.info("Saving Agent State")
                     self.agent.save_state()
+                    steps_since_save = 0
 
-                if i % flush_freq == 0:
+                if steps_since_flush > flush_freq:
                     self.logger.info("Saving Log Metrics")
                     self.save_logs(train_metrics, test_metrics)
                     train_metrics, test_metrics = [], []
+                    steps_since_flush = 0
+
+                steps_since_test += training_steps_taken
+                steps_since_save += training_steps_taken
+                steps_since_flush += training_steps_taken
 
         except StopIteration:
             print('Done training')

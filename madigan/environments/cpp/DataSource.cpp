@@ -21,6 +21,9 @@ namespace madigan{
     else if (dataSourceType == "OU"){
       return make_unique<OU>();
     }
+    else if (dataSourceType == "SimpleTrend"){
+      return make_unique<SimpleTrend>();
+    }
     else{
       std::stringstream ss;
       ss << dataSourceType;
@@ -43,6 +46,9 @@ namespace madigan{
     }
     else if (dataSourceType == "OU"){
       return make_unique<OU>(config);
+    }
+    else if (dataSourceType == "SimpleTrend"){
+      return make_unique<SimpleTrend>(config);
     }
     else{
       std::stringstream ss;
@@ -70,6 +76,7 @@ namespace madigan{
     }
     this->nAssets_ = assets.size();
     currentData_.resize(nAssets_);;
+    generator.seed(std::chrono::system_clock::now().time_since_epoch().count());
   }
 
   Synth::Synth(){
@@ -260,6 +267,7 @@ namespace madigan{
     this->assets.push_back(Asset("multi_sine"));
     this->nAssets_ = assets.size();
     currentData_.resize(1);
+    generator.seed(std::chrono::system_clock::now().time_since_epoch().count());
   }
   const PriceVector& SineAdder::getData() {
     double sum{0.};
@@ -293,6 +301,7 @@ namespace madigan{
       for (const auto& val: mean){
         currentData_ << val;
       }
+      generator.seed(std::chrono::system_clock::now().time_since_epoch().count());
     }
     else{
       throw std::length_error("parameters passed to DataSource of type OU"
@@ -346,4 +355,96 @@ namespace madigan{
     return currentData_;
   }
 
+  void SimpleTrend::initParams(std::vector<double> trendProb, std::vector<int> minPeriod,
+                                std::vector<int> maxPeriod, std::vector<double> noise,
+                                std::vector<double> start, std::vector<double> dY) {
+    if ((trendProb.size() == minPeriod.size()) && (minPeriod.size() == maxPeriod.size())
+        && (maxPeriod.size() == noise.size()) && (noise.size() == start.size())){
+      this->trendProb=trendProb;
+      this->minPeriod=minPeriod;
+      this->maxPeriod=maxPeriod;
+      this->noise=noise;
+      this->dY=dY;
+      currentData_.resize(trendProb.size());
+      for (int i=0; i<trendProb.size(); i++){
+        noiseDist.push_back(std::normal_distribution<double>(0., noise[i]));
+        trendLenPicker.push_back(std::uniform_int_distribution<int>
+                                 (minPeriod[i], maxPeriod[i]));
+        trending.push_back(false);
+        std::string assetName = "SimpleTrend_" + std::to_string(i);
+        this->assets.push_back(Asset(assetName));
+        currentData_ << start[i]; // default starting val
+        currentDirection.push_back(1);
+        currentTrendLen.push_back(0);
+      }
+      this->nAssets_ = assets.size();
+    }
+    else{
+      throw std::length_error("parameters passed to DataSource of type SimpleTrend"
+                              " need to be vectors of same length");
+    }
+    generator.seed(std::chrono::system_clock::now().time_since_epoch().count());
+  }
+
+  SimpleTrend::SimpleTrend(std::vector<double> trendProb, std::vector<int> minPeriod,
+                           std::vector<int> maxPeriod, std::vector<double> noise,
+                           std::vector<double> start, std::vector<double> dY) {
+    initParams(trendProb, minPeriod, maxPeriod, noise, start, dY);
+  }
+
+  SimpleTrend::SimpleTrend(): SimpleTrend({0.001, 0.001}, {100, 500}, {200, 1500},
+                                          {1. ,0.1}, {10., 15.}, {0.001, 0.01}){}
+
+  SimpleTrend::SimpleTrend(Config config){
+    bool allParamsPresent{true};
+    if (config.find("data_source_config") == config.end()){
+      throw ConfigError("config passed but doesn't contain generator params");
+      allParamsPresent = false;
+    }
+    Config params = std::any_cast<Config>(config["data_source_config"]);
+    for (auto key: {"trendProb", "minPeriod", "maxPeriod", "noise", "start", "dY"}){
+      if (params.find(key) == params.end()){
+        allParamsPresent=false;
+        throw ConfigError("data_Source_config doesn't have all required constructor arguments");
+      }
+    }
+    vector<double> trendProb = std::any_cast<vector<double>>(params["trendProb"]);
+    vector<int> minPeriod = std::any_cast<vector<int>>(params["minPeriod"]);
+    vector<int> maxPeriod = std::any_cast<vector<int>>(params["maxPeriod"]);
+    vector<double> noise = std::any_cast<vector<double>>(params["noise"]);
+    vector<double> dY = std::any_cast<vector<double>>(params["dY"]);
+    vector<double> start = std::any_cast<vector<double>>(params["start"]);
+    initParams(trendProb, minPeriod, maxPeriod, noise, start, dY);
+  }
+
+  SimpleTrend::SimpleTrend(pybind11::dict py_config):
+    SimpleTrend::SimpleTrend(makeConfigFromPyDict(py_config)){}
+
+  const PriceVector& SimpleTrend::getData() {
+    for (int i=0; i < nAssets_; i++){
+      double& y = currentData_[i];
+      if(trending[i]){
+        y += dY[i] * currentDirection[i];
+        currentTrendLen[i] -= 1;
+        if (currentTrendLen[i] == 0){
+          trending[i] = false;
+        }
+        if (y <= 0.01){
+          currentDirection[i] = 1;
+        }
+      }
+      else{
+        double rand = uniformDist(generator);
+        if (rand < trendProb[i]){
+          trending[i] = true;
+          currentDirection[i] = (rand < 0.5)? -1: 1;
+          currentTrendLen[i] = trendLenPicker[i](generator);
+        }
+      }
+      y += noiseDist[i](generator);
+      y = std::max(0.01, y);
+    }
+    timestamp_ += 1;
+    return currentData_;
+  }
 }// namespace madigan

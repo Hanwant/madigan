@@ -92,6 +92,7 @@ PYBIND11_MODULE(env, m){
   py::class_<SawTooth, Synth>_SawTooth(m, "SawTooth");
   py::class_<Triangle, Synth>_Triangle(m, "Triangle");
   py::class_<SineAdder, Synth>_SineAdder(m, "SineAdder");
+  py::class_<SimpleTrend, DataSource>_SimpleTrend(m, "SimpleTrend");
 
   py::class_<Portfolio>_Portfolio(m, "Portfolio");
   py::class_<Account>_Account(m, "Account");
@@ -237,6 +238,26 @@ PYBIND11_MODULE(env, m){
          "Get Next data points",
          py::return_value_policy::reference)
     .def("currentData", (PriceVector& (SineAdder::*) ()) &SineAdder::currentData,
+         "Get current data points",
+         py::return_value_policy::reference);
+
+  _SimpleTrend.def(py::init<>())
+    .def(py::init<py::dict>(), py::arg("config_dict"))
+    .def(py::init<
+         vector<double>, vector<int>,
+         vector<int>, vector<double>,
+         vector<double>, vector<double>> (),
+         py::arg("trend_prob"), py::arg("min_period"),
+         py::arg("max_period"), py::arg("noise"),
+         py::arg("start"), py::arg("dY"))
+
+    .def_property_readonly("currentTime", &SimpleTrend::currentTime,
+                           "get the current timestamp",
+                           py::return_value_policy::move)
+    .def("getData", (PriceVector& (SimpleTrend::*) ()) &SimpleTrend::getData,
+         "Get Next data points",
+         py::return_value_policy::reference)
+    .def("currentData", (PriceVector& (SimpleTrend::*) ()) &SimpleTrend::currentData,
          "Get current data points",
          py::return_value_policy::reference);
 

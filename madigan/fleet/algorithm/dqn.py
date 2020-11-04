@@ -4,7 +4,9 @@ from pathlib import Path
 import numpy as np
 import torch
 import torch.nn.functional as F
+
 from .base import OffPolicyQ
+from ..utils import get_model_class
 from ...environments import make_env
 from ..net.conv_net import ConvNet
 from ..net.mlp_net import MLPNet
@@ -13,13 +15,6 @@ from ...utils.preprocessor import make_preprocessor
 from ...utils.config import Config
 from ...utils.data import State
 
-def get_model_class(name):
-    if name in ("ConvNet", ):
-        return ConvNet
-    elif name == ("MLPNet", ):
-        return MLPNet
-    else:
-        raise NotImplementedError(f"model {name} is not Implemented")
 
 # p = type('params', (object, ), params)
 
@@ -47,6 +42,7 @@ class DQN(OffPolicyQ):
                  eps_min: float,
                  batch_size: int,
                  test_steps: int,
+                 unit_size: float,
                  savepath: Union[Path, str],
                  double_dqn: bool,
                  tau_soft_update: float,
@@ -55,14 +51,14 @@ class DQN(OffPolicyQ):
                  lr):
         super().__init__(env, preprocessor, input_shape, action_space, discount, nstep_return,
                          replay_size, replay_min_size, eps, eps_decay, eps_min,
-                         batch_size, test_steps, savepath)
+                         batch_size, test_steps, unit_size, savepath)
 
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self._action_space = action_space
         self.double_dqn = double_dqn
         self.discount = discount
         self.tau_soft_update = tau_soft_update
-        self.model_class = get_model_class(model_class)
+        self.model_class = get_model_class(type(self).__name__, model_class)
         output_shape = (action_space.n, action_space.action_atoms)
         self.model_b = self.model_class(input_shape, output_shape, **model_config)
         self.model_t = self.model_class(input_shape, output_shape, **model_config)
@@ -94,10 +90,11 @@ class DQN(OffPolicyQ):
         action_space = DiscreteRangeSpace((-atoms//2, atoms//2 + 1),
                                           config.n_assets)
         aconf = config.agent_config
+        unit_size = aconf.unit_size_proportion_avM
         return cls(env, preprocessor, input_shape, action_space, aconf.discount,
                    aconf.nstep_return, aconf.replay_size, aconf.replay_min_size,
                    aconf.eps, aconf.eps_decay, aconf.eps_min, aconf.batch_size,
-                   config.test_steps, Path(config.basepath)/'models',
+                   config.test_steps, unit_size, Path(config.experiment_path)/'models',
                    aconf.double_dqn, aconf.tau_soft_update,
                    config.model_config.model_class, config.model_config,
                    config.optim_config.lr
@@ -115,6 +112,7 @@ class DQN(OffPolicyQ):
         self.device = torch.device(device)
         self.model_b.to(self.device)
         self.model_t.to(self.device)
+        return self
 
     @property
     def action_space(self) -> np.ndarray:
@@ -122,7 +120,7 @@ class DQN(OffPolicyQ):
         Action space object which can be sampled from
         outputs transaction units
         """
-        units = 0.05 * self.env.availableMargin / self.env.currentPrices
+        units = self.unit_size * self.env.availableMargin / self.env.currentPrices
         self._action_space.action_multiplier = units
         return self._action_space
 
@@ -131,10 +129,9 @@ class DQN(OffPolicyQ):
         """
         Takes output from net and converts to transaction units
         """
-        units = 0.05 * self.env.availableMargin / self.env.currentPrices
-        transactions = actions.cpu().numpy() - self.action_atoms // 2
-        transactions *= units
-        return transactions
+        units = self.unit_size * self.env.availableMargin / self.env.currentPrices
+        actions_centered = (actions - (self.action_atoms // 2)).cpu().numpy()
+        return actions_centered * units
 
     def transactions_to_actions(self, transactions: np.ndarray) -> np.ndarray:
         """
@@ -149,7 +146,7 @@ class DQN(OffPolicyQ):
         return actions
 
     @torch.no_grad()
-    def get_qvals(self, state, target=True, device=None):
+    def get_qvals(self, state, target=False, device=None):
         """
         External interface - for inference and env interaction
         Takes in numpy arrays
@@ -162,17 +159,17 @@ class DQN(OffPolicyQ):
         return self.model_b(state)
 
     @torch.no_grad()
-    def get_action(self, state, target=True, device=None):
+    def get_action(self, state, target=False, device=None):
         """
         External interface - for inference and env interaction
         takes in numpy arrays and returns greedy actions
         """
         qvals = self.get_qvals(state, target=target, device=device)
-        actions = qvals.max(-1)[0][:, 0] # get rid of last dim
+        actions = qvals.max(-1)[1][:, 0] # get rid of last dim
         return self.actions_to_transactions(actions)
 
 
-    def __call__(self, state: State, target: bool = True, raw_qvals: bool = False,
+    def __call__(self, state: State, target: bool = False, raw_qvals: bool = False,
                  max_qvals: bool = False):
         return self.get_action(state, target=target)
 
@@ -223,13 +220,14 @@ class DQN(OffPolicyQ):
         sarsd = sarsd or self.buffer.sample(self.batch_size)
         state, action, reward, next_state, done = self.prep_sarsd_tensors(sarsd)
 
-        Gt = self.calculate_Gt_target(next_state, reward, done)
         action_mask = F.one_hot(action, self.action_atoms).to(self.device)
         qvals = self.model_b(state)
-        # import ipdb; ipdb.set_trace()
         Qt = (qvals*action_mask).sum(-1)
+        Gt = self.calculate_Gt_target(next_state, reward, done)
         assert Qt.shape == Gt.shape
+
         loss = self.loss_fn(Qt, Gt)
+
         self.opt.zero_grad()
         loss.backward()
         self.opt.step()

@@ -4,7 +4,8 @@ import numpy as np
 import pandas as pd
 import torch
 
-def list_2_dict(list_of_dicts: list):
+
+def list_2_dict(list_of_dicts: list) -> dict:
     """
     aggregates a list of dicts (all with same keys) into a dict of lists
 
@@ -22,20 +23,18 @@ def list_2_dict(list_of_dicts: list):
             dict_of_lists = {k: [metric[k] for metric in list_of_dicts]
                              for k in list_of_dicts[0].keys()}
             return dict_of_lists
-        else:
-            raise ValueError('list passed to list_2_dict does not contain dicts')
-    else:
-        return {}
+        raise ValueError('list passed to list_2_dict does not contain dicts')
+    return {}
 
 
 def reduce_train_metrics(metrics: Union[dict, pd.DataFrame],
-                         columns: list)-> Union[dict, pd.DataFrame]:
+                         columns: list) -> Union[dict, pd.DataFrame]:
     """
     Takes dict (I.e from list_2_dict) or pandas df
     returns dict/df depending on input type
     """
     if metrics is not None and len(metrics):
-        _metrics = type(metrics)() # Create an empty dict or pd df
+        _metrics = type(metrics)()  # Create an empty dict or pd df
         for col in metrics.keys():
             if col in columns:
                 if isinstance(metrics[col][0], (np.ndarray, torch.Tensor)):
@@ -45,22 +44,27 @@ def reduce_train_metrics(metrics: Union[dict, pd.DataFrame],
                 else:
                     _metrics[col] = metrics[col]
             else:
-                _metrics[col] = metrics[col] # Copy might be needed for numpy arrays / torch tensors
+                _metrics[col] = metrics[col]
     else:
         return metrics
     return _metrics
 
-def test_summary(test_metrics: Union[dict, pd.DataFrame])->pd.DataFrame:
+
+def test_summary(test_metrics: Union[dict, pd.DataFrame]) -> pd.DataFrame:
+    """
+    Given metrics from a test episode, returns a summary.
+    Needs to be updated to include backtest style stats
+    I.e drawdown, sharpe etc - sharpe needs timestamps
+    """
     df = pd.DataFrame(test_metrics)
     out = {'mean_equity': df['equity'].mean(),
-            'final_equity': df['equity'].iloc[-1],
-            'mean_reward': df['reward'].mean(),
-            'mean_transaction_cost': df['transaction_cost'].mean(),
-            'total_transaction_cost': df['transaction_cost'].sum(),
-            'mean_qvals': df['qvals'].mean(),
+           'final_equity': df['equity'].iloc[-1],
+           'mean_reward': df['reward'].mean(),
+           'mean_transaction_cost': np.array(df['transaction_cost'].tolist()).mean(),
+           'total_transaction_cost': np.array(df['transaction_cost'].tolist()).sum(),
+           'mean_qvals': np.array(df['qvals'].tolist()).mean(),
            'nsteps': len(df)}
-
-    return pd.DataFrame(out)
+    return pd.DataFrame({k: [v] for k, v in out.items()})
 
 # def reduce_test_metrics(test_metrics, cols=('returns', 'equity', 'cash', 'margin')):
 #     out = []

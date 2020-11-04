@@ -47,6 +47,7 @@ namespace madigan{
                                       });
     if (dataSourceFound != dict.end()){
       std::string dataSourceType = string(pybind11::str(dataSourceFound->second));
+      // std::cout << dataSourceType << "\n";
       if ( dataSourceType == "Synth" || dataSourceType == "SawTooth" ||
            dataSourceType == "Triangle" || dataSourceType == "SineAdder"){
           auto genParamsFound=std::find_if(dict.begin(), dict.end(),
@@ -152,6 +153,65 @@ namespace madigan{
           }
           else{
             throw ConfigError("config for DataSource type OU needs data_source_config");
+          }
+      }
+      else if ( dataSourceType == "SimpleTrend"){
+        auto genParamsFound=std::find_if(dict.begin(), dict.end(),
+                                         [](const std::pair<pybind11::handle, pybind11::handle>& pair){
+                                           return string(pybind11::str(pair.first)) == "data_source_config";
+                                           });
+          if (genParamsFound != dict.end()){
+            pybind11::dict genParams = dict[pybind11::str("data_source_config")];
+            for (auto key: {"trend_prob", "min_period", "max_period", "noise", "dY", "start"}){
+              auto keyFound=std::find_if(genParams.begin(), dict.end(),
+                                         [key](const std::pair<pybind11::handle, pybind11::handle>& pair){
+                                           return string(pybind11::str(pair.first)) == key;
+                                         });
+              if (keyFound == genParams.end()){
+                throw ConfigError(string(key)+" key not found in data_source_config in config");
+              }
+            }
+            vector<double> trendProb;
+            vector<int> minPeriod;
+            vector<int> maxPeriod;
+            vector<double> noise;
+            vector<double> dY;
+            vector<double> start;
+            for(auto& item: genParams){
+              string key = string(pybind11::str(item.first));
+              std::cout << key << "\n";
+              if(key == "trend_prob"){
+                trendProb = item.second.cast<vector<double>>();
+              }
+              if(key == "min_period"){
+                minPeriod= item.second.cast<vector<int>>();
+              }
+              if(key == "max_period"){
+                maxPeriod= item.second.cast<vector<int>>();
+              }
+              if(key == "noise"){
+                noise = item.second.cast<vector<double>>();
+              }
+              if(key == "dY"){
+                dY= item.second.cast<vector<double>>();
+              }
+              if(key == "start"){
+                start = item.second.cast<vector<double>>();
+              }
+            }
+            config=Config({
+                {"data_source_type", dataSourceType},
+                {"data_source_config", Config{{"trendProb", trendProb},
+                                            {"minPeriod", minPeriod},
+                                            {"maxPeriod", maxPeriod},
+                                            {"noise", noise },
+                                            {"dY", dY},
+                                            {"start", start}}
+                }
+              });
+          }
+          else{
+            throw ConfigError("config for DataSource type SimpleTrend needs data_source_config");
           }
       }
       else{

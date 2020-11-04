@@ -46,7 +46,7 @@ class Ui_MainWindow(object):
         self.tab = QtWidgets.QWidget()
         self.tab.setObjectName("tab")
         self.ParamsEdit = QtWidgets.QTextEdit(self.tab)
-        self.ParamsEdit.setGeometry(QtCore.QRect(0, 0, 251, 521))
+        self.ParamsEdit.setGeometry(QtCore.QRect(0, 0, 251, 401))
         self.ParamsEdit.setStyleSheet("")
         self.ParamsEdit.setObjectName("ParamsEdit")
         self.ExpTab.addTab(self.tab, "")
