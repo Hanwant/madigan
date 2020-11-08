@@ -39,19 +39,25 @@ class TrainPlots(QGridLayout):
         self.data = None
         self.graphs = pg.GraphicsLayoutWidget(show=True, title=title)
         self.addWidget(self.graphs)
-        self.colours = {'reward': (255, 228, 181),
+        self.colours = {'reward': (255, 228, 181), 'reward_mean': (255, 0, 0),
                         'loss': (242, 242, 242)}
         self.plots = {}
         self.lines = {}
         self.plots['loss'] = self.graphs.addPlot(title='Loss',
-                                          bottom='step', left='Loss')
+                                                 bottom='step', left='Loss')
         self.plots['loss'].showGrid(1, 1)
-        self.plots['running_reward'] = self.graphs.addPlot(title='Rewards',
-                                                    bottom='step', left='reward')
+        self.plots['running_reward'] = self.graphs.addPlot(title='Episode Rewards',
+                                                           bottom='step', left='reward')
         self.plots['running_reward'].showGrid(1, 1)
+        self.plots['running_reward'].addLegend()
 
         self.lines['loss'] = self.plots['loss'].plot(y=[])
-        self.lines['running_reward'] = self.plots['running_reward'].plot(y=[])
+        self.lines['running_reward'] = self.plots['running_reward'].plot(
+            y=[], name='rewards')
+        self.reward_mean_window = 50000
+        self.lines['running_reward_mean'] = self.plots['running_reward'].plot(
+            y=[], name=f'rewards_{self.reward_mean_window}_window_average')
+        self.plots['running_reward'].setLabels()
         self.link_x_axes()
 
     def link_x_axes(self):
@@ -70,7 +76,14 @@ class TrainPlots(QGridLayout):
             data = {k: [] for k in self.lines.keys()}
         self.lines['loss'].setData(y=data['loss'], pen=self.colours['loss'])
         rewards = data['running_reward']
-        self.lines['running_reward'].setData(y=rewards, pen=self.colours['reward'])
+        rewards_mean = pd.Series(data['running_reward']).rolling(
+            self.reward_mean_window).mean().to_numpy()
+        rewards_mean = np.nan_to_num(rewards_mean)
+        self.lines['running_reward'].setData(y=rewards,
+                                             pen=self.colours['reward'])
+        self.lines['running_reward_mean'].setData(
+            y=rewards_mean, pen=pg.mkPen(
+                {'color': self.colours['reward_mean'], 'width': 2}))
 
     def set_datapath(self, path):
         self.datapath = Path(path)
@@ -117,7 +130,8 @@ class TestEpisodePlots(QGridLayout):
         self.colours = {'equity': (218, 112, 214), 'reward': (242, 242, 242),
                         'cash': (0, 255, 255), 'margin': (255, 86, 0)}
         self.heatmap_colors = [(0, 0, 85), (85, 0, 0)]
-        cmap = pg.ColorMap(pos=np.linspace(-1., 1., 2), color=self.heatmap_colors)
+        cmap = pg.ColorMap(pos=np.linspace(-1., 1., 2),
+                           color=self.heatmap_colors)
         self.plots = {}
         self.lines = {}
         self.plots['prices'] = self.graphs.addPlot(title='Prices', bottom='time',
@@ -201,9 +215,10 @@ class TestEpisodePlots(QGridLayout):
     def load_episode_list(self, path=None):
         path = path or self.datapath
         if path is not None:
-            self.episodes = list(filter(lambda x: "episode" in str(x), path.iterdir()))
-            self.episodes = list(reversed([f for f in  path.iterdir()
-                                      if "episode" in str(f.name)]))
+            episodes = filter(lambda x: "episode" in str(x.name), path.iterdir())
+            self.episodes = sorted(episodes,
+                                   key=lambda x: int(str(x.name).split('_')[3]),
+                                   reverse=True)
             self.episode_table.setRowCount(len(self.episodes))
             for i, episode in enumerate(self.episodes):
                 val = QTableWidgetItem(str(episode.name))
@@ -331,11 +346,11 @@ class TestHistoryPlots(QGridLayout):
                                                    bottom='training_steps',
                                                    left='Denomination currency')
         self.plots['reward'] = self.graphs.addPlot(title='Mean Returns over Episodes',
-                                                               bottom='training_steps',
-                                                               left='returns (proportion)')
+                                                   bottom='training_steps',
+                                                   left='returns (proportion)')
         self.plots['margin'] = self.graphs.addPlot(title='Mean Cash over Episodes',
-                                                            bottom='training steps',
-                                                            left='returns (proportion)')
+                                                   bottom='training steps',
+                                                   left='returns (proportion)')
         self.plots['equity'].showGrid(1, 1)
         self.plots['reward'].showGrid(1, 1)
         self.plots['margin'].showGrid(1, 1)

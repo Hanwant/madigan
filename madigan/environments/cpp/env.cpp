@@ -183,8 +183,11 @@ PYBIND11_MODULE(env, m){
     .def("getData", (PriceVector& (Synth::*) ()) &Synth::getData,
          "Get Next data points",
          py::return_value_policy::reference)
+    .def("currentPrices", (PriceVector& (Synth::*) ()) &Synth::currentPrices,
+         "Get current prices",
+         py::return_value_policy::reference)
     .def("currentData", (PriceVector& (Synth::*) ()) &Synth::currentData,
-         "Get current data points",
+         "Get current data - make be raw prices or preprocessed or anything else",
          py::return_value_policy::reference);
   _SawTooth.def(py::init<>())
     .def(py::init<py::dict>(), py::arg("config_dict"))
@@ -237,6 +240,9 @@ PYBIND11_MODULE(env, m){
     .def("getData", (PriceVector& (SineAdder::*) ()) &SineAdder::getData,
          "Get Next data points",
          py::return_value_policy::reference)
+    .def("currentPrices", (PriceVector& (SineAdder::*) ()) &SineAdder::currentPrices,
+         "Get current prices",
+         py::return_value_policy::reference)
     .def("currentData", (PriceVector& (SineAdder::*) ()) &SineAdder::currentData,
          "Get current data points",
          py::return_value_policy::reference);
@@ -256,6 +262,9 @@ PYBIND11_MODULE(env, m){
                            py::return_value_policy::move)
     .def("getData", (PriceVector& (SimpleTrend::*) ()) &SimpleTrend::getData,
          "Get Next data points",
+         py::return_value_policy::reference)
+    .def("currentPrices", (PriceVector& (SimpleTrend::*) ()) &SimpleTrend::currentPrices,
+         "Get current prices",
          py::return_value_policy::reference)
     .def("currentData", (PriceVector& (SimpleTrend::*) ()) &SimpleTrend::currentData,
          "Get current data points",

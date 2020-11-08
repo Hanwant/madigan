@@ -60,7 +60,7 @@ class ConvNetIQN(nn.Module):
     def __init__(self, input_shape: tuple, output_shape: tuple, d_model: int=512,
                  channels: list=[32, 32], kernels: list=[5, 5], strides: list=[1, 1],
                  dueling=True, preserve_window_len: bool = False,
-                 tau_embed_size=64, nTau=32, **params):
+                 tau_embed_size=64, nTau=32, **extra):
         """
         input_shape: (window_length, n_features)
         output_shape: (n_assets, action_atoms)

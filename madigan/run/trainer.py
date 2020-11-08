@@ -41,11 +41,12 @@ class Trainer:
         self.preprocessor = agent.preprocessor
         self.config = config
         self.train_steps = config.train_steps
+        self.test_steps = config.test_steps
         self.logger = logging.getLogger(__name__)
         self.log_freq = config.log_freq
         self.test_freq = config.test_freq
         self.print_progress = print_progress
-        self.logdir = Path(config.experiment_path) / 'logs'
+        self.logdir = Path(config.basepath)/config.experiment_id/'logs'
         self.logfile = self.logdir/'log.h5'
         if not self.logdir.is_dir():
             self.logger.info("Making New Experiment Directory %s", self.logdir)
@@ -64,7 +65,10 @@ class Trainer:
         agent = make_agent(config)
         return cls(agent, config, device=device, **kwargs)
 
-    def save_logs(self, train_metrics, test_metrics, append=True):
+    def save_logs(self,
+                  train_metrics: Union[dict, pd.DataFrame],
+                  test_metrics: Union[dict, pd.DataFrame],
+                  append: bool = True):
         if len(train_metrics):
             train_metrics = list_2_dict(train_metrics)
             train_metrics = reduce_train_metrics(train_metrics, ['Gt', 'Qt', 'rewards'])
@@ -95,15 +99,14 @@ class Trainer:
         return train_logs, test_logs
 
     def load_latest_test_run(self):
-        files = list(filter(lambda x: 'test' in x.stem, self.logdir.iterdir()))
+        files = list(filter(lambda x: 'test_' in x.stem, self.logdir.iterdir()))
         files = sorted([(int(f.stem.split('_')[3]), f) for f in files])
         return pd.read_hdf(files[-1][1], key='full_run')
 
-
     def test(self, test_steps=None, reset=True):
-        test_steps = test_steps or self.config.test_steps
-        # episode_metrics = test(self.agent, self.env, self.preprocessor, nsteps=nsteps)
-        test_metrics = self.agent.test_episode(test_steps=test_steps, reset=reset)
+        test_steps = test_steps or self.test_steps
+        test_metrics = self.agent.test_episode(test_steps=test_steps,
+                                               reset=reset)
         return pd.DataFrame(test_metrics)
 
     def train(self, nsteps=None):
@@ -192,6 +195,8 @@ class Trainer:
             test_metrics.append((i, self.agent.test_episode()))
             self.agent.save_state()
             self.save_logs(train_metrics, test_metrics)
+            self.logger.info("saving buffer")
+            self.agent.save_buffer()
             train_metrics, test_metrics = self.load_logs()
             progress_bar.close()
             return train_metrics, test_metrics

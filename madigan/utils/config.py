@@ -140,7 +140,7 @@ def make_config(
         test_steps: int = 1024,  # number of testing steps to run each 'episode' for
 
         #######################################################################
-        # AGENT + MODEL #######################################################
+        # AGENT ###############################################################
         agent_type="DQN",  # String of class name
         double_dqn=False,  # Agent/Model spec
         dueling=False,  # Agent/Model spec
@@ -164,6 +164,7 @@ def make_config(
         # MODEL ###############################################################
         model_class="ConvNet",  # String of model class
         d_model=256,  # dimensionality of model
+        d_model_project=256,  # dimensionality of model
         n_layers=4,  # number of layer units
         n_feats=1,  # 1 corresponds to an input of just price
         lr=1e-3,  # learning rate
@@ -176,10 +177,10 @@ def make_config(
 ):
     assert experiment_id != "", "must specify experiment id"
     assert assets is not None, "Must specify list of asset names/codes"
-    experiment_path = basepath + '/' + experiment_id
     model_config = {
         'model_class': model_class,
         'd_model': d_model,
+        'd_model_project': d_model_project,
         'n_layers': n_layers,
         'n_feats': n_feats,
         'action_atoms': discrete_action_atoms,
@@ -236,7 +237,6 @@ def make_config(
     }
     config = dict(
         basepath=basepath,
-        experiment_path=experiment_path,
         experiment_id=experiment_id,
         parent_id=parent_id,
         # overwrite_exp=overwrite_exp,

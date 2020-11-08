@@ -125,9 +125,8 @@ class RollerDiscrete:
         self.feature_buffer = deque(maxlen=self.k)
         self.portfolio_buffer = deque(maxlen=self.k)
         self.time_buffer = deque(maxlen=self.k)
-        n_feats = 8 + 1  # 8 from roller, 1 for close price
-        self.feature_output_shape = (window_len,
-                                     n_feats * len(self.timeframes))
+        n_feats = 8*len(self.timeframes) + 1  # 8 from roller, 1 for close price
+        self.feature_output_shape = (window_len, n_feats)
 
     @classmethod
     def from_config(cls, config):
@@ -151,7 +150,7 @@ class RollerDiscrete:
 
     def stream(self, data):
         if isinstance(data, tuple):
-            self.stream_state(data[0])  # assume srdi
+            self.stream_srdi(data)  # assume srdi
         else:  # assume data is State
             self.stream_state(data)
 
@@ -163,7 +162,6 @@ class RollerDiscrete:
         feats[:, :4, :] /= current_price
         prices /= current_price
         feats = feats.reshape(current_len, -1)
-        # import ipdb; ipdb.set_trace()
         feats = np.concatenate([prices, feats], axis=1)
         return State(feats,
                      np.array(self.portfolio_buffer),
@@ -173,3 +171,9 @@ class RollerDiscrete:
         while len(self) < self.k:
             _state, reward, done, info = env.step()
             self.stream_state(_state)
+
+    def reset_state(self):
+        self.price_buffer.clear()
+        self.portfolio_buffer.clear()
+        self.time_buffer.clear()
+        self.feature_buffer.clear()

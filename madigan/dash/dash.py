@@ -10,6 +10,7 @@ from PyQt5.QtGui import QPen, QColor
 from PyQt5.QtWidgets import QApplication, QLabel, QWidget, QPushButton, QVBoxLayout
 import pyqtgraph as pg
 from .dash_ui import Ui_MainWindow
+from .trainer_thread import TrainerWorker
 from .utils import make_dark_palette
 from .plots import make_train_plots, make_test_episode_plots, make_test_history_plots
 from ..run.test import test
@@ -56,7 +57,6 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                 self.ServerInfo.setItem(row, col, item)
         self.update_server_status()
 
-
         # CONTROL SIGNALS/SLOTS #########################################
         # CONFIG
         self.config_path = Path('/media/hemu/Data/Markets/farm/TestDash')/'test.json'
@@ -91,6 +91,9 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.test_history_plots = make_test_history_plots(self.exp_config.agent_type)
         self.PlotsWidgetTest.setLayout(self.test_history_plots)
 
+        self.worker = None
+        self.threadpool = QtCore.QThreadPool()
+
 
     def update_server_status(self):
         for row in range(self.ServerInfo.rowCount()):
@@ -102,23 +105,24 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                 for col in range(self.ServerInfo.columnCount()):
                     self.ServerInfo.item(row, col).setBackground(QColor('#999999'))
 
+    def make_worker(self, action: str):
+        if action not in ["test", "train"]:
+            raise ValueError("aciton must be either 'test' or 'train")
+        worker = TrainerWorker(self.exp_config, action)
+        worker.signals.test_metrics.connect(self.test_episode_plots.set_data)
+        worker.signals.train_metrics.connect(self.train_plots.set_data)
+        return worker
+
     def run_job(self, action):
         assert action in ('train', 'test')
         try:
             if self.compSource == "Local":
-                if self.trainer is None:
-                    print('Initializing environment and agent')
-                    self.trainer = Trainer.from_config(self.exp_config)
-                if action == 'test':
-                    eps=self.exp_config.agent_config.greedy_eps_testing
-                    test_metric = test(self.trainer.agent, self.trainer.env,
-                                       nsteps=1000, eps=eps)
-                    self.update_full_episode_data(test_metric)
-                    self.update_episode_data(test_metric)
-                elif action == 'train':
-                    train_metrics, test_metrics = self.trainer.train()
-                    self.update_training_data(train_metrics)
-                    self.update_test_data(test_metrics)
+                if action == "test":
+                    worker = self.make_worker("test")
+                    self.threadpool.start(worker)
+                elif action == "train":
+                    worker = self.make_worker("train")
+                    self.threadpool.start(worker)
             elif self.compSource == "Server":
                 # if action == 'test':
                     # self.socket.send_pyobj({'signal': 'job', 'action': 'test',
@@ -158,8 +162,8 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.config_path = Path(self.get_file(load=True))
         self.exp_config = Config(load_config(self.config_path))
         self.ParamsEdit.setText(str(yaml.safe_dump(self.exp_config.to_dict())))
-        self.set_datapath(Path(self.exp_config.experiment_path)/'logs')
-        print()
+        path = Path(self.exp_config.basepath)/self.exp_config.experiment_id/'logs'
+        self.set_datapath(path)
         self.FilenameLabel.setText('/'.join(self.config_path.parts[-2:]))
 
     def save_config(self):

@@ -179,7 +179,6 @@ namespace madigan{
             vector<double> start;
             for(auto& item: genParams){
               string key = string(pybind11::str(item.first));
-              std::cout << key << "\n";
               if(key == "trend_prob"){
                 trendProb = item.second.cast<vector<double>>();
               }

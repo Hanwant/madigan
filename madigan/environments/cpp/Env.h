@@ -159,13 +159,13 @@ namespace madigan{
     double prevEq = defaultPortfolio_->equity();
     PriceVector newPrices = dataSource_->getData();
     double currentEq = defaultPortfolio_->equity();
-    double reward = log(std::max(currentEq / prevEq, 0.3));
+    double reward = log(std::max(currentEq / prevEq, 0.3)); // limit to log(0.3) = -1.2
     RiskInfo risk = broker_->checkRisk();
     bool done = (risk == RiskInfo::green)? false: true;
     if (defaultPortfolio_->equity() < 0.1*initCash_){
       done = true;
     }
-    return std::make_tuple(State{newPrices, broker_->defaultAccount_->ledgerNormed(),
+    return std::make_tuple(State{newPrices, defaultPortfolio_->ledgerNormed(),
                                  currentTime()}, reward, done, EnvInfo<double>());
   }
 
@@ -176,7 +176,7 @@ namespace madigan{
     PriceVector newPrices = dataSource_->getData();
 
     double currentEq = broker_->defaultPortfolio_->equity();
-    double reward = log(std::max(currentEq / prevEq, 0.3));
+    double reward = log(std::max(currentEq / prevEq, 0.3)); // limit to log(0.3) = -1.2
 
     BrokerResponseMulti response = broker_->handleTransaction(units);
     bool done{false};

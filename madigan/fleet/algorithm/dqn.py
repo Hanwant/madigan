@@ -60,8 +60,10 @@ class DQN(OffPolicyQ):
         self.tau_soft_update = tau_soft_update
         self.model_class = get_model_class(type(self).__name__, model_class)
         output_shape = (action_space.n, action_space.action_atoms)
-        self.model_b = self.model_class(input_shape, output_shape, **model_config)
-        self.model_t = self.model_class(input_shape, output_shape, **model_config)
+        self.model_b = self.model_class(input_shape, output_shape,
+                                        **model_config)
+        self.model_t = self.model_class(input_shape, output_shape,
+                                        **model_config)
         self.model_t.load_state_dict(self.model_b.state_dict())
         self.opt = torch.optim.Adam(self.model_b.parameters(), lr=lr)
 
@@ -74,7 +76,8 @@ class DQN(OffPolicyQ):
         USE_SCHED=False
         if USE_SCHED:
             self.lr_sched = torch.optim.lr_scheduler.CyclicLR(self.opt, base_lr=lr,
-                                                              max_lr=1e-2, step_size_up=2000)
+                                                              max_lr=1e-2,
+                                                              step_size_up=2000)
         else:
             # Dummy class for now
             class Sched:
@@ -91,10 +94,11 @@ class DQN(OffPolicyQ):
                                           config.n_assets)
         aconf = config.agent_config
         unit_size = aconf.unit_size_proportion_avM
+        savepath = Path(config.basepath)/config.experiment_id/'models'
         return cls(env, preprocessor, input_shape, action_space, aconf.discount,
                    aconf.nstep_return, aconf.replay_size, aconf.replay_min_size,
                    aconf.eps, aconf.eps_decay, aconf.eps_min, aconf.batch_size,
-                   config.test_steps, unit_size, Path(config.experiment_path)/'models',
+                   config.test_steps, unit_size, savepath,
                    aconf.double_dqn, aconf.tau_soft_update,
                    config.model_config.model_class, config.model_config,
                    config.optim_config.lr
@@ -266,6 +270,7 @@ class DQN(OffPolicyQ):
                 os.remove(model)
         # else:
         #     raise NotImplementedError("Attempting to delete models when config.overwrite_exp is not set to true")
+
     def update_target(self):
         """
         Soft Update
@@ -282,5 +287,5 @@ class DQN(OffPolicyQ):
             if portfolio[i] == 0.:
                 pass
             elif np.sign(portfolio[i]) == np.sign(action):
-                    transactions[i] = 0.
+                transactions[i] = 0.
         return transactions

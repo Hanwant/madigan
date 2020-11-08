@@ -424,22 +424,23 @@ namespace madigan{
     for (int i=0; i < nAssets_; i++){
       double& y = currentData_[i];
       if(trending[i]){
-        y += dY[i] * currentDirection[i];
+        y += y * dY[i] * currentDirection[i];
         currentTrendLen[i] -= 1;
         if (currentTrendLen[i] == 0){
           trending[i] = false;
-        }
-        if (y <= 0.01){
-          currentDirection[i] = 1;
         }
       }
       else{
         double rand = uniformDist(generator);
         if (rand < trendProb[i]){
           trending[i] = true;
-          currentDirection[i] = (rand < 0.5)? -1: 1;
+          currentDirection[i] = (uniformDist(generator) < 0.5)? -1: 1;
+          // std::cout << currentDirection[i] << "\n";
           currentTrendLen[i] = trendLenPicker[i](generator);
         }
+      }
+      if (y <= 0.01){
+        currentDirection[i] = 1;
       }
       y += noiseDist[i](generator);
       y = std::max(0.01, y);
