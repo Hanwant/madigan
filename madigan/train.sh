@@ -18,12 +18,14 @@ BASEPATH="$config_basepath"
 
 EXP="$config_experiment_id"
 NSTEPS="$config_train_steps"
-#NSTEPS=400000
+NSTEPS=1000000
 CONFIGPATH="$BASEPATH"/"$EXP"
 
 # save to local config folder
+echo Making dir ../experiments/"$EXP" "(if doesn\'t exist and copying config.yaml over)";
 mkdir -p ../experiments/"$EXP" && cp -u -p ./config.yaml ../experiments/"$EXP"/config.yaml
 # save to experiment folder - where data for logs/models etc are
+echo Making dir "$CONFIGPATH (if doesn\'t exist)";
 mkdir -p "$CONFIGPATH" && cp -u -p ./config.yaml "$CONFIGPATH"/config.yaml
 
 

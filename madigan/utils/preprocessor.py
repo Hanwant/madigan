@@ -20,8 +20,7 @@ def make_preprocessor(config):
         raise NotImplementedError(
             f"{config['preprocessor_type']} is not implemented ")
 
-
-class Preprocessor(ABC):
+class PreProcessor(ABC):
     def __init__(self):
         pass
 
@@ -42,7 +41,7 @@ class Preprocessor(ABC):
         pass
 
 
-class StackerDiscrete(Preprocessor):
+class StackerDiscrete(PreProcessor):
     def __init__(self, window_len):
         self.k = window_len
         self.min_tf = self.k
@@ -110,7 +109,7 @@ class StackerContinuous(StackerDiscrete):
                 self.time_buffer.popleft()
 
 
-class RollerDiscrete:
+class RollerDiscrete(PreProcessor):
     """
     Wraps Roller to accumulate rolling window features
     using discrete windows for the final aggregation of features

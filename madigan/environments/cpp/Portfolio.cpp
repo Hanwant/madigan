@@ -137,7 +137,14 @@ namespace madigan{
   }
 
   Ledger Portfolio::ledgerNormed() const{
-    return (positionValues().array()/(positionValues().cwiseAbs().sum()+balance())).matrix();
+    return (positionValues().array() / equity()).matrix();
+  }
+
+  Ledger Portfolio::ledgerNormedFull() const{
+    Ledger led = Ledger(nAssets()+1);
+    led << (cash_-borrowedMargin())/equity(),
+      (positionValues().array() / equity()).matrix();
+    return led;
   }
 
   double Portfolio::pnl() const{
@@ -166,7 +173,7 @@ namespace madigan{
 
   double Portfolio::equity() const{
     return cash_ + assetValue() - borrowedMargin();
-  };
+  }
 
   const Ledger& Portfolio::borrowedMarginLedger() const{
     return borrowedMargin_;

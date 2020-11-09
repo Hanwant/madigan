@@ -65,7 +65,10 @@ namespace madigan{
     std::size_t currentTime() const {return dataSource_->currentTime(); }
     const PriceVectorMap& currentPrices() const { return currentPrices_;}
     const LedgerMap& ledger() const { return defaultLedger_;}
-    Ledger ledgerNormed() const { return defaultPortfolio_->ledgerNormed();}
+    Ledger ledgerNormed() const
+    { return defaultPortfolio_->ledgerNormed();}
+    Ledger ledgerNormedFull() const
+    { return defaultPortfolio_->ledgerNormedFull();}
     const Ledger&  meanEntryPrices() const { return defaultPortfolio_->meanEntryPrices(); }
 
     string dataSourceType() const { return dataSourceType_; }

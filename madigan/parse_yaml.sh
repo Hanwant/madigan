@@ -1,4 +1,6 @@
 #!/bin/sh
+# From https://gist.github.com/pkuczynski/8665367
+
 parse_yaml() {
    local prefix=$2
    local s='[[:space:]]*' w='[a-zA-Z0-9_]*' fs=$(echo @|tr @ '\034')

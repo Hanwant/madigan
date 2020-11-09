@@ -140,9 +140,10 @@ class Trainer:
         steps_since_flush = 0
 
         # fill replay buffer up to replay_min_size before training
-        self.logger.info('filling replay buffer to min size before training')
-        burn_in_train_loop = iter(self.agent.step(self.agent.replay_min_size))
-        train_metrics.extend(next(burn_in_train_loop))
+        self.logger.info('initializing buffer')
+        # burn_in_train_loop = iter(self.agent.step(self.agent.replay_min_size))
+        # train_metrics.extend(next(burn_in_train_loop))
+        self.agent.initialize_buffer()
         test_metrics.append((i, self.agent.test_episode()))
 
         self.logger.info("Starting Training")

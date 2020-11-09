@@ -11,6 +11,7 @@ from ...environments import make_env
 from ..net.conv_net import ConvNet
 from ..net.mlp_net import MLPNet
 from ...utils import default_device, DiscreteActionSpace, DiscreteRangeSpace, ternarize_array
+from ...utils import ActionSpace
 from ...utils.preprocessor import make_preprocessor
 from ...utils.config import Config
 from ...utils.data import State
@@ -32,7 +33,7 @@ class DQN(OffPolicyQ):
                  env,
                  preprocessor,
                  input_shape: tuple,
-                 action_space: tuple,
+                 action_space: ActionSpace,
                  discount: float,
                  nstep_return: int,
                  replay_size: int,

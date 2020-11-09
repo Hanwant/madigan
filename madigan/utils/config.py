@@ -163,6 +163,8 @@ def make_config(
 
         # MODEL ###############################################################
         model_class="ConvNet",  # String of model class
+        critic_model_class="ConvCriticQ",  # String of model class
+        actor_model_class="ConvPolicyDeterministic",  # String of model class
         d_model=256,  # dimensionality of model
         d_model_project=256,  # dimensionality of model
         n_layers=4,  # number of layer units
@@ -179,6 +181,8 @@ def make_config(
     assert assets is not None, "Must specify list of asset names/codes"
     model_config = {
         'model_class': model_class,
+        'critic_model_class': critic_model_class,
+        'actor_model_class': actor_model_class,
         'd_model': d_model,
         'd_model_project': d_model_project,
         'n_layers': n_layers,

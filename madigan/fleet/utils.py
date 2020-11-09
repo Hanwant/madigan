@@ -1,4 +1,4 @@
-from .net.conv_net import ConvNet
+from .net.conv_net import ConvNet, ConvCriticQ, ConvPolicyDeterministic
 from .net.conv_net_iqn import ConvNetIQN
 
 def get_model_class(agent_type, model_type):
@@ -13,12 +13,21 @@ def get_model_class(agent_type, model_type):
         model_type = ConvNet
     returns ConvNetIQN
     """
+    model_na = NotImplementedError(f"{model_type} not Implemented" +\
+                                   f"for agent {agent_type}")
     if agent_type in ("DQN", ):
         if model_type in ("ConvNet", ):
             return ConvNet
-        raise NotImplementedError(f"model of type {model_type} not Implemented")
+        raise model_na
     if agent_type in ("IQN", ):
         if model_type in ("ConvNet", "ConvNetIQN"):
             return ConvNetIQN
-        raise NotImplementedError(f"model of type {model_type} not Implemented")
+        raise model_na
+    if agent_type in ("DDPG", ):
+        if model_type == "ConvCriticQ":
+            return ConvCriticQ
+        if model_type == "ConvPolicyDeterministic":
+            return ConvPolicyDeterministic
+        raise model_na
+
     raise NotImplementedError(f"models for agent {agent_type} not Implemented")

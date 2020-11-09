@@ -155,21 +155,24 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
     def update_config(self):
         # self.exp_config = Config(ast.literal_eval(self.ParamsEdit.toPlainText()))
         self.exp_config = Config(yaml.safe_load(self.ParamsEdit.toPlainText()))
-        print('saved config')
         # print(self.exp_config)
 
-    def load_config(self):
-        self.config_path = Path(self.get_file(load=True))
-        self.exp_config = Config(load_config(self.config_path))
-        self.ParamsEdit.setText(str(yaml.safe_dump(self.exp_config.to_dict())))
-        path = Path(self.exp_config.basepath)/self.exp_config.experiment_id/'logs'
-        self.set_datapath(path)
-        self.FilenameLabel.setText('/'.join(self.config_path.parts[-2:]))
+    def load_config(self, config_path=None):
+        config_path = config_path or Path(self.get_file(load=True))
+        if config_path is not None or config_path != "":
+            self.config_path = config_path
+            self.exp_config = Config(load_config(self.config_path))
+            self.ParamsEdit.setText(str(yaml.safe_dump(self.exp_config.to_dict())))
+            path = Path(self.exp_config.basepath)/self.exp_config.experiment_id/'logs'
+            self.set_datapath(path)
+            self.FilenameLabel.setText('/'.join(self.config_path.parts[-2:]))
 
     def save_config(self):
-        self.config_path = self.get_file(save=True)
-        save_config(self.exp_config, self.config_path, write_mode='w')
-        self.load_config()
+        config_path = self.get_file(save=True)
+        if config_path != "":
+            self.config_path = config_path
+            save_config(self.exp_config, self.config_path, write_mode='w')
+            self.load_config()
 
     def get_file(self, load=False, save=False):
         assert load != save, "specify either load=True or save=True"

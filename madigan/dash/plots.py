@@ -76,9 +76,8 @@ class TrainPlots(QGridLayout):
             data = {k: [] for k in self.lines.keys()}
         self.lines['loss'].setData(y=data['loss'], pen=self.colours['loss'])
         rewards = data['running_reward']
-        rewards_mean = pd.Series(data['running_reward']).rolling(
-            self.reward_mean_window).mean().to_numpy()
-        rewards_mean = np.nan_to_num(rewards_mean)
+        rewards_mean = pd.Series(data['running_reward']).ewm(20000).mean()
+        rewards_mean = np.nan_to_num(rewards_mean.values)
         self.lines['running_reward'].setData(y=rewards,
                                              pen=self.colours['reward'])
         self.lines['running_reward_mean'].setData(

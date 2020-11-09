@@ -23,7 +23,7 @@ def test_assets_init():
     asset2 = Asset("GBPUSD")
     assets = Assets(['EURUSD', 'GBPUSD'])
     assets_ = Assets([asset1, asset2])
-    assert all((ass1.code==ass2.code for ass1, ass2 in zip(assets, assets_)))
+    assert all((ass1.code == ass2.code for ass1, ass2 in zip(assets, assets_)))
 
 def test_dataSource_init():
     synth1 = Synth()
@@ -126,6 +126,31 @@ def test_port_accounting_logic():
     compare_port_transaction_ref(-1000., 1_000_000, 1.) # sell on cash
     compare_port_transaction_ref(1000., 1_000_000, .1) # buy on margin (0.1)
     compare_port_transaction_ref(-1000., 1_000_000, .1)# sell on margin (0.1)
+
+def test_port_ledger():
+    synth = Synth()
+    synth.getData()
+    port1 = Portfolio("port_1", assets=assets, initCash=1_000_000)
+    port1.setDataSource(synth)
+    port1.setRequiredMargin(1.)
+    current_prices = synth.currentPrices()
+    for assetIdx, units in zip([0, 1, 2, 3], [1000, 2000, -4000, 1000]):
+        port1.handleTransaction(assetIdx, current_prices[assetIdx], units, 0.)
+    assert abs((1-port1.ledgerNormed.sum())*port1.equity \
+               - (port1.cash - port1.borrowedMargin)) < 1e-8
+    # Since port1.borrowedMargin should be 0. given full requiredMargin of 1.
+    assert abs((1-port1.ledgerNormed.sum())*port1.equity - port1.cash) < 1e-8
+    assert abs(port1.ledgerNormedFull.sum() - 1.) < 1e-8
+
+    port2 = Portfolio("port_2", assets=assets, initCash=1_000_000)
+    port2.setDataSource(synth)
+    port2.setRequiredMargin(.1)
+    current_prices = synth.currentPrices()
+    for assetIdx, units in zip([0, 1, 2, 3], [1000, 2000, -4000, 1000]):
+        port2.handleTransaction(assetIdx, current_prices[assetIdx], units, 0.)
+    assert abs((1-port2.ledgerNormed.sum())*port2.equity \
+               - (port2.cash-port2.borrowedMargin)) < 1e-8
+    assert abs(port1.ledgerNormedFull.sum() - 1.) < 1e-8
 
 def test_account_init():
     assets = Assets(['EURUSD', 'GBPUSD', 'BTCUSD', 'ETHBTC'])
@@ -520,6 +545,7 @@ if __name__ == "__main__":
         test_port_init,
         test_port_data_ref,
         test_port_accounting_logic,
+        test_port_ledger,
 
         test_account_init,
         test_acc_data_ref,

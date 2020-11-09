@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 from typing import Union, Iterable, List
 from abc import ABC, abstractmethod
+from functools import partial
 
 import numba
 import numpy as np
@@ -56,9 +57,9 @@ def default_device():
     return 'cuda' if torch.cuda.is_available() else 'cpu'
 
 
-####################################################################################
-################################      AGENT       ##################################
-####################################################################################
+###############################################################################
+################################      AGENT       #############################
+###############################################################################
 class ActionSpace(ABC):
 
     @abstractmethod
@@ -109,6 +110,25 @@ class DiscreteActionSpace(ActionSpace):
     @property
     def shape(self):
         return (self.n, )
+
+class ContinuousActionSpace(ActionSpace):
+    def __init__(self, low: float, high: float, num_assets, num_actions,
+                 transform=lambda x: x):
+        self.output_shape = (num_assets, num_actions)
+        self.low = low
+        self.high = high
+        self.dist = partial(np.random.uniform, low, high,
+                            size=self.output_shape)
+        self.transform = transform
+
+    def sample(self, shape=None):
+        if shape is not None:
+            return np.random.uniform(self.low, self.high, shape)
+        return self.transform(self.dist())
+
+    @property
+    def shape(self):
+        return self.output_shape
 
 @numba.vectorize([numba.float32(numba.float32), numba.float64(numba.float64)])
 def ternarize_array(val):

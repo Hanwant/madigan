@@ -127,7 +127,6 @@ class OffPolicyQ(Agent):
         self.eps_min = eps_min
         self.buffer = ReplayBuffer(replay_size, nstep_return, discount)
         self.bufferpath = self.savepath.parent/'replay.pkl'
-        self.load_buffer()
         self.replay_min_size = replay_min_size
         self.batch_size = batch_size
         self.test_steps = test_steps
@@ -160,6 +159,13 @@ class OffPolicyQ(Agent):
         self._preprocessor.reset_state()
         self._preprocessor.stream_state(state)
         self._preprocessor.initialize_history(self._env)
+
+    def initialize_buffer(self):
+        if self.bufferpath.is_file():
+            self.load_buffer()
+        if len(self.buffer) < self.replay_min_size:
+            steps = self.replay_min_size - len(self.buffer)
+            self.step(steps)
 
     def step(self, n, reset=True):
         """
@@ -258,7 +264,7 @@ class OffPolicyActorCritic(Agent):
     """
     def __init__(self, env, preprocessor, input_shape, action_space, discount,
                  nstep_return, replay_size, replay_min_size, batch_size,
-                 test_steps, unit_size, savepath):
+                 test_steps, savepath):
         super().__init__(env, preprocessor, input_shape, action_space,
                          discount, nstep_return, savepath)
         # self.eps = eps
@@ -269,11 +275,7 @@ class OffPolicyActorCritic(Agent):
         self.replay_min_size = replay_min_size
         self.batch_size = batch_size
         self.test_steps = test_steps
-        self.unit_size = unit_size
-        self.action_atoms = self.action_space.action_atoms
-        self.n_assets = self.action_space.n
-        self.centered_actions = np.arange(
-            self.action_atoms) - self.action_atoms // 2
+        self.n_assets = self.action_space.shape[0]
         self.log_freq = 10000
 
     @abstractmethod

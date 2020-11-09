@@ -306,7 +306,7 @@ PYBIND11_MODULE(env, m){
                            "Margin available for entering positions (i.e for levaraged buy)")
     .def_property_readonly("assetValue", &Portfolio::assetValue,
                            "net value of current positions (long + short)")
-    .def_property_readonly("positionValues", &Portfolio::assetValue,
+    .def_property_readonly("positionValues", &Portfolio::positionValues,
                            "vector of position values for current holdings",
                            py::return_value_policy::move)
     .def_property_readonly("borrowedAssetValue", &Portfolio::borrowedAssetValue,
@@ -333,8 +333,13 @@ PYBIND11_MODULE(env, m){
                            py::return_value_policy::reference)
     .def_property_readonly("ledgerNormed", &Portfolio::ledgerNormed,
                            "returns current ledger "
-                           " normalized by position sizes and cash balance - I.e equity",
-                           py::return_value_policy::copy)
+                           " normalized by equity",
+                           py::return_value_policy::move)
+    .def_property_readonly("ledgerNormedFull", &Portfolio::ledgerNormedFull,
+                           "returns current ledger along with cash holdings"
+                           " (- borrowedMargin)"
+                           " normalized by total equity",
+                           py::return_value_policy::move)
     .def("setRequiredMargin", (void (Portfolio::*)(double)) &Portfolio::setRequiredMargin,
          "set required Margin level for port, takes proportion as input"
          " I.e 0.1 for 10% margin or 10x levarage",
@@ -707,6 +712,11 @@ PYBIND11_MODULE(env, m){
                            "returns current ledger for the default portfolio"
                            " normalized by position sizes and cash balance - I.e equity",
                            py::return_value_policy::copy)
+    .def_property_readonly("ledgerNormedFull", &Env::ledgerNormedFull,
+                           "returns current ledger along with cash holdings"
+                           " (- borrowedMargin)"
+                           " normalized by total equity",
+                           py::return_value_policy::move)
     .def_property_readonly("equity",  &Env::equity,
                            "returns net equity")
     .def_property_readonly("cash",  &Env::cash,
