@@ -133,6 +133,8 @@ namespace madigan {
         return BrokerResponseSingle(transactionPrice, units, transactionCost, risk,
                                     (port->checkRisk()==RiskInfo::margin_call)? true: false);
       }
+      return BrokerResponseSingle(0., 0., 0., risk,
+                                  (port->checkRisk()==RiskInfo::margin_call)? true: false);
     }
     return BrokerResponseSingle(0., 0., 0., RiskInfo::green,
                                 (port->checkRisk()==RiskInfo::margin_call)? true: false);
@@ -150,7 +152,7 @@ namespace madigan {
       transCosts[i] = brokerResp.transactionCost;
       riskInfo[i] = brokerResp.riskInfo;
     }
-    return BrokerResponseMulti(transPrices, units, transCosts, riskInfo,
+    return BrokerResponseMulti(transPrices, transUnits, transCosts, riskInfo,
                                (port->checkRisk()==RiskInfo::margin_call)? true: false);
   }
 

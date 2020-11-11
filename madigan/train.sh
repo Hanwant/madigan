@@ -18,7 +18,9 @@ BASEPATH="$config_basepath"
 
 EXP="$config_experiment_id"
 NSTEPS="$config_train_steps"
-NSTEPS=1000000
+if [ "$1" ]; then
+	NSTEPS="$1";
+fi
 CONFIGPATH="$BASEPATH"/"$EXP"
 
 # save to local config folder
@@ -28,6 +30,5 @@ mkdir -p ../experiments/"$EXP" && cp -u -p ./config.yaml ../experiments/"$EXP"/c
 echo Making dir "$CONFIGPATH (if doesn\'t exist)";
 mkdir -p "$CONFIGPATH" && cp -u -p ./config.yaml "$CONFIGPATH"/config.yaml
 
-
-
+echo attempting to train for "$NSTEPS" steps;
 python train.py "$CONFIGPATH"/config.yaml --nsteps "$NSTEPS"

@@ -2,6 +2,7 @@ import os
 import ast
 import json
 import yaml
+import pickle
 import logging
 from pathlib import Path
 import pandas as pd
@@ -11,14 +12,14 @@ from PyQt5.QtWidgets import QApplication, QLabel, QWidget, QPushButton, QVBoxLay
 import pyqtgraph as pg
 from .dash_ui import Ui_MainWindow
 from .trainer_thread import TrainerWorker
-from .utils import make_dark_palette
+from .utils import make_dark_palette, delete_layout
 from .plots import make_train_plots, make_test_episode_plots, make_test_history_plots
 from ..run.test import test
 from ..run.trainer import Trainer
 from ..utils.config import make_config, Config, load_config, save_config
 
 
-class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
+class MainWindow( Ui_MainWindow, QtWidgets.QMainWindow):
     def __init__(self):
         super().__init__()
         self.setupUi(self)
@@ -30,6 +31,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                                       assets=["ou1"])
         self.trainer = None
         self.compSource = "Local"
+        self.cache_filepath = Path(os.getcwd())/'.cache.dash'
 
         # SERVER COMMUINICATION ###############################################
         default_server = {'name': 'local',
@@ -59,8 +61,8 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         # CONTROL SIGNALS/SLOTS #########################################
         # CONFIG
-        self.config_path = Path('/media/hemu/Data/Markets/farm/TestDash')/'test.json'
-        self.FilenameLabel.setText('/'.join(self.config_path.parts[-1:]))
+        self.config_path = None
+        # self.FilenameLabel.setText('/'.join(self.config_path.parts[-1:]))
         self.LoadConfigButton.clicked.connect(self.load_config)
         self.SaveConfigButton.clicked.connect(self.save_config)
 
@@ -73,26 +75,34 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.TestCommand.clicked.connect(lambda: self.run_job('test'))
         self.TrainCommand.clicked.connect(lambda: self.run_job('train'))
 
-        # EXPERIMENT ##########################################################
-        # self.TrainLog.addItem('Train')
-        # self.TestLog.addItem('Test')
-
-        # PLOTS ########################################################
-        # 2 rows of 3 columns
-        # row 1: prices, equity, returns
-        # row 2: loss, G_t, Q_t
-        # Training #####################################################
-        self.train_plots = make_train_plots(self.exp_config.agent_type)
-        self.PlotsWidgetTrain.setLayout(self.train_plots)
-        #  Testing #####################################################
-        self.test_episode_plots = make_test_episode_plots(self.exp_config.agent_type)
-        self.PlotsWidgetTestEpisodes.setLayout(self.test_episode_plots)
-        #  Test History #####################################################
-        self.test_history_plots = make_test_history_plots(self.exp_config.agent_type)
-        self.PlotsWidgetTest.setLayout(self.test_history_plots)
+        self.plots = {'train': None, 'test_episodes': None,
+                      'test_history': None}  # custom plots
+        self.make_plots()
 
         self.worker = None
         self.threadpool = QtCore.QThreadPool()
+        self.load_user_cache()
+        self.centralwidget.destroyed.connect(self.save_user_cache)
+        if self.config_path is not None:
+            print('loading')
+            self.load_config(self.config_path)
+
+    def make_plots(self):
+        self.remove_plots()  # remove existing plots if they exist
+        self.plots['train'] = make_train_plots(self.exp_config.agent_type)
+        self.plots['test_episode'] = \
+            make_test_episode_plots(self.exp_config.agent_type)
+        self.plots['test_history'] = \
+            make_test_history_plots(self.exp_config.agent_type)
+        self.PlotsWidgetTrain.setLayout(self.plots['train'])
+        self.PlotsWidgetTestEpisodes.setLayout(self.plots['test_episode'])
+        self.PlotsWidgetTest.setLayout(self.plots['test_history'])
+
+    def remove_plots(self):
+        for plot in self.plots.values():
+            if plot is not None:
+                delete_layout(plot)
+                QtCore.QObjectCleanupHandler().add(plot)
 
 
     def update_server_status(self):
@@ -142,9 +152,9 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
     def set_datapath(self, path):
         self.datapath = path
-        self.train_plots.set_datapath(path)
-        self.test_episode_plots.set_datapath(path)
-        # self.test_history_plots.set_datapath(path)
+        for plot in self.plots.values():
+            if plot is not None:
+                plot.set_datapath(path)
 
     def compSourceToggle(self):
         if self.LocalRadio.isChecked():
@@ -159,13 +169,17 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
     def load_config(self, config_path=None):
         config_path = config_path or Path(self.get_file(load=True))
-        if config_path is not None or config_path != "":
+        if config_path is not None and config_path != "":
             self.config_path = config_path
+            old_agent_type = self.exp_config.agent_type
             self.exp_config = Config(load_config(self.config_path))
             self.ParamsEdit.setText(str(yaml.safe_dump(self.exp_config.to_dict())))
             path = Path(self.exp_config.basepath)/self.exp_config.experiment_id/'logs'
-            self.set_datapath(path)
+            if self.exp_config.agent_type != old_agent_type:
+                self.make_plots()
             self.FilenameLabel.setText('/'.join(self.config_path.parts[-2:]))
+            # set new datapath and let plots load new data
+            self.set_datapath(path)
 
     def save_config(self):
         config_path = self.get_file(save=True)
@@ -184,9 +198,24 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                                                       '/home/hemu/madigan/')[0]
         return fname
 
-    def __del__(self):
+    def save_user_cache(self):
+        settings = {'config_path': self.config_path}
+        with open(self.cache_filepath, 'wb') as f:
+            pickle.dump(settings, f)
+            print('saving user cache')
+
+    def load_user_cache(self):
+        if self.cache_filepath.is_file():
+            print('loading cache')
+            with open(self.cache_filepath, 'rb') as f:
+                settings = pickle.load(f)
+            self.config_path = settings['config_path']
+            print('setting config_path: ', self.config_path)
+
+    def closeEvent(self, event):
         """ Save local settings to pkl here """
-        super().__del__()
+        self.save_user_cache()
+        super(QtWidgets.QMainWindow, self).closeEvent(event)
 
 def run_dash():
 

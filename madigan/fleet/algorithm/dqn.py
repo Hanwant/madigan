@@ -65,13 +65,14 @@ class DQN(OffPolicyQ):
                                         **model_config)
         self.model_t = self.model_class(input_shape, output_shape,
                                         **model_config)
-        self.model_t.load_state_dict(self.model_b.state_dict())
         self.opt = torch.optim.Adam(self.model_b.parameters(), lr=lr)
 
         if not self.savepath.is_dir():
             self.savepath.mkdir(parents=True)
         if (self.savepath/'main.pth').is_file():
             self.load_state()
+        else:
+            self.model_t.load_state_dict(self.model_b.state_dict())
 
         # SCHEDULER NOT YET IN USE
         USE_SCHED=False
@@ -249,7 +250,8 @@ class DQN(OffPolicyQ):
     def save_state(self, branch=None):
         branch = branch or "main"
         # self.save_checkpoint("main")
-        state = {'state_dict': self.model_b.state_dict(),
+        state = {'state_dict_b': self.model_b.state_dict(),
+                 'state_dict_t': self.model_t.state_dict(),
                   'training_steps': self.training_steps,
                   'env_steps': self.env_steps, 'eps': self.eps}
         torch.save(state, self.savepath/f'{branch}.pth')
@@ -257,8 +259,8 @@ class DQN(OffPolicyQ):
     def load_state(self, branch=None):
         branch = branch or "main"
         state = torch.load(self.savepath/f'{branch}.pth')
-        self.model_b.load_state_dict(state['state_dict'])
-        self.model_t.load_state_dict(state['state_dict'])
+        self.model_b.load_state_dict(state['state_dict_b'])
+        self.model_t.load_state_dict(state['state_dict_t'])
         self.training_steps = state['training_steps']
         self.env_steps = state['env_steps']
         self.eps = state['eps']
@@ -276,7 +278,8 @@ class DQN(OffPolicyQ):
         """
         Soft Update
         """
-        for behaviour, target in zip(self.model_b.parameters(), self.model_t.parameters()):
+        for behaviour, target in zip(self.model_b.parameters(),
+                                     self.model_t.parameters()):
             target.data.copy_(self.tau_soft_update * behaviour.data + \
                               (1.-self.tau_soft_update)*target.data)
 

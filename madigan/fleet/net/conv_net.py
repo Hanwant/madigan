@@ -1,5 +1,6 @@
 from functools import reduce
 from collections.abc import Iterable
+import math
 
 import torch
 import torch.nn as nn
@@ -102,7 +103,7 @@ class ConvNet(nn.Module):
         #     conv_layers.append(self.act)
         # self.conv_layers = nn.Sequential(*conv_layers)
         self.conv_layers = make_conv1d_layers(
-            input_shape, channels, kernels, strides=strides, act=nn.GELU,
+            input_shape, kernels, channels, strides=strides, act=nn.GELU,
             preserve_window_len=preserve_window_len, causal_dim=0)
         conv_out_shape = calc_conv_out_shape(window_len, self.conv_layers)
         self.price_project = nn.Linear(conv_out_shape[0]*channels[-1], d_model)
@@ -139,12 +140,12 @@ class ConvNet(nn.Module):
         return qvals
 
 
-class ConvCriticQ:
+class ConvCriticQ(nn.Module):
     """
     For use as critic in Actor Critic methods, takes both state and action as input
     """
-    def __init__(self, input_shape: tuple, output_shape: tuple, d_model=512,
-                 channels=[32, 32], kernels=[5, 5], strides=[1, 1],
+    def __init__(self, input_shape: tuple, n_assets: int, n_actions: int = 1,
+                 d_model=512, channels=[32, 32], kernels=[5, 5], strides=[1, 1],
                  dueling=True, preserve_window_len: bool = False,
                  **extra):
         super().__init__()
@@ -153,12 +154,12 @@ class ConvCriticQ:
             "window_length should be at least as long as sum of kernels"
 
         self.input_shape = input_shape
-        self.n_assets = output_shape[0]
-        self.action_atoms = output_shape[1]
+        self.n_assets = n_assets
+        self.n_actions = n_actions
         self.d_model = d_model
         self.act = nn.GELU()
         self.conv_layers = make_conv1d_layers(
-            input_shape, channels, kernels, strides=strides, act=nn.GELU,
+            input_shape, kernels, channels, strides=strides, act=nn.GELU,
             preserve_window_len=preserve_window_len, causal_dim=0)
         conv_out_shape = calc_conv_out_shape(window_len, self.conv_layers)
         # self.price_project = nn.Linear(conv_out_shape[0]*channels[-1], d_model)
@@ -166,10 +167,19 @@ class ConvCriticQ:
         # self.action_project = nn.Linear(self.n_assets, d_model)
         project_in = conv_out_shape[0]*channels[-1] + 2 * self.n_assets
         self.projection = nn.Linear(project_in, d_model)
-        if dueling:
-            self.output_head = DuelingHead(d_model, output_shape)
-        else:
-            self.output_head = NormalHead(d_model, output_shape)
+        self.output_head = nn.Linear(d_model, 1)
+        self.apply(self.initialize_weights)
+
+    def initialize_weights(self, m):
+        if isinstance(m, nn.Linear):
+            nn.init.uniform_(m.weight, -3e-3, 3e-3)
+        elif isinstance(m, nn.Conv1d):
+            fan_in, _ = nn.init._calculate_fan_in_and_fan_out(
+                m.weight)
+            scale = 1/math.sqrt(fan_in)
+            nn.init.uniform_(m.weight, -scale, scale)
+            if m.bias is not None:
+                nn.init.constant_(m.bias, 0)
 
     def get_state_emb(self, state: State, action: torch.Tensor):
         """
@@ -182,6 +192,7 @@ class ConvCriticQ:
         # price_emb = self.price_project(price_emb)
         # port_emb = self.port_project(port)
         # action_emb = self.action_project(action)
+        # import ipdb; ipdb.set_trace()
         state_emb = torch.cat([price_emb, port, action], dim=-1)
         state_emb = self.projection(state_emb)
         out = self.act(state_emb)
@@ -199,12 +210,12 @@ class ConvCriticQ:
         qvals = self.output_head(state_emb)  # (bs, n_assets, action_atoms)
         return qvals
 
-class ConvPolicyDeterministic:
+class ConvPolicyDeterministic(nn.Module):
     """
     For use as actor in Actor Critic methods, takes both state and action as input
     """
-    def __init__(self, input_shape: tuple, output_shape: tuple, d_model=512,
-                 channels=[32, 32], kernels=[5, 5], strides=[1, 1],
+    def __init__(self, input_shape: tuple, n_assets: int, n_actions: int = 1,
+                 d_model=512, channels=[32, 32], kernels=[5, 5], strides=[1, 1],
                  dueling=True, preserve_window_len: bool = False,
                  **extra):
         super().__init__()
@@ -213,19 +224,31 @@ class ConvPolicyDeterministic:
             "window_length should be at least as long as sum of kernels"
 
         self.input_shape = input_shape
-        self.n_assets = output_shape[0]
-        self.n_actions = output_shape[1]
+        self.n_assets = n_assets
+        self.n_actions = n_actions
         assert self.n_actions == 1
         self.d_model = d_model
         self.act_fn = nn.GELU
         self.act = self.act_fn()
         self.conv_layers = make_conv1d_layers(
-            input_shape, channels, kernels, strides=strides, act=self.act_fn,
+            input_shape, kernels, channels, strides=strides, act=self.act_fn,
             preserve_window_len=preserve_window_len, causal_dim=0)
         conv_out_shape = calc_conv_out_shape(window_len, self.conv_layers)
-        project_in = conv_out_shape[0]*channels[-1] + 2 * self.n_assets
+        project_in = conv_out_shape[0]*channels[-1] + self.n_assets
         self.projection = nn.Linear(project_in, d_model)
         self.output_head = nn.Linear(d_model, self.n_assets*self.n_actions)
+        self.apply(self.initialize_weights)
+
+    def initialize_weights(self, m):
+        if isinstance(m, nn.Linear):
+            nn.init.uniform_(m.weight, -3e-4, 3e-4)
+        elif isinstance(m, nn.Conv1d):
+            fan_in, _ = nn.init._calculate_fan_in_and_fan_out(
+                m.weight)
+            scale = 1/math.sqrt(fan_in)
+            nn.init.uniform_(m.weight, -scale, scale)
+            if m.bias is not None:
+                nn.init.constant_(m.bias, 0)
 
     def get_state_emb(self, state: State):
         """
@@ -238,6 +261,7 @@ class ConvPolicyDeterministic:
         # price_emb = self.price_project(price_emb)
         # port_emb = self.port_project(port)
         state_emb = torch.cat([price_emb, port], dim=-1)
+        # import ipdb; ipdb.set_trace()
         state_emb = self.projection(state_emb)
         out = self.act(state_emb)
         return out
@@ -250,5 +274,6 @@ class ConvPolicyDeterministic:
         assert (None not in (state, )) or state_emb is not None
         if state_emb is None:
             state_emb = self.get_state_emb(state)  # (bs, d_model)
-        actions = self.output_head(state_emb)  # (bs, n_assets, action_atoms)
-        return actions.view(actions.shape[0], self.n_assets, self.n_actions)
+        actions = self.output_head(state_emb).view(
+            state_emb.shape[0], self.n_assets, self.n_actions)
+        return torch.tanh(actions)

@@ -1,7 +1,7 @@
 agent_config:
   action_atoms: 3
   batch_size: 34
-  discount: 0.999
+  discount: 0.99
   discrete_action_atoms: 3
   double_dqn: true
   dueling: true
@@ -9,46 +9,56 @@ agent_config:
   eps: 1.0
   eps_decay: 0.999999
   eps_min: 0.1
+  expl_noise_sd: 0.01
   greedy_eps_testing: 0.0
   iqn: true
   k_huber: 1
   nTau1: 32
   nTau2: 8
-  nstep_return: 5
+  nstep_return: 3
   nsteps: 1000000
   replay_min_size: 50000
   replay_size: 100000
   reward_clip: &id001 !!python/tuple
   - -1.0
   - 1.0
-  target_update_freq: 32000
   tau_embed_size: 64
   tau_soft_update: 0.0001
   train_freq: 4
   type: DQN
   unit_size_proportion_avM: 0.1
-agent_type: IQN
+agent_type: DDPG
 assets:
 - sine1
 basepath: /media/hemu/Data/madigan/experiments/
 data_source_config:
-  trend_prob:
-  - .01
-  min_period:
-  - 50
-  max_period:
-  - 150
-  noise:
-  - .001
-  dY:
-  - 0.001
-  start:
-  - 5.0
-data_source_type: SimpleTrend
+  amp:
+  - 0.5
+  - 0.2
+  - 0.4
+  - 1.2
+  dX: 0.01
+  freq:
+  - 2.2
+  - 4.1
+  - 1.0
+  - 3.0
+  mu:
+  - 0.6
+  - 0.3
+  - 2.0
+  - 4.2
+  noise: 0.0
+  phase:
+  - 0.0
+  - 1.0
+  - 4.0
+  - 0.0
+data_source_type: SineAdder
 discrete_action_atoms: 3
 discrete_actions: true
 env_type: Synth
-experiment_id: IQN_Trend_trans_.02_unit_.1_smaller_trends
+experiment_id: DDPG_SineA_penalty_0.05_trans_0.02
 init_cash: 1000000
 log_freq: 10000
 lot_unit_value: 10000
@@ -64,10 +74,10 @@ model_config:
   lot_unit_value: 10000
   min_tf: 64
   model_class: ConvNet
+  critic_model_class: ConvCriticQ
+  actor_model_class: ConvPolicyDeterministic
   nTau1: 32
   nTau2: 8
-  n_assets: 1
-  n_feats: 1
   n_layers: 4
   tau_embed_size: 64
 model_save_freq: 64000
@@ -85,18 +95,18 @@ optim_config:
   weight_decay: 0
 parent_id: ''
 preprocessor_config:
-  preprocessor_type: RollerDiscrete
+  preprocessor_type: WindowedStacker
   window_length: 64
   timeframes:
   - 64
   - 256
-preprocessor_type: RollerDiscrete
+preprocessor_type: WindowedStacker
 required_margin: 1.0
 reward_clip: *id001
 slippage_abs: 0.0
 slippage_rel: 0.0
 test_freq: 10000
 test_steps: 4096
-train_steps: 500000
+train_steps: 100000
 transaction_cost_abs: 0.0
 transaction_cost_rel: 0.02

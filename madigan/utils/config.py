@@ -154,6 +154,7 @@ def make_config(
         expl_eps=1.,  # Initial eps if eps-greedy  is used for exploration
         expl_eps_min=0.1,
         expl_eps_decay=1e-6,
+        expl_noise_sd=0.1,
         batch_size=32,
         greedy_eps_testing=0.,
         discrete_actions=True,  # Agent/Model spec
@@ -186,10 +187,7 @@ def make_config(
         'd_model': d_model,
         'd_model_project': d_model_project,
         'n_layers': n_layers,
-        'n_feats': n_feats,
         'action_atoms': discrete_action_atoms,
-        'n_assets': len(assets),
-        # 'min_tf': window_length,
         'dueling': dueling,
         'iqn': iqn,
         'nTau': nTau1,
@@ -236,6 +234,7 @@ def make_config(
         'eps': expl_eps,
         'eps_min': expl_eps_min,
         'eps_decay': expl_eps_decay,
+        'expl_noise_sd': expl_noise_sd,
         'reward_clip': reward_clip,
         'unit_size_proportion_avM': unit_size_proportion_avM
     }

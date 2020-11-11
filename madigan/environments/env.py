@@ -2,24 +2,12 @@ import itertools as it
 import numpy as np
 
 from ..utils import DiscreteActionSpace
-from .cpp import Env
+from .cpp import Env as EnvC
 
+class Env(EnvC):
+    def step(self, *args, **kw):
+        super().__init__(*args, **kw)
 
-# class DiscreteActionSpace: moved to agent
-#     def __init__(self, ranges: tuple, n: int):
-#         assert len(ranges) == 2
-#         self.ranges = ranges
-#         self.low = ranges[0]
-#         self.high = ranges[1]
-#         self.n = n
-
-#     def sample(self):
-#         action = np.random.randint(self.low, self.high, self.n)
-#         return action
-
-#     @property
-#     def shape(self):
-#         return (self.n, )
 
 class EnvPy:
     """

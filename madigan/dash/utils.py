@@ -17,3 +17,16 @@ def make_dark_palette():
     # dark_palette.setColor(QPalette.Highlight, QColor(42, 130, 218))
     # dark_palette.setColor(QPalette.HighlightedText, Qt.black)
     return dark_palette
+
+
+def delete_layout(layout):
+    """
+    Recursively deletes layout and all of it's contents
+    """
+    while layout.count():
+        item = layout.takeAt(0)
+        widget = item.widget()
+        if widget is not None:
+            widget.deleteLater()
+        else:
+            delete_layout(item.layout())

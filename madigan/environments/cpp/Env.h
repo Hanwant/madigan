@@ -155,7 +155,8 @@ namespace madigan{
     else dataSource_ = makeDataSource(dataSourceType_);
 
     initAccountants();
-    return State(currentPrices(), ledger(), currentTime());
+    return State(currentPrices(), defaultPortfolio_->ledgerNormedFull(),
+                 currentTime());
   }
 
   SRDISingle Env::step(){
@@ -168,7 +169,7 @@ namespace madigan{
     if (defaultPortfolio_->equity() < 0.1*initCash_){
       done = true;
     }
-    return std::make_tuple(State{newPrices, defaultPortfolio_->ledgerNormed(),
+    return std::make_tuple(State{newPrices, defaultPortfolio_->ledgerNormedFull(),
                                  currentTime()}, reward, done, EnvInfo<double>());
   }
 
@@ -193,7 +194,7 @@ namespace madigan{
       done = true;
     }
 
-    return std::make_tuple(State{newPrices, broker_->defaultAccount_->ledgerNormed(),
+    return std::make_tuple(State{newPrices, defaultPortfolio_->ledgerNormedFull(),
                                  currentTime()}, reward, done, EnvInfoMulti(response));
   }
 
@@ -218,7 +219,7 @@ namespace madigan{
       done = true;
     }
 
-    return std::make_tuple(State{newPrices, broker_->defaultAccount_->ledgerNormed(),
+    return std::make_tuple(State{newPrices, defaultPortfolio_->ledgerNormedFull(),
                                  currentTime()}, reward, done, EnvInfoSingle(response));
   }
 

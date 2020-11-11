@@ -13,17 +13,23 @@ import pyqtgraph as pg
 def make_train_plots(agent_type, title=None, **kw):
     if agent_type in ("DQN", ):
         return TrainPlotsDQN(title=title, **kw)
+    if agent_type in ("DDPG", ):
+        return TrainPlotsActorCritic(title=title, **kw)
     raise NotImplementedError(f"Train plot widget for agent_type: {agent_type}"+\
                                 "has not been implemented")
 
 def make_test_episode_plots(agent_type, title=None, **kw):
     if agent_type in ("DQN", ):
         return TestEpisodePlotsDQN(title=title, **kw)
+    if agent_type in ("DDPG", ):
+        return TestEpisodePlotsActorCritic(title=title, **kw)
     raise NotImplementedError(f"Test episode plot widget for agent_type: {agent_type}"+\
                                 "has not been implemented")
 def make_test_history_plots(agent_type, title=None, **kw):
     if agent_type in ("DQN", ):
         return TestHistoryPlotsDQN(title=title, **kw)
+    if agent_type in ("DDPG", ):
+        return TestHistoryPlotsActorCritic(title=title, **kw)
     raise NotImplementedError(f"Test History plot widget for agent_type: {agent_type}"+\
                                 "has not been implemented")
 
@@ -46,6 +52,7 @@ class TrainPlots(QGridLayout):
         self.plots['loss'] = self.graphs.addPlot(title='Loss',
                                                  bottom='step', left='Loss')
         self.plots['loss'].showGrid(1, 1)
+        self.plots['loss'].addLegend()
         self.plots['running_reward'] = self.graphs.addPlot(title='Episode Rewards',
                                                            bottom='step', left='reward')
         self.plots['running_reward'].showGrid(1, 1)
@@ -114,6 +121,56 @@ class TrainPlotsDQN(TrainPlots):
             return
         self.lines['Gt'].setData(y=data['Gt'], pen=self.colours['Gt'])
         self.lines['Qt'].setData(y=data['Qt'], pen=self.colours['Qt'])
+
+class TrainPlotsActorCritic(TrainPlots):
+    def __init__(self, *args, **kw):
+        super().__init__(*args, **kw)
+        self.colours.update({'Gt': (0, 255, 255), 'Qt': (255, 86, 0)})
+        self.colours.update({'loss_critic': (255, 0, 0),
+                             'loss_actor': (0, 255, 0)})
+        self.plots['values'] = self.graphs.addPlot(title='Values',
+                                                    bottom='step', left='Value')
+        self.plots['values'].showGrid(1, 1)
+        self.plots['values'].addLegend()
+        self.lines['Gt'] = self.plots['values'].plot(y=[], name='Gt')
+        self.lines['Qt'] = self.plots['values'].plot(y=[], name='Qt')
+        self.plots['values'].setLabels()
+
+        del self.lines['loss']
+        self.lines['loss_critic'] = self.plots['loss'].plot(y=[],
+                                                            name='loss_critic')
+        self.lines['loss_actor'] = self.plots['loss'].plot(y=[],
+                                                           name='loss_actor')
+        self.plots['loss'].setLabels()
+
+        print("CALLED")
+        self.link_x_axes()
+
+    def set_data(self, data):
+        print("AC ")
+        self.data = data
+        if len(data) == 0:
+            print("train data is empty")
+            data = {k: [] for k in self.lines.keys()}
+
+        self.lines['loss_critic'].setData(y=data['loss_critic'],
+                                          pen=self.colours['loss_critic'])
+        self.lines['loss_actor'].setData(y=data['loss_actor'],
+                                         pen=self.colours['loss_actor'])
+        rewards = data['running_reward']
+        rewards_mean = pd.Series(data['running_reward']).ewm(20000).mean()
+        rewards_mean = np.nan_to_num(rewards_mean.values)
+        self.lines['running_reward'].setData(y=rewards,
+                                             pen=self.colours['reward'])
+        self.lines['running_reward_mean'].setData(
+            y=rewards_mean, pen=pg.mkPen(
+                {'color': self.colours['reward_mean'], 'width': 2}))
+        self.lines['Gt'].setData(y=data['Gt'], pen=self.colours['Gt'])
+        self.lines['Qt'].setData(y=data['Qt'], pen=self.colours['Qt'])
+
+
+
+TrainPlotsDDPG = TrainPlotsActorCritic
 
 ####################################################################################
 ############# Test Episode Plots  ##################################################
@@ -328,6 +385,48 @@ class TestEpisodePlotsDQN(TestEpisodePlots):
                            color=self.heatmap_colors)
         self.lines['qvals'].setLookupTable(cmap.getLookupTable())
 
+class TestEpisodePlotsActorCritic(TestEpisodePlots):
+    def __init__(self, *args, **kw):
+        super().__init__(*args, **kw)
+        self.colours.update({'qvals': (255, 86, 0)})
+        self.lines['qvals'] = pg.ImageItem(np.empty(shape=(1, 1, 1)))
+        self.plots['qvals'] = self.graphs.addPlot(title="qvals", row=1, col=3)
+        self.plots['qvals'].addItem(self.lines['qvals'])
+        self.plots['qvals'].showGrid(1, 1)
+        self.lines['action'] = pg.ImageItem(np.empty(shape=(1, 1, 1)))
+        self.plots['action'] = self.graphs.addPlot(
+            title="model output - portfolio weights", row=2, col=0)
+        self.plots['action'].addItem(self.lines['action'])
+        self.plots['action'].showGrid(1, 1)
+        self.link_x_axes()
+
+    def set_data(self, data):
+        super().set_data(data)
+        if len(data) == 0:
+            return
+        if isinstance(data['qvals'], (pd.DataFrame, pd.Series)):
+            qvals = np.array(data['qvals'].tolist())
+        else:
+            qvals = np.array(data['qvals'])
+        assert len(qvals.shape) == 2
+        self.lines['qvals'].setImage(qvals, axes={'x': 0, 'y': 1})
+        cmap = pg.ColorMap(pos=np.linspace(np.nanmin(qvals), np.nanmax(qvals), 2),
+                           color=self.heatmap_colors)
+        self.lines['qvals'].setLookupTable(cmap.getLookupTable())
+        if isinstance(data['action'], (pd.DataFrame, pd.Series)):
+            action = np.array(data['action'].tolist())
+        else:
+            action = np.array(data['action'])
+        assert len(action.shape) == 2
+        self.lines['action'].setImage(action, axes={'x': 0, 'y': 1})
+        cmap = pg.ColorMap(pos=np.linspace(np.nanmin(action),
+                                           np.nanmax(action), 2),
+                           color=self.heatmap_colors)
+        self.lines['action'].setLookupTable(cmap.getLookupTable())
+
+
+TestEpisodePlotsDDPG = TestEpisodePlotsActorCritic
+
 ####################################################################################
 ############# Test History Plots  ##################################################
 ####################################################################################
@@ -337,7 +436,9 @@ class TestHistoryPlots(QGridLayout):
         super().__init__()
         self.graphs = pg.GraphicsLayoutWidget(show=True, title=title)
         self.addWidget(self.graphs)
-        self.colours = {'equity': (218, 112, 214), 'reward': (242, 242, 242),
+        self.colours = {'mean_equity': (0, 255, 0),
+                        'final_equity': (255, 0, 0),
+                        'mean_reward': (242, 242, 242),
                         'cash': (0, 255, 255), 'margin': (255, 86, 0)}
         self.data = None
         self.plots = {}
@@ -350,14 +451,18 @@ class TestHistoryPlots(QGridLayout):
         self.plots['margin'] = self.graphs.addPlot(title='Mean Cash over Episodes',
                                                    bottom='training steps',
                                                    left='returns (proportion)')
+        self.plots['equity'].addLegend()
         self.plots['equity'].showGrid(1, 1)
         self.plots['reward'].showGrid(1, 1)
         self.plots['margin'].showGrid(1, 1)
         self.plots['margin'].setLabels()
         self.lines = {}
-        self.lines['mean_equity'] = self.plots['equity'].plot(y=[])
-        self.lines['final_equity'] = self.plots['equity'].plot(y=[])
+        self.lines['mean_equity'] = self.plots['equity'].plot(y=[],
+                                                              name='mean_equity')
+        self.lines['final_equity'] = self.plots['equity'].plot(y=[],
+                                                               name='final_equity')
         self.lines['mean_reward'] = self.plots['reward'].plot(y=[])
+        self.plots['equity'].setLabels()
         # self.lines['mean_available_margin']= self.plots['margin'].plot(y=[])
 
     def clear_data(self):
@@ -369,11 +474,11 @@ class TestHistoryPlots(QGridLayout):
             print("test data is empty")
             data = {k: [] for k in self.lines.keys()}
         self.lines['mean_equity'].setData(y=data['mean_equity'],
-                                            pen=self.colours['mean_equity'])
+                                          pen=self.colours['mean_equity'])
         self.lines['final_equity'].setData(y=data['final_equity'],
-                                            pen=self.colours['final_equity'])
+                                           pen=self.colours['final_equity'])
         self.lines['mean_reward'].setData(y=data['mean_reward'],
-                                            pen=self.colours['mean_reward'])
+                                          pen=self.colours['mean_reward'])
         # self.lines['mean_transaction_cost'].setData(y=data['mean_transaction_cost'],
         #                                             pen=self.colours['mean_transaction_cost'])
         # self.lines['margin'].setData(y=data['cash'], pen=self.colours['margin'])
@@ -385,10 +490,7 @@ class TestHistoryPlots(QGridLayout):
     def load_from_hdf(self, path=None):
         path = path or self.datapath
         if path is not None:
-            data = []
-            for run in self.datapath.iterdir():
-                data.append(pd.read_hdf(run, key='run_summary'))
-            data = pd.concatenate(data, axis=0)
+            data = pd.read_hdf(path/'test.hdf5', key='run_history')
             self.set_data(data)
 
 
@@ -396,6 +498,12 @@ class TestHistoryPlotsDQN(TestHistoryPlots):
     def __init__(self, *args, **kw):
         super().__init__(*args, **kw)
         self.colours.update({'mean_qvals': (255, 86, 0)})
+        self.plots['qvals'] = self.graphs.addPlot(title='Mean Qvals over Episodes',
+                                                   bottom='training_steps',
+                                                   left='Value')
+        self.lines['mean_qvals'] = self.plots['qvals'].plot(y=[])
+        self.plots['qvals'].showGrid(1, 1)
+        self.plots['qvals'].setLabels()
 
     def set_data(self, data):
         super().set_data(data)
@@ -404,3 +512,6 @@ class TestHistoryPlotsDQN(TestHistoryPlots):
         self.lines['mean_qvals'].setData(y=data['mean_qvals'],
                                             pen=self.colours['mean_qvals'])
 
+
+TestHistoryPlotsActorCritic = TestHistoryPlotsDQN
+TestHistoryPlotsDDPG = TestHistoryPlotsActorCritic
