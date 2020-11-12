@@ -6,7 +6,7 @@ from .data import SARSD, State
 
 class ReplayBuffer:
     """
-    Generalized for n-step returns
+    Experience Replay Buffer generalized for n-step returns
     """
     def __init__(self, size, nstep_return, discount):
         self.size = size

@@ -27,38 +27,25 @@ agent_config:
   train_freq: 4
   type: DQN
   unit_size_proportion_avM: 0.1
+  proximal_portfolio_penalty: 0.5
 agent_type: DDPG
 assets:
 - sine1
 basepath: /media/hemu/Data/madigan/experiments/
 data_source_config:
-  amp:
-  - 0.5
-  - 0.2
-  - 0.4
-  - 1.2
-  dX: 0.01
-  freq:
-  - 2.2
-  - 4.1
-  - 1.0
-  - 3.0
-  mu:
-  - 0.6
-  - 0.3
-  - 2.0
-  - 4.2
-  noise: 0.0
-  phase:
-  - 0.0
-  - 1.0
+  mean:
+  - 10.0
+  theta:
+  - .15
+  phi:
   - 4.0
-  - 0.0
-data_source_type: SineAdder
+  noise_var:
+  - 0.1
+data_source_type: OU
 discrete_action_atoms: 3
 discrete_actions: true
 env_type: Synth
-experiment_id: DDPG_SineA_penalty_0.05_trans_0.02
+experiment_id: DDPG_OU_penalty_.5_trans_0.05_sigmoid
 init_cash: 1000000
 log_freq: 10000
 lot_unit_value: 10000

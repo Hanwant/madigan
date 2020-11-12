@@ -59,9 +59,16 @@ class MainWindow( Ui_MainWindow, QtWidgets.QMainWindow):
                 self.ServerInfo.setItem(row, col, item)
         self.update_server_status()
 
-        # CONTROL SIGNALS/SLOTS #########################################
-        # CONFIG
+        # HOUSE KEEPING
         self.config_path = None
+        self.experiments_path = None
+        self.load_user_cache()  # loads saved config_path and experiments_path
+
+        # Experiment CONTROL SIGNALS/SLOTS #########################################
+        # MENU BAR
+        self.actionSet_Experiments_Folder.triggered.connect(
+            self.choose_experiments_path)
+        # CONFIG TAB
         # self.FilenameLabel.setText('/'.join(self.config_path.parts[-1:]))
         self.LoadConfigButton.clicked.connect(self.load_config)
         self.SaveConfigButton.clicked.connect(self.save_config)
@@ -70,6 +77,18 @@ class MainWindow( Ui_MainWindow, QtWidgets.QMainWindow):
         # save_config(self.exp_config, self.config_path)
         self.ParamsEdit.setText(str(yaml.safe_dump(self.exp_config.to_dict())))
         self.ParamsEdit.textChanged.connect(self.update_config)
+        # EXP TAB
+        self.ExperimentsList.currentRowChanged.connect(
+            lambda: self.load_config(
+                self.experiments_path/
+                self.ExperimentsList.item(
+                    self.ExperimentsList.currentRow()).text()/
+                'config.yaml')
+            )
+        if self.experiments_path is None:
+            self.choose_experiments_path()
+        else:
+            self.load_experiments_list()
 
         # Run exp based on config
         self.TestCommand.clicked.connect(lambda: self.run_job('test'))
@@ -78,14 +97,30 @@ class MainWindow( Ui_MainWindow, QtWidgets.QMainWindow):
         self.plots = {'train': None, 'test_episodes': None,
                       'test_history': None}  # custom plots
         self.make_plots()
-
         self.worker = None
         self.threadpool = QtCore.QThreadPool()
-        self.load_user_cache()
         self.centralwidget.destroyed.connect(self.save_user_cache)
         if self.config_path is not None:
             print('loading')
             self.load_config(self.config_path)
+
+    def choose_experiments_path(self):
+        path = QtWidgets.QFileDialog.getExistingDirectory(
+            self, 'Choose Folder containing experiments',
+            os.getcwd())
+        self.experiments_path = Path(path) if path != '' else None
+        self.load_experiments_list()
+
+    def load_experiments_list(self):
+        experiments = [p.name for p in Path(self.experiments_path).iterdir()
+                       if p.is_dir()]
+        experiments = sorted(experiments,
+                             key=lambda x:
+                             (self.experiments_path/x).stat().st_mtime,
+                             reverse=True)
+        self.ExperimentsList.clear()
+        for exp in experiments:
+            self.ExperimentsList.addItem(exp)
 
     def make_plots(self):
         self.remove_plots()  # remove existing plots if they exist
@@ -103,7 +138,6 @@ class MainWindow( Ui_MainWindow, QtWidgets.QMainWindow):
             if plot is not None:
                 delete_layout(plot)
                 QtCore.QObjectCleanupHandler().add(plot)
-
 
     def update_server_status(self):
         for row in range(self.ServerInfo.rowCount()):
@@ -191,18 +225,24 @@ class MainWindow( Ui_MainWindow, QtWidgets.QMainWindow):
     def get_file(self, load=False, save=False):
         assert load != save, "specify either load=True or save=True"
         if load:
+            # fname = QtGui.QFileDialog.getOpenFileName(self, 'Choose config file',
+            #                                           Path(os.getcwd()))[0]
             fname = QtGui.QFileDialog.getOpenFileName(self, 'Choose config file',
-                                                      '/home/hemu/madigan/')[0]
+                                                      os.getcwd())[0]
         if save:
+            # fname = QtGui.QFileDialog.getSaveFileName(self, 'Choose config file',
+            #                                           Path(os.getcwd()))[0]
             fname = QtGui.QFileDialog.getSaveFileName(self, 'Choose config file',
-                                                      '/home/hemu/madigan/')[0]
+                                                      os.getcwd())[0]
         return fname
 
     def save_user_cache(self):
-        settings = {'config_path': self.config_path}
-        with open(self.cache_filepath, 'wb') as f:
-            pickle.dump(settings, f)
-            print('saving user cache')
+        if self.config_path is not None:
+            settings = {'config_path': self.config_path,
+                        'experiments_path': self.experiments_path}
+            with open(self.cache_filepath, 'wb') as f:
+                pickle.dump(settings, f)
+                print('saving user cache')
 
     def load_user_cache(self):
         if self.cache_filepath.is_file():
@@ -210,7 +250,8 @@ class MainWindow( Ui_MainWindow, QtWidgets.QMainWindow):
             with open(self.cache_filepath, 'rb') as f:
                 settings = pickle.load(f)
             self.config_path = settings['config_path']
-            print('setting config_path: ', self.config_path)
+            self.experiments_path = settings['experiments_path']
+            # print('setting config_path: ', self.config_path)
 
     def closeEvent(self, event):
         """ Save local settings to pkl here """

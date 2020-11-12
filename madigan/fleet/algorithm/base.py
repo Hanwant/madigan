@@ -330,7 +330,6 @@ class OffPolicyActorCritic(Agent):
         max_steps = self.training_steps + n
         while True:
             action, transaction = self.explore(state)
-            prev_eq = self._env.equity
             _next_state, reward, done, info = self._env.step(transaction)
 
             running_cost += np.sum(info.brokerResponse.transactionCost)

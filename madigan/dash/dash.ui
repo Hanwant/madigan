@@ -103,6 +103,16 @@ background-color: rgb(53, 50, 47);</string>
         <property name="currentIndex">
          <number>0</number>
         </property>
+        <widget class="QWidget" name="tab_2">
+         <attribute name="title">
+          <string>Exp</string>
+         </attribute>
+         <layout class="QGridLayout" name="gridLayout">
+          <item row="0" column="0">
+           <widget class="QListWidget" name="ExperimentsList"/>
+          </item>
+         </layout>
+        </widget>
         <widget class="QWidget" name="tab">
          <attribute name="title">
           <string>Config</string>
@@ -121,16 +131,6 @@ p, li { white-space: pre-wrap; }
 &lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-family:'Ubuntu'; font-size:11pt;&quot;&gt;{'name': 'run0', 'discrete_actions': true, 'action_atoms':11, 'nsteps':100}&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
             </property>
            </widget>
-          </item>
-         </layout>
-        </widget>
-        <widget class="QWidget" name="tab_2">
-         <attribute name="title">
-          <string>Exp</string>
-         </attribute>
-         <layout class="QGridLayout" name="gridLayout">
-          <item row="0" column="0">
-           <widget class="QListWidget" name="listWidget"/>
           </item>
          </layout>
         </widget>
@@ -220,12 +220,25 @@ background-color: rgb(74, 108, 78);</string>
     <property name="title">
      <string>Dash-Synth</string>
     </property>
+    <widget class="QMenu" name="menuTraining">
+     <property name="title">
+      <string>Training</string>
+     </property>
+     <addaction name="separator"/>
+     <addaction name="separator"/>
+     <addaction name="separator"/>
+    </widget>
     <addaction name="separator"/>
-    <addaction name="separator"/>
-    <addaction name="separator"/>
-    <addaction name="actionTraining"/>
+    <addaction name="menuTraining"/>
+   </widget>
+   <widget class="QMenu" name="menuSettings">
+    <property name="title">
+     <string>Settings</string>
+    </property>
+    <addaction name="actionSet_Experiments_Folder"/>
    </widget>
    <addaction name="menuDash_Synth"/>
+   <addaction name="menuSettings"/>
   </widget>
   <widget class="QToolBar" name="toolBar">
    <property name="windowTitle">
@@ -239,9 +252,17 @@ background-color: rgb(74, 108, 78);</string>
    </attribute>
   </widget>
   <widget class="QStatusBar" name="statusBar"/>
-  <action name="actionTraining">
+  <action name="actionSet_Experiments_Folder">
+   <property name="checkable">
+    <bool>false</bool>
+   </property>
    <property name="text">
-    <string>Training</string>
+    <string>Set Experiments Folder</string>
+   </property>
+  </action>
+  <action name="actionSet">
+   <property name="text">
+    <string>Set</string>
    </property>
   </action>
  </widget>

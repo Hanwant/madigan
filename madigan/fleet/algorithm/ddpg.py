@@ -50,6 +50,7 @@ class DDPG(OffPolicyActorCritic):
             lr_critic: float,
             lr_actor: float,
             model_config: Union[dict, Config],
+            proximal_portfolio_penalty: float
     ):
         super().__init__(env, preprocessor, input_shape, action_space,
                          discount, nstep_return, replay_size, replay_min_size,
@@ -88,6 +89,7 @@ class DDPG(OffPolicyActorCritic):
         else:
             self.critic_t.load_state_dict(self.critic_b.state_dict())
             self.actor_t.load_state_dict(self.actor_b.state_dict())
+        self.proximal_portfolio_penalty = proximal_portfolio_penalty
 
     @classmethod
     def from_config(cls, config):
@@ -108,7 +110,8 @@ class DDPG(OffPolicyActorCritic):
                    config.model_config.critic_model_class,
                    config.model_config.actor_model_class,
                    config.optim_config.lr_critic, config.optim_config.lr_actor,
-                   config.model_config)
+                   config.model_config,
+                   aconf.proximal_portfolio_penalty)
 
     @property
     def env(self):
@@ -143,9 +146,12 @@ class DDPG(OffPolicyActorCritic):
         # current_port = np.concatenate(([cash_pct], self.env.ledgerNormed))
         current_port = self.env.ledgerNormedFull
         assert abs(current_port.sum() - 1.) < 1e-8
-        actions = actions.cpu().numpy()
+        # actions = actions.cpu().numpy()
         desired_port = actions / actions.sum(axis=-1)
+        # max_amount = self.env.availableMargin * 0.25
         amounts = (desired_port - current_port) * self.env.equity
+        # amounts = ((desired_port - current_port) * self.env.equity
+        #            ).clip(-max_amount, max_amount)
         units = amounts[..., 1:] / self.env.currentPrices  # element wise div
         return units
 
@@ -269,9 +275,8 @@ class DDPG(OffPolicyActorCritic):
     def train_step_actor(self, state):
         action = self.actor_b(state).squeeze(-1)
         loss_actor = -self.critic_t(state, action).mean()
-        penalty_w = 0.5
         penalty = ((action - state.portfolio) ** 2).mean()
-        loss_actor += penalty_w * penalty
+        loss_actor += self.proximal_portfolio_penalty * penalty
         self.opt_actor.zero_grad()
         loss_actor.backward()
         nn.utils.clip_grad_norm_(self.actor_b.parameters(),
@@ -308,13 +313,10 @@ class DDPG(OffPolicyActorCritic):
         self.env_steps = state['env_steps']
 
     def _delete_models(self):
-        # if self.overwrite_exp:
         saved_models = list(self.savepath.iterdir())
         if len(saved_models):
             for model in saved_models:
                 os.remove(model)
-        # else:
-        #     raise NotImplementedError("Attempting to delete models when config.overwrite_exp is not set to true")
 
     def update_critic_target(self):
         """

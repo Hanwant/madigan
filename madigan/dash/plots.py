@@ -11,7 +11,7 @@ import pyqtgraph as pg
 ############# Factory Methods ######################################################
 ####################################################################################
 def make_train_plots(agent_type, title=None, **kw):
-    if agent_type in ("DQN", ):
+    if agent_type in ("DQN", "IQN"):
         return TrainPlotsDQN(title=title, **kw)
     if agent_type in ("DDPG", ):
         return TrainPlotsActorCritic(title=title, **kw)
@@ -19,14 +19,14 @@ def make_train_plots(agent_type, title=None, **kw):
                                 "has not been implemented")
 
 def make_test_episode_plots(agent_type, title=None, **kw):
-    if agent_type in ("DQN", ):
+    if agent_type in ("DQN", "IQN"):
         return TestEpisodePlotsDQN(title=title, **kw)
     if agent_type in ("DDPG", ):
         return TestEpisodePlotsActorCritic(title=title, **kw)
     raise NotImplementedError(f"Test episode plot widget for agent_type: {agent_type}"+\
                                 "has not been implemented")
 def make_test_history_plots(agent_type, title=None, **kw):
-    if agent_type in ("DQN", ):
+    if agent_type in ("DQN", "IQN"):
         return TestHistoryPlotsDQN(title=title, **kw)
     if agent_type in ("DDPG", ):
         return TestHistoryPlotsActorCritic(title=title, **kw)
@@ -191,25 +191,39 @@ class TestEpisodePlots(QGridLayout):
         self.plots = {}
         self.lines = {}
         self.plots['prices'] = self.graphs.addPlot(title='Prices', bottom='time',
-                                                   left='prices')
+                                                   left='prices', colspan=2)
         self.plots['equity'] = self.graphs.addPlot(title='Equity', bottom='time',
-                                                   left='Denomination currency')
+                                                   left='Denomination currency',
+                                                   row=0, col=2,
+                                                   colspan=2)
         self.plots['reward'] = self.graphs.addPlot(title='Rewards', bottom='time',
-                                                   left='reward')
+                                                   left='reward',
+                                                   row=0, col=4,
+                                                   colspan=2)
         self.lines['ledgerNormed'] = pg.ImageItem(np.empty(shape=(1, 1, 1)))
         self.lines['ledgerNormed'].setLookupTable(cmap.getLookupTable())
-        self.plots['ledgerNormed'] = self.graphs.addPlot(title="Ledger")
+        self.plots['ledgerNormed'] = self.graphs.addPlot(title="Ledger",
+                                                         colspan=2)
         self.plots['ledgerNormed'].addItem(self.lines['ledgerNormed'])
+        self.plots['ledgerNormed'].showAxis('left', False)
+        hist = pg.HistogramLUTItem()
+        hist.setImageItem(self.lines['ledgerNormed'])
+        self.graphs.addItem(hist, row=0, col=8, colspan=1)
         self.plots['equity'].setLabels()
         self.lines['equity'] = self.plots['equity'].plot(y=[])
         self.lines['reward'] = self.plots['reward'].plot(y=[])
         self.lines['prices'] = {}
         self.current_pos_line = pg.InfiniteLine(movable=True)
         self.plots['equity'].addItem(self.current_pos_line)
-        self.plots['cash'] = self.graphs.addPlot(title="cash", row=1, col=0)
+        self.plots['cash'] = self.graphs.addPlot(title="cash",
+                                                 row=1, col=0,
+                                                 colspan=2)
         self.plots['availableMargin'] = self.graphs.addPlot(title="available margin",
-                                                             row=1, col=1)
-        self.plots['transactions'] = self.graphs.addPlot(title="transactions", row=1, col=2)
+                                                            row=1, col=2,
+                                                            colspan=2)
+        self.plots['transactions'] = self.graphs.addPlot(title="transactions",
+                                                         row=1, col=4,
+                                                         colspan=2)
         self.lines['cash'] = self.plots['cash'].plot(y=[])
         self.lines['availableMargin'] = self.plots['availableMargin'].plot(y=[])
         self.lines['transactions'] = {}
@@ -243,7 +257,8 @@ class TestEpisodePlots(QGridLayout):
         self.addWidget(self.episode_table, 0, 9, 1, 1)
         self.addWidget(self.accounting_table, 1, 9, 1, 1)
         self.addWidget(self.positions_table, 2, 9, 1, 1)
-        self.setColumnStretch(0, 4)
+        for i in range(8):
+            self.setColumnStretch(i, 4)
 
         self.current_pos_line.sigPositionChanged.connect(self.update_accounting_table)
         self.current_pos_line.sigPositionChanged.connect(self.update_positions_table)
@@ -253,6 +268,7 @@ class TestEpisodePlots(QGridLayout):
 
         self.link_x_axes()
         # self.unlink_x_axes()
+
 
     def link_x_axes(self):
         for name, plot in self.plots.items():
@@ -291,7 +307,7 @@ class TestEpisodePlots(QGridLayout):
         data = pd.read_hdf(latest_episode, key='full_run')
         self.set_data(data)
 
-    def clear_data(self):
+    def clear_plots(self):
         for _, line in self.lines.items():
             if isinstance(line, dict):
                 for _, sub_line in line.items():
@@ -302,9 +318,24 @@ class TestEpisodePlots(QGridLayout):
                 except:
                     line.setImage(np.empty(shape=(1, 1, 1)))
 
+    def process_data(self, data):
+        self.data = dict(data.items())
+        if isinstance(data['prices'], (pd.Series, pd.DataFrame)):
+            self.data['prices'] = np.array(data['prices'].tolist())
+            self.data['transactions'] =\
+                np.array(data['transaction'].tolist()) # assuming this is also pd
+            self.data['ledgerNormed'] = np.array(data['ledgerNormed'].tolist())
+        else:
+            self.data['prices'] = np.array(data['prices'])
+            self.data['transactions'] = np.array(data['transaction'])
+            self.data['ledgerNormed'] = np.array(data['ledgerNormed'])
+            assert len(self.data['prices'].shape) == \
+                len(self.data['transactions'].shape) ==\
+                len(self.data['ledgerNormed'].shape) == 2
+
     def set_data(self, data):
-        self.data = data
-        self.clear_data()
+        self.process_data(data)
+        self.clear_plots()
         if len(data) == 0:
             print('test episode data is empty')
             data = {k: [] for k in self.lines.keys()}
@@ -314,32 +345,28 @@ class TestEpisodePlots(QGridLayout):
         self.lines['cash'].setData(y=data['cash'], pen=self.colours['cash'])
         self.lines['availableMargin'].setData(y=data['availableMargin'],
                                               pen=self.colours['cash'])
-        if isinstance(data['prices'], (pd.Series, pd.DataFrame)):
-            prices = np.array(data['prices'].tolist())
-            transactions = np.array(data['transaction'].tolist()) # assuming this is also pd
-            ledger = np.array(data['ledgerNormed'].tolist())
-        else:
-            prices = np.array(data['prices'])
-            transactions = np.array(data['transaction'])
-            ledger = np.array(data['ledgerNormed'])
-            assert len(prices.shape) ==  len(transactions.shape) == len(ledger.shape) == 2
-        for asset in range(prices.shape[1]):
-            self.lines['prices'][asset] = self.plots['prices'].plot(y=prices[:, asset],
-                                                                    pen=(asset, prices.shape[1]))
-            self.lines['transactions'][asset] = self.plots['transactions'].plot(y=transactions[:, asset],
-                                                                                pen=(asset, transactions.shape[1]))
-            self.lines['ledgerNormed'].setImage(ledger, axes={'x': 0, 'y': 1})
+        for asset in range(self.data['prices'].shape[1]):
+            self.lines['prices'][asset] = self.plots['prices'].plot(
+                y=self.data['prices'][:, asset],
+                pen=(asset, self.data['prices'].shape[1]))
+            self.lines['transactions'][asset] =\
+                self.plots['transactions'].plot(
+                    y=self.data['transactions'][:, asset],
+                    pen=(asset, self.data['transactions'].shape[1]))
+            self.lines['ledgerNormed'].setImage(
+                self.data['ledgerNormed'], axes={'x': 0, 'y': 1})
             self.current_pos_line.setValue(len(data['equity'])-1)
             self.current_pos_line.setBounds((0, len(data['equity'])-1))
             self.update_accounting_table()
-            self.positions_table.setRowCount(ledger.shape[1])
+            self.positions_table.setRowCount(self.data['ledgerNormed'].shape[1])
             self.update_positions_table()
 
     def update_accounting_table(self):
         current_timepoint = int(self.current_pos_line.value())
         try:
-            for i, metric in enumerate(['equity', 'balance', 'cash', 'availableMargin',
-                                        'usedMargin', 'pnl']):
+            for i, metric in enumerate(['equity', 'balance', 'cash',
+                                        'availableMargin', 'usedMargin',
+                                        'pnl']):
                 metric = QTableWidgetItem(str(self.data[metric][current_timepoint]))
                 self.accounting_table.setItem(i, 0, metric)
         except IndexError:
@@ -364,9 +391,10 @@ class TestEpisodePlotsDQN(TestEpisodePlots):
         super().__init__(*args, **kw)
         self.colours.update({'qvals': (255, 86, 0)})
         self.lines['qvals'] = pg.ImageItem(np.empty(shape=(1, 1, 1)))
-        self.plots['qvals'] = self.graphs.addPlot(title="qvals", row=1, col=3)
+        self.plots['qvals'] = self.graphs.addPlot(title="qvals", row=1, col=6)
         self.plots['qvals'].addItem(self.lines['qvals'])
         self.plots['qvals'].showGrid(1, 1)
+        # self.lines['qvals'].autoLevels()
 
         self.link_x_axes()
 
@@ -389,40 +417,123 @@ class TestEpisodePlotsActorCritic(TestEpisodePlots):
     def __init__(self, *args, **kw):
         super().__init__(*args, **kw)
         self.colours.update({'qvals': (255, 86, 0)})
-        self.lines['qvals'] = pg.ImageItem(np.empty(shape=(1, 1, 1)))
-        self.plots['qvals'] = self.graphs.addPlot(title="qvals", row=1, col=3)
+        # self.plots['qvals'].addItem(self.lines['qvals'])
+        # self.plots['qvals'] = self.graphs.addViewBox(row=1, col=4)
+        self.plots['qvals'] = self.graphs.addPlot(row=1, col=6,
+                                                  colspan=2)
+        # self.lines['qvals'] = pg.ImageItem(parent=self.graphs,
+        #                                    view=self.plots['qvals'].getViewBox())
+        # self.plots['qvals'].addWidget(self.lines['qvals'])
+        # self.lines['qvals'] = pg.ImageView(self.graphs)
+        self.lines['qvals'] = pg.ImageItem(np.empty(shape=(1, 1)),
+                                           axes={'x': 0, 'y': 1})
         self.plots['qvals'].addItem(self.lines['qvals'])
-        self.plots['qvals'].showGrid(1, 1)
-        self.lines['action'] = pg.ImageItem(np.empty(shape=(1, 1, 1)))
+        self.plots['qvals'].setTitle('qvals')
+        self.plots['qvals'].showAxis('left', False)
+        hist = pg.HistogramLUTItem()
+        hist.setImageItem(self.lines['qvals'])
+        self.graphs.addItem(hist, row=1, col=8, colspan=1)
+        # self.lines['qvals'].showGrid(1, 1)
+        self.lines['qvals'].setImage(np.empty(shape=(1, 1)),
+                                     axes={'x': 0, 'y': 1})
+        # self.plots['qvals'].ledgerNormedshow()
+        # self.plots['qvals'].hoverEvent = self.update_qvals_title
+        # self.plots['qvals'].addItem(self.lines['qvals'])
         self.plots['action'] = self.graphs.addPlot(
-            title="model output - portfolio weights", row=2, col=0)
-        self.plots['action'].addItem(self.lines['action'])
+            title="model output - portfolio weights", row=2, col=0, colspan=2)
+        self.lines['action'] = pg.ImageItem(np.empty(shape=(1, 1, 1)))
+        self.plots['action'].addItem(self.lines['action'], colspan=2)
         self.plots['action'].showGrid(1, 1)
+        hist = pg.HistogramLUTItem()
+        hist.setImageItem(self.lines['action'])
+        self.graphs.addItem(hist, row=2, col=2, colspan=1)
+        self.transaction_table = pg.TableWidget()
+        self.transaction_table.setVerticalHeaderLabels(['Model Outputs'])
+        # self.graphs.addItem(self.actions_table, row=2, col=3, colspan=1)
+        self.addWidget(self.transaction_table, 3, 9, 1, 1)
         self.link_x_axes()
+        self.current_pos_line.sigPositionChanged.connect(
+            self.update_transaction_table)
+
+    def update_transaction_table(self):
+        current_timepoint = int(self.current_pos_line.value())
+        try:
+            actions = self.data['action'][current_timepoint]
+            transactions = self.data['transaction'][current_timepoint]
+            transactions = np.concatenate([[0], transactions], axis=0)
+            data = np.stack([actions, transactions], axis=1)
+            # data = np.array([actions, transactions],
+            #                 dtype=[('model_output', float),
+            #                        ('transactions', float)])
+            # import ipdb; ipdb.set_trace()
+            self.transaction_table.setData(data)
+            self.transaction_table.setHorizontalHeaderLabels(['Model Outputs',
+                                                              'Transactions'])
+            self.transaction_table.resizeColumnsToContents()
+        except IndexError:
+            import traceback
+            traceback.print_exc()
+
+    # def update_qvals_title(self, event):
+    #     if event.isExit():
+    #         # self.plots['ledgerNormed'].setTitle("")
+    #         return
+    #     pos = event.pos()
+    #     j, i = pos.y(), pos.x()
+    #     i = int(np.clip(i, 0, self.data['qvals'].shape[0]-1))
+    #     j = int(np.clip(j, 0, self.data['qvals'].shape[1]-1))
+    #     val = self.data['qvals'][i, j]
+    #     ppos = self.lines['qvals'].mapToParent(pos)
+    #     x, y = ppos.x(), ppos.y()
+    #     self.plots['qvals'].setTitle(f"qval ({i}, {j}) ({x}, {y}): {val}")
+
+
+    def make_matplotlib_image(self, data, metric=''):
+        import matplotlib.pyplot as plt
+        fig, ax = plt.subplots(1,1)
+        if isinstance(data[metric], (pd.Series, pd.DataFrame)):
+            data_2d = np.stack(data[metric].tolist()).T
+        else:
+            data_2d = np.stack(data[metric]).T
+        assetIdx=0
+        if len(data_2d.shape) == 3:
+            print("plotting only first asset - need to implement multi-asset")
+            data_2d = data_2d[:, assetIdx, :]
+        im = ax.imshow(data_2d) #vmin=0., vmax=1.) #, cmap='gray'
+        ax.set_aspect(data_2d.shape[1]/data_2d.shape[0])
+        ax.set_title(metric)
+        ax.set_yticks(range(data_2d.shape[0]))
+        ax.set_yticklabels(labels=[f'action_{i}' for i in range(data_2d.shape[0])])
+        fig.colorbar(im, ax=ax)
+        return fig, ax
+
+    def process_data(self, data):
+        super().process_data(data)
+        if isinstance(data['qvals'], (pd.DataFrame, pd.Series)):
+            self.data['qvals'] = np.array(data['qvals'].tolist())
+        else:
+            self.data['qvals'] = np.array(data['qvals'])
+        assert len(self.data['qvals'].shape) == 2
+        if isinstance(data['action'], (pd.DataFrame, pd.Series)):
+            self.data['action'] = np.array(data['action'].tolist())
+        else:
+            self.data['action'] = np.array(data['action'])
+        assert len(self.data['action'].shape) == 2
 
     def set_data(self, data):
         super().set_data(data)
         if len(data) == 0:
             return
-        if isinstance(data['qvals'], (pd.DataFrame, pd.Series)):
-            qvals = np.array(data['qvals'].tolist())
-        else:
-            qvals = np.array(data['qvals'])
-        assert len(qvals.shape) == 2
-        self.lines['qvals'].setImage(qvals, axes={'x': 0, 'y': 1})
-        cmap = pg.ColorMap(pos=np.linspace(np.nanmin(qvals), np.nanmax(qvals), 2),
-                           color=self.heatmap_colors)
-        self.lines['qvals'].setLookupTable(cmap.getLookupTable())
-        if isinstance(data['action'], (pd.DataFrame, pd.Series)):
-            action = np.array(data['action'].tolist())
-        else:
-            action = np.array(data['action'])
-        assert len(action.shape) == 2
-        self.lines['action'].setImage(action, axes={'x': 0, 'y': 1})
-        cmap = pg.ColorMap(pos=np.linspace(np.nanmin(action),
-                                           np.nanmax(action), 2),
-                           color=self.heatmap_colors)
-        self.lines['action'].setLookupTable(cmap.getLookupTable())
+        self.lines['qvals'].setImage(self.data['qvals'], axes={'x': 0, 'y': 1})
+        # cmap = pg.ColorMap(pos=np.linspace(np.nanmin(qvals), np.nanmax(qvals), 2),
+        #                    color=self.heatmap_colors)
+        # self.lines['qvals'].setLookupTable(cmap.getLookupTable())
+        self.lines['action'].setImage(self.data['action'],
+                                      axes={'x': 0, 'y': 1})
+        # cmap = pg.ColorMap(pos=np.linspace(np.nanmin(self.data['action']),
+        #                                    np.nanmax(self.data['action']), 2),
+        #                    color=self.heatmap_colors)
+        # self.lines['action'].setLookupTable(cmap.getLookupTable())
 
 
 TestEpisodePlotsDDPG = TestEpisodePlotsActorCritic

@@ -276,4 +276,5 @@ class ConvPolicyDeterministic(nn.Module):
             state_emb = self.get_state_emb(state)  # (bs, d_model)
         actions = self.output_head(state_emb).view(
             state_emb.shape[0], self.n_assets, self.n_actions)
-        return torch.tanh(actions)
+        # return torch.tanh(actions)
+        return torch.sigmoid(actions)
