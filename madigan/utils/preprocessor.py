@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from collections import deque
 
 import numpy as np
+import numba
 
 from rollers import Roller as _Roller
 from ..utils.data import State
@@ -9,16 +10,39 @@ from ..utils.data import State
 
 
 def make_preprocessor(config):
+    """
+    Choices for config.preprocessor_type:
+    StackerDiscrete (== WindowedStacker):  maintains a fixed size window of obs
+    StackerContinuous: maintains a variable sized window of a fixed time offset
+    RollerDiscrete: Rolling summary functions for discrete (fixed) windows
+    RollerContinuous: Rolling functions for continuous (variable) time-windows
+    """
     if config.preprocessor_type in ("WindowedStacker", "StackerDiscrete"):
         return StackerDiscrete.from_config(config)
     elif config.preprocessor_type in ("StackerContinuous"):
         return StackerContinuous.from_config(config)
     elif config.preprocessor_type in ("RollerDiscrete", ):
         return RollerDiscrete.from_config(config)
+    elif config.preprocessor_type in ("CustomA", ):
+        return CustomA.from_config(config)
+    raise NotImplementedError(
+        f"{config['preprocessor_type']} is not implemented ")
 
-    else:
-        raise NotImplementedError(
-            f"{config['preprocessor_type']} is not implemented ")
+def make_normalizer(norm_type):
+    """
+    Choices
+
+    lookback: norm everything by current price x / x[-1]
+    lookback_log: log(x / x[-1])
+    expanding: norm by an expanding window mean
+    """
+    if norm_type == 'lookback':
+        return lambda x: x / x[-1]
+    if norm_type == 'lookback_log':
+        return lambda x: np.log(x / x[-1])
+    if norm_type == 'expanding':
+        return lambda x: x / expanding_mean(x)
+
 
 class PreProcessor(ABC):
     def __init__(self):
@@ -40,11 +64,12 @@ class PreProcessor(ABC):
     def initialize_history(self):
         pass
 
-
 class StackerDiscrete(PreProcessor):
-    def __init__(self, window_len):
+    def __init__(self, window_len, norm=True, norm_type='lookback'):
         self.k = window_len
         self.min_tf = self.k
+        self.norm = norm
+        self.norm_fn = make_normalizer(norm_type)
         self.price_buffer = deque(maxlen=self.k)
         self.portfolio_buffer = deque(maxlen=self.k)
         self.time_buffer = deque(maxlen=self.k)
@@ -52,8 +77,10 @@ class StackerDiscrete(PreProcessor):
 
     @classmethod
     def from_config(cls, config):
-        window_len = config.preprocessor_config.window_length
-        return cls(window_len)
+        pconf = config.preprocessor_config
+        norm = pconf.norm if 'norm' in pconf.keys() else False
+        norm_type = pconf.norm_type if 'norm_type' in pconf.keys() else None
+        return cls(pconf.window_length, norm, norm_type)
 
     def __len__(self):
         return len(self.price_buffer)
@@ -70,9 +97,13 @@ class StackerDiscrete(PreProcessor):
             self.stream_state(data)
 
     def current_data(self):
-        return State(np.array(self.price_buffer, copy=True),
-                     np.array(self.portfolio_buffer, copy=True),
-                     np.array(self.time_buffer, copy=True))
+        price = np.array(self.price_buffer, copy=True)
+        if self.norm:
+            price = self.norm_fn(price)
+        portfolio = np.array(self.portfolio_buffer, copy=True)
+        timestamp = np.array(self.time_buffer, copy=True)
+        return State(price, portfolio, timestamp)
+
 
     def initialize_history(self, env):
         while len(self) < self.k:
@@ -86,9 +117,11 @@ class StackerDiscrete(PreProcessor):
 
 
 class StackerContinuous(StackerDiscrete):
-    def __init__(self, window_len):
+    def __init__(self, window_len, norm=True, norm_type='lookback'):
         self.timeframe = window_len
         self.min_tf = self.k
+        self.norm = norm
+        self.norm_fn = make_normalizer(norm_type)
         self.price_buffer = deque()
         self.portfolio_buffer = deque()
         self.time_buffer = deque()
@@ -176,3 +209,42 @@ class RollerDiscrete(PreProcessor):
         self.portfolio_buffer.clear()
         self.time_buffer.clear()
         self.feature_buffer.clear()
+
+
+class CustomA(StackerDiscrete):
+    def __init__(self, *args, **kw):
+        super().__init__(*args, **kw)
+        self.feature_output_shape = (self.k-1, 2)
+
+
+    def current_data(self):
+        price = np.array(self.price_buffer, copy=True).squeeze()
+        if self.norm:
+            price = self.norm_fn(price)
+        returns = (price[1:] - price[:-1])
+        pct_up = np.empty_like(returns)
+        _expanding_mean(returns > 0., pct_up)
+        price = np.stack([price[1:], pct_up], axis=-1)
+        # import ipdb; ipdb.set_trace()
+        portfolio = np.array(self.portfolio_buffer, copy=True)
+        timestamp = np.array(self.time_buffer, copy=True)
+        return State(price, portfolio, timestamp)
+
+
+@numba.guvectorize([(numba.float64[:], numba.float64[:])],
+                   '(n)->(n)', nopython=True)
+def _expanding_mean(arr, ma):
+    """ expanding/running estimate - equiv to pd.expanding().mean()"""
+    n = arr.shape[0]
+    # ma = np.empty(n)
+    w = 1
+    if not np.isnan(arr[0]):
+        ma_old = arr[0]
+    else:
+        ma_old = 0.
+    ma[0] = ma_old
+    for i in range(1, n):
+        if not np.isnan(arr[i]):
+            ma_old = ma_old + arr[i]
+            w += 1
+        ma[i] = ma_old / w

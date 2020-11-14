@@ -238,6 +238,8 @@ class ConvPolicyDeterministic(nn.Module):
         self.projection = nn.Linear(project_in, d_model)
         self.output_head = nn.Linear(d_model, self.n_assets*self.n_actions)
         self.apply(self.initialize_weights)
+        # import ipdb; ipdb.set_trace()
+
 
     def initialize_weights(self, m):
         if isinstance(m, nn.Linear):

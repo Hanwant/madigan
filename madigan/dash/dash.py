@@ -203,17 +203,26 @@ class MainWindow( Ui_MainWindow, QtWidgets.QMainWindow):
 
     def load_config(self, config_path=None):
         config_path = config_path or Path(self.get_file(load=True))
-        if config_path is not None and config_path != "":
-            self.config_path = config_path
-            old_agent_type = self.exp_config.agent_type
-            self.exp_config = Config(load_config(self.config_path))
-            self.ParamsEdit.setText(str(yaml.safe_dump(self.exp_config.to_dict())))
-            path = Path(self.exp_config.basepath)/self.exp_config.experiment_id/'logs'
-            if self.exp_config.agent_type != old_agent_type:
-                self.make_plots()
-            self.FilenameLabel.setText('/'.join(self.config_path.parts[-2:]))
-            # set new datapath and let plots load new data
-            self.set_datapath(path)
+        try:
+            if config_path is not None and config_path != "":
+                self.config_path = config_path
+                old_agent_type = self.exp_config.agent_type
+                self.exp_config = Config(load_config(self.config_path))
+                self.ParamsEdit.setText(str(yaml.safe_dump(self.exp_config.to_dict())))
+                path = Path(self.exp_config.basepath)/self.exp_config.experiment_id/'logs'
+                if self.exp_config.agent_type != old_agent_type:
+                    self.make_plots()
+                self.FilenameLabel.setText('/'.join(self.config_path.parts[-2:]))
+                # set new datapath and let plots load new data
+                self.set_datapath(path)
+        except Exception as E:
+            self.log(E)
+
+    def log(self, message):
+        """
+        Sends message to log box
+        """
+        print(message)
 
     def save_config(self):
         config_path = self.get_file(save=True)

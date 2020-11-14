@@ -90,6 +90,7 @@ class DDPG(OffPolicyActorCritic):
             self.critic_t.load_state_dict(self.critic_b.state_dict())
             self.actor_t.load_state_dict(self.actor_b.state_dict())
         self.proximal_portfolio_penalty = proximal_portfolio_penalty
+        self.norm_penalty = 1.
 
     @classmethod
     def from_config(cls, config):
@@ -135,26 +136,6 @@ class DDPG(OffPolicyActorCritic):
         """
         return self._action_space
 
-    def action_to_transaction(self, actions: torch.Tensor) -> np.ndarray:
-        """
-        Takes output from net and converts to transaction units
-        Given current ledgerNormedFull - portfolio weights (incl cash)
-        and current prices
-        """
-        assert actions.shape[1:] == (self.n_assets, )
-        # cash_pct = self.env.cash / self.env.equity
-        # current_port = np.concatenate(([cash_pct], self.env.ledgerNormed))
-        current_port = self.env.ledgerNormedFull
-        assert abs(current_port.sum() - 1.) < 1e-8
-        # actions = actions.cpu().numpy()
-        desired_port = actions / actions.sum(axis=-1)
-        # max_amount = self.env.availableMargin * 0.25
-        amounts = (desired_port - current_port) * self.env.equity
-        # amounts = ((desired_port - current_port) * self.env.equity
-        #            ).clip(-max_amount, max_amount)
-        units = amounts[..., 1:] / self.env.currentPrices  # element wise div
-        return units
-
     @torch.no_grad()
     def get_qvals(self, state, action: torch.Tensor = None,
                   target=False, device=None):
@@ -185,6 +166,27 @@ class DDPG(OffPolicyActorCritic):
         if target:
             return self.actor_t(state).squeeze(-1)
         return self.actor_b(state).squeeze(-1)
+
+    def action_to_transaction(self, actions: torch.Tensor) -> np.ndarray:
+        """
+        Takes output from net and converts to transaction units
+        Given current ledgerNormedFull - portfolio weights (incl cash)
+        and current prices
+        """
+        assert actions.shape[1:] == (self.n_assets, )
+        # cash_pct = self.env.cash / self.env.equity
+        # current_port = np.concatenate(([cash_pct], self.env.ledgerNormed))
+        current_port = self.env.ledgerNormedFull
+        assert abs(current_port.sum() - 1.) < 1e-8
+        # actions = actions.cpu().numpy()
+        desired_port = actions / actions.sum(axis=-1)
+        # max_amount = self.env.availableMargin * 0.25
+        amounts = (desired_port - current_port) * self.env.equity
+        # amounts = ((desired_port - current_port) * self.env.equity
+        #            ).clip(-max_amount, max_amount)
+        units = amounts[..., 1:] / self.env.currentPrices  # element wise div
+        return units
+
 
     def get_transactions(self, state, target=False, device=None):
         actions = self.get_actions(state, target, device)
@@ -275,8 +277,10 @@ class DDPG(OffPolicyActorCritic):
     def train_step_actor(self, state):
         action = self.actor_b(state).squeeze(-1)
         loss_actor = -self.critic_t(state, action).mean()
-        penalty = ((action - state.portfolio) ** 2).mean()
-        loss_actor += self.proximal_portfolio_penalty * penalty
+        port_penalty = ((action - state.portfolio) ** 2).mean()
+        # norm_penalty = (1.*action.shape[0] - action.sum()) ** 2
+        loss_actor += self.proximal_portfolio_penalty * port_penalty
+        # loss_actor += self.norm_penalty * norm_penalty
         self.opt_actor.zero_grad()
         loss_actor.backward()
         nn.utils.clip_grad_norm_(self.actor_b.parameters(),
@@ -298,7 +302,7 @@ class DDPG(OffPolicyActorCritic):
             'state_dict_actor_b': self.actor_b.state_dict(),
             'state_dict_actor_t': self.actor_t.state_dict(),
             'training_steps': self.training_steps,
-            'env_steps': self.env_steps,
+            'env_steps': self.env_steps
         }
         torch.save(state, self.savepath / f'{branch}.pth')
 

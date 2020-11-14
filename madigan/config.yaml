@@ -27,25 +27,29 @@ agent_config:
   train_freq: 4
   type: DQN
   unit_size_proportion_avM: 0.1
-  proximal_portfolio_penalty: 0.5
+  proximal_portfolio_penalty: .5
 agent_type: DDPG
 assets:
 - sine1
 basepath: /media/hemu/Data/madigan/experiments/
 data_source_config:
-  mean:
-  - 10.0
-  theta:
-  - .15
-  phi:
-  - 4.0
-  noise_var:
-  - 0.1
-data_source_type: OU
+  trend_prob:
+  - .01
+  min_period:
+  - 50
+  max_period:
+  - 150
+  noise:
+  - .0
+  dY:
+  - 0.001
+  start:
+  - 5.0
+data_source_type: SimpleTrend
 discrete_action_atoms: 3
 discrete_actions: true
 env_type: Synth
-experiment_id: DDPG_OU_penalty_.5_trans_0.05_sigmoid
+experiment_id: DDPG_Trend_penalty_.5_trans_0.0_tanh_RollerD_no_noise_large_kernels_pct_up
 init_cash: 1000000
 log_freq: 10000
 lot_unit_value: 10000
@@ -67,6 +71,18 @@ model_config:
   nTau2: 8
   n_layers: 4
   tau_embed_size: 64
+  kernels:
+  - 5
+  - 10
+  - 15
+  channels:
+  - 32
+  - 32
+  - 32
+  strides:
+  - 3
+  - 2
+  - 1
 model_save_freq: 64000
 n_assets: 1
 optim_config:
@@ -82,12 +98,13 @@ optim_config:
   weight_decay: 0
 parent_id: ''
 preprocessor_config:
-  preprocessor_type: WindowedStacker
-  window_length: 64
+  preprocessor_type: CustomA
+  window_length: 128
   timeframes:
   - 64
+  - 128
   - 256
-preprocessor_type: WindowedStacker
+preprocessor_type: CustomA
 required_margin: 1.0
 reward_clip: *id001
 slippage_abs: 0.0
@@ -96,4 +113,4 @@ test_freq: 10000
 test_steps: 4096
 train_steps: 100000
 transaction_cost_abs: 0.0
-transaction_cost_rel: 0.02
+transaction_cost_rel: 0.0

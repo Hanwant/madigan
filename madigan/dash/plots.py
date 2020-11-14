@@ -4,7 +4,7 @@ from itertools import product
 import numpy as np
 import pandas as pd
 
-from PyQt5.QtGui import QTableWidget, QTableWidgetItem, QGridLayout
+from PyQt5.QtGui import QTableWidget, QTableWidgetItem, QGridLayout, QListWidget
 import pyqtgraph as pg
 
 ####################################################################################
@@ -237,8 +237,8 @@ class TestEpisodePlots(QGridLayout):
         self.plots['transactions'].showGrid(1, 1)
         self.plots['ledgerNormed'].showGrid(1, 1)
 
-        self.episode_table = QTableWidget(0, 1)
-        self.episode_table.setHorizontalHeaderLabels(['Episode Name'])
+        self.episode_table = QListWidget()
+        self.episode_table.setWindowTitle(['Episode Name'])
         self.episode_table.setStyleSheet("background-color:rgb(99, 102, 49) ")
         self.accounting_table = QTableWidget(5, 1)
         self.accounting_table.setVerticalHeaderLabels(['Equity', 'Balance', 'Cash',
@@ -291,10 +291,12 @@ class TestEpisodePlots(QGridLayout):
             self.episodes = sorted(episodes,
                                    key=lambda x: int(str(x.name).split('_')[3]),
                                    reverse=True)
-            self.episode_table.setRowCount(len(self.episodes))
-            for i, episode in enumerate(self.episodes):
-                val = QTableWidgetItem(str(episode.name))
-                self.episode_table.setItem(i, 0, val)
+            # self.episode_table.setRowCount(len(self.episodes))
+            self.episode_table.clear()
+            self.episode_table.addItems(self.episodes)
+            # for i, episode in enumerate(self.episodes):
+            #     val = QTableWidgetItem(str(episode.name))
+            #     self.episode_table.setItem(i, 0, val)
 
     def load_from_hdf(self, path=None):
         if path is None:
