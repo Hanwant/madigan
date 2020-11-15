@@ -23,7 +23,7 @@ agent_config:
   - -1.0
   - 1.0
   tau_embed_size: 64
-  tau_soft_update: 0.0001
+  tau_soft_update: 0.001
   train_freq: 4
   type: DQN
   unit_size_proportion_avM: 0.1
@@ -49,7 +49,7 @@ data_source_type: SimpleTrend
 discrete_action_atoms: 3
 discrete_actions: true
 env_type: Synth
-experiment_id: DDPG_Trend_penalty_.5_trans_0.0_tanh_RollerD_no_noise_large_kernels_pct_up
+experiment_id: DDPG_Trend_penalty_.5_trans_0.0_tanh_CustomA_orthog_init
 init_cash: 1000000
 log_freq: 10000
 lot_unit_value: 10000
@@ -73,15 +73,12 @@ model_config:
   tau_embed_size: 64
   kernels:
   - 5
-  - 10
-  - 15
+  - 5
   channels:
-  - 32
   - 32
   - 32
   strides:
   - 3
-  - 2
   - 1
 model_save_freq: 64000
 n_assets: 1

@@ -1,7 +1,9 @@
 import math
+from itertools import product
 
 import numpy as np
 import pandas as pd
+import torch
 import h5py
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
@@ -13,7 +15,7 @@ def make_grid(n):
     makes evenish 2d grid of size n
     useful for arranging plots
     """
-    nrows =  int(math.sqrt(n))
+    nrows = int(math.sqrt(n))
     ncols = int(math.ceil(n/nrows))
     return nrows, ncols
 
@@ -156,5 +158,44 @@ def plot_sarsd(sarsd, env_metrics=None, qvals=None):
     return fig, axes
 
 
+def plot_conv1d_kernel(params, ax, channels_in=None, channels_out=None,
+                       title: str = '', show_legend=False):
+    if isinstance(params, torch.Tensor):
+        params = params.detach().cpu().numpy()
+    assert len(params.shape) == 3  # (c_in, c_out, kernel_size)
+    if isinstance(channels_in, int):
+        channels_in = range(channels_in)
+    elif channels_in is None:
+        channels_in = range(params.shape[0])
+    if isinstance(channels_out, int):
+        channels_in = range(channels_out)
+    elif channels_out is None:
+        channels_out = range(params.shape[1])
 
+    for _in, _out in product(channels_in, channels_out):
+        p = params[_in, _out, :]
+        ax.plot(p, label=f'in: {_in}, out: {_out}')
+    ax.set_title(title)
+    if show_legend:
+        ax.legend()
+    return ax
+
+
+def filter_conv_name(name):
+    if 'conv' in name or 'Conv' in name:
+        return True
+
+
+def plot_conv1d_model(model: torch.nn.Module, channels_in=None,
+                      channels_out=None, show_legend=False):
+    # params = get_conv_params(model)
+    params = {k: p for k, p in model.named_parameters() if filter_conv_name(k)}
+    params = {k: p for k, p in params.items() if len(p.shape) == 3}
+
+    rows, cols = make_grid(len(params))
+    fig, axs = plt.subplots(rows, cols)
+    for (name, param), ax in zip(params.items(), axs.flatten()):
+        plot_conv1d_kernel(param, ax, title=name,
+                           show_legend=show_legend)
+    return fig, axs
 

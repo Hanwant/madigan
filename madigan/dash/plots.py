@@ -238,7 +238,7 @@ class TestEpisodePlots(QGridLayout):
         self.plots['ledgerNormed'].showGrid(1, 1)
 
         self.episode_table = QListWidget()
-        self.episode_table.setWindowTitle(['Episode Name'])
+        self.episode_table.setWindowTitle('Episode Name')
         self.episode_table.setStyleSheet("background-color:rgb(99, 102, 49) ")
         self.accounting_table = QTableWidget(5, 1)
         self.accounting_table.setVerticalHeaderLabels(['Equity', 'Balance', 'Cash',
@@ -249,7 +249,7 @@ class TestEpisodePlots(QGridLayout):
         self.positions_table.setHorizontalHeaderLabels(['Ledger', 'Ledger Normed'])
         self.positions_table.setStyleSheet("background-color:rgb(23, 46, 67) ")
 
-        self.episode_table.horizontalHeader().setStretchLastSection(True)
+        # self.episode_table.horizontalHeader().setStretchLastSection(True)
         self.accounting_table.horizontalHeader().setStretchLastSection(True)
         self.positions_table.horizontalHeader().setStretchLastSection(True)
 
@@ -262,9 +262,12 @@ class TestEpisodePlots(QGridLayout):
 
         self.current_pos_line.sigPositionChanged.connect(self.update_accounting_table)
         self.current_pos_line.sigPositionChanged.connect(self.update_positions_table)
-        self.episode_table.cellDoubleClicked.connect(
+        # self.episode_table.cellDoubleClicked.connect(
+        #     lambda: self.load_from_hdf(self.datapath/self.episode_table.currentItem().text())
+        # )
+        self.episode_table.currentRowChanged.connect(
             lambda: self.load_from_hdf(self.datapath/self.episode_table.currentItem().text())
-        )
+            )
 
         self.link_x_axes()
         # self.unlink_x_axes()
@@ -293,7 +296,7 @@ class TestEpisodePlots(QGridLayout):
                                    reverse=True)
             # self.episode_table.setRowCount(len(self.episodes))
             self.episode_table.clear()
-            self.episode_table.addItems(self.episodes)
+            self.episode_table.addItems([ep.name for ep in self.episodes])
             # for i, episode in enumerate(self.episodes):
             #     val = QTableWidgetItem(str(episode.name))
             #     self.episode_table.setItem(i, 0, val)

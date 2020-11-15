@@ -277,7 +277,7 @@ class OffPolicyActorCritic(Agent):
         self.batch_size = batch_size
         self.expl_noise_sd = expl_noise_sd
         self.test_steps = test_steps
-        self.n_assets = self.action_space.shape[0]
+        self.n_assets = self.action_space.shape[0]  #  includes cash
         self.log_freq = 10000
 
     def save_buffer(self):
@@ -303,6 +303,10 @@ class OffPolicyActorCritic(Agent):
 
     def reset_state(self) -> State:
         state = self._env.reset()
+        random_port = np.random.uniform(-1, 1, self.n_assets)
+        random_port = random_port / random_port.sum()
+        units = (random_port[1:] * self._env.equity) / self._env.currentPrices
+        self._env.step(units)
         self._preprocessor.reset_state()
         self._preprocessor.stream_state(state)
         self._preprocessor.initialize_history(self._env)

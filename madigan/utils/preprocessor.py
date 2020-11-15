@@ -216,7 +216,6 @@ class CustomA(StackerDiscrete):
         super().__init__(*args, **kw)
         self.feature_output_shape = (self.k-1, 2)
 
-
     def current_data(self):
         price = np.array(self.price_buffer, copy=True).squeeze()
         if self.norm:
