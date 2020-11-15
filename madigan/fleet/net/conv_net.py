@@ -7,30 +7,9 @@ import torch.nn as nn
 
 from .base import QNetwork
 from ...utils.data import State
-from ...utils import calc_conv_out_shape, calc_pad_to_conserve
-
-def make_conv1d_layers(input_shape, kernels, channels, strides=None,
-                       preserve_window_len=False, act=nn.GELU,
-                       causal_dim=0):
-    if strides is None:
-        strides = [1 for i in range(len(kernels))]
-    assert len(kernels) == len(strides) == len(channels)
-    assert len(input_shape) == 2
-    window_len = input_shape[0]
-    input_feats = input_shape[1]
-    channels = [input_feats] + channels
-    conv_layers = []
-    for i in range(len(kernels)):
-        conv = nn.Conv1d(channels[i], channels[i+1], kernels[i], stride=strides[i])
-        conv_layers.append(conv)
-        if preserve_window_len:
-            arb_input = (window_len, )
-            # CAUSAL_DIM=0 assumes 0 is time dimension for input to calc_pad
-            causal_pad = calc_pad_to_conserve(arb_input, conv,
-                                              causal_dim=causal_dim)
-            conv_layers.append(nn.ReplicationPad1d(causal_pad))
-        conv_layers.append(act())
-    return nn.Sequential(*conv_layers)
+from .utils import make_conv1d_layers, calc_conv_out_shape
+from .utils import calc_pad_to_conserve
+from .utils import xavier_initialization, orthogonal_initialization
 
 class PortEmbed(nn.Module):
     """
@@ -168,18 +147,19 @@ class ConvCriticQ(nn.Module):
         project_in = conv_out_shape[0]*channels[-1] + 2 * self.n_assets
         self.projection = nn.Linear(project_in, d_model)
         self.output_head = nn.Linear(d_model, 1)
-        self.apply(self.initialize_weights)
+        # self.apply(xavier_initialization, linear_range=(-3e-3, 3e-3))
+        self.apply(orthogonal_initialization)
 
-    def initialize_weights(self, m):
-        if isinstance(m, nn.Linear):
-            nn.init.uniform_(m.weight, -3e-3, 3e-3)
-        elif isinstance(m, nn.Conv1d):
-            fan_in, _ = nn.init._calculate_fan_in_and_fan_out(
-                m.weight)
-            scale = 1/math.sqrt(fan_in)
-            nn.init.uniform_(m.weight, -scale, scale)
-            if m.bias is not None:
-                nn.init.constant_(m.bias, 0)
+    # def initialize_weights(self, m):
+    #     if isinstance(m, nn.Linear):
+    #         nn.init.uniform_(m.weight, -3e-3, 3e-3)
+    #     elif isinstance(m, nn.Conv1d):
+    #         fan_in, _ = nn.init._calculate_fan_in_and_fan_out(
+    #             m.weight)
+    #         scale = 1/math.sqrt(fan_in)
+    #         nn.init.uniform_(m.weight, -scale, scale)
+    #         if m.bias is not None:
+    #             nn.init.constant_(m.bias, 0)
 
     def get_state_emb(self, state: State, action: torch.Tensor):
         """
@@ -192,7 +172,6 @@ class ConvCriticQ(nn.Module):
         # price_emb = self.price_project(price_emb)
         # port_emb = self.port_project(port)
         # action_emb = self.action_project(action)
-        # import ipdb; ipdb.set_trace()
         state_emb = torch.cat([price_emb, port, action], dim=-1)
         state_emb = self.projection(state_emb)
         out = self.act(state_emb)
@@ -237,20 +216,20 @@ class ConvPolicyDeterministic(nn.Module):
         project_in = conv_out_shape[0]*channels[-1] + self.n_assets
         self.projection = nn.Linear(project_in, d_model)
         self.output_head = nn.Linear(d_model, self.n_assets*self.n_actions)
-        self.apply(self.initialize_weights)
-        # import ipdb; ipdb.set_trace()
+        # self.apply(self.initialize_weights)
+        # self.apply(xavier_initialization, linear_range=(-3e-4, 3e-4))
+        self.apply(orthogonal_initialization)
 
-
-    def initialize_weights(self, m):
-        if isinstance(m, nn.Linear):
-            nn.init.uniform_(m.weight, -3e-4, 3e-4)
-        elif isinstance(m, nn.Conv1d):
-            fan_in, _ = nn.init._calculate_fan_in_and_fan_out(
-                m.weight)
-            scale = 1/math.sqrt(fan_in)
-            nn.init.uniform_(m.weight, -scale, scale)
-            if m.bias is not None:
-                nn.init.constant_(m.bias, 0)
+    # def initialize_weights(self, m):
+    #     if isinstance(m, nn.Linear):
+    #         nn.init.uniform_(m.weight, -3e-4, 3e-4)
+    #     elif isinstance(m, nn.Conv1d):
+    #         fan_in, _ = nn.init._calculate_fan_in_and_fan_out(
+    #             m.weight)
+    #         scale = 1/math.sqrt(fan_in)
+    #         nn.init.uniform_(m.weight, -scale, scale)
+    #         if m.bias is not None:
+    #             nn.init.constant_(m.bias, 0)
 
     def get_state_emb(self, state: State):
         """
@@ -278,5 +257,5 @@ class ConvPolicyDeterministic(nn.Module):
             state_emb = self.get_state_emb(state)  # (bs, d_model)
         actions = self.output_head(state_emb).view(
             state_emb.shape[0], self.n_assets, self.n_actions)
-        # return torch.tanh(actions)
-        return torch.sigmoid(actions)
+        return torch.tanh(actions)
+        # return torch.sigmoid(actions)

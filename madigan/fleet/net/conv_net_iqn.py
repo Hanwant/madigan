@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 
 from ...utils.data import State
-from ...utils import calc_conv_out_shape, calc_pad_to_conserve
+from .utils import calc_conv_out_shape, calc_pad_to_conserve
 
 class NormalHeadIQN(nn.Module):
     def __init__(self, d_model, output_shape):
