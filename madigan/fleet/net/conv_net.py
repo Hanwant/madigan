@@ -69,24 +69,12 @@ class ConvNet(nn.Module):
         self.action_atoms = output_shape[1]
         self.d_model = d_model
         self.act = nn.GELU()
-        # channels = [input_shape[1]] + channels
-        # conv_layers = []
-        # for i in range(len(kernels)):
-        #     conv = nn.Conv1d(channels[i], channels[i+1], kernels[i], stride=strides[i])
-        #     conv_layers.append(conv)
-        #     if preserve_window_len:
-        #         arb_input = (window_len, )
-        #         # CAUSAL_DIM=0 assumes 0 is time dimension for input to calc_pad
-        #         causal_pad = calc_pad_to_conserve(arb_input, conv, causal_dim=0)
-        #         conv_layers.append(nn.ReplicationPad1d(causal_pad))
-        #     conv_layers.append(self.act)
-        # self.conv_layers = nn.Sequential(*conv_layers)
         self.conv_layers = make_conv1d_layers(
             input_shape, kernels, channels, strides=strides, act=nn.GELU,
             preserve_window_len=preserve_window_len, causal_dim=0)
         conv_out_shape = calc_conv_out_shape(window_len, self.conv_layers)
         self.price_project = nn.Linear(conv_out_shape[0]*channels[-1], d_model)
-        self.port_project = nn.Linear(self.n_assets, d_model)
+        self.port_project = nn.Linear(self.n_assets+1, d_model)
         if dueling:
             self.output_head = DuelingHead(d_model, output_shape)
         else:
@@ -100,7 +88,6 @@ class ConvNet(nn.Module):
         price = state.price.transpose(-1, -2) # switch features and time dimension
         port = state.portfolio
         price_emb = self.conv_layers(price).view(price.shape[0], -1)
-        # import ipdb; ipdb.set_trace()
         price_emb = self.price_project(price_emb)
         port_emb = self.port_project(port)
         state_emb = price_emb * port_emb

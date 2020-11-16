@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 import pickle
 from copy import deepcopy
 from random import random
-from typing import List, Tuple
+from typing import List, Tuple, Union
 
 import numpy as np
 import torch
@@ -153,6 +153,10 @@ class OffPolicyQ(Agent):
     @abstractmethod
     def get_action(self, state, target=False):
         pass
+    @abstractmethod
+    def action_to_transaction(self, action: Union[np.ndarray, torch.tensor]):
+        pass
+
 
     def reset_state(self) -> State:
         state = self._env.reset()
@@ -183,8 +187,8 @@ class OffPolicyQ(Agent):
         # i = 0
         max_steps = self.training_steps + n
         while True:
-            action = self.explore(state)
-            _next_state, reward, done, info = self._env.step(action)
+            action, transaction = self.explore(state)
+            _next_state, reward, done, info = self._env.step(transaction)
 
             running_cost += np.sum(info.brokerResponse.transactionCost)
             self._preprocessor.stream_state(_next_state)
@@ -221,13 +225,13 @@ class OffPolicyQ(Agent):
 
             self.env_steps += 1
 
-    def explore(self, state) -> np.ndarray:
+    def explore(self, state: State) -> Tuple[np.ndarray, np.ndarray]:
         if random() < self.eps:
             action = self.action_space.sample()
         else:
-            action = self.get_action(state, target=False)
+            action = self.get_action(state, target=False).cpu().numpy()
         self.eps = max(self.eps_min, self.eps * self.eps_decay)
-        return action
+        return action, self.action_to_transaction(action)
 
     @torch.no_grad()
     def test_episode(self, test_steps=None, reset=True):
@@ -242,8 +246,9 @@ class OffPolicyQ(Agent):
         while i <= test_steps:
             _tst_metrics = {}
             qvals = self.get_qvals(state, target=False)[0].cpu().numpy()
-            action = self.get_action(state, target=False)
-            state, reward, done, info = self._env.step(action)
+            action = self.get_action(state, target=False).cpu().numpy()
+            transaction = self.action_to_transaction(action)
+            state, reward, done, info = self._env.step(transaction)
             self._preprocessor.stream_state(state)
             state = self._preprocessor.current_data()
             _tst_metrics['qvals'] = qvals

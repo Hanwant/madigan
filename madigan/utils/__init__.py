@@ -83,7 +83,7 @@ class DiscreteRangeSpace(ActionSpace):
         self.n = n
         self.low = ranges[0]
         self.high = ranges[1]
-        self.action_atoms = self.high - self.low - 1
+        self.action_atoms = self.high - self.low
         self.action_multiplier = 1
 
     def sample(self):

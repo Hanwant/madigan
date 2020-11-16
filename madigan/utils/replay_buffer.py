@@ -1,8 +1,17 @@
 from collections import deque
 import math
 from random import sample
+
 import numpy as np
+import cpprb
+
 from .data import SARSD, State
+
+class ReplayBufferC(cpprb.ReplayBuffer):
+
+    @classmethod
+    def from_config(cls, config):
+        return cls(config.rb_size, config.nstep_return, config.agent_config.discount)
 
 class ReplayBuffer:
     """
@@ -29,7 +38,7 @@ class ReplayBuffer:
     def buffer(self):
         return self._buffer
 
-    def get_nstep_sarsd(self):
+    def pop_nstep_sarsd(self):
         """
         Calculates nstep discounted return from the nstep buffer
         and returns the sarsd with the adjusted return and next_state offset to t+n
@@ -40,6 +49,9 @@ class ReplayBuffer:
         nstep_sarsd.reward = reward
         if len(self._nstep_buffer):
             nstep_sarsd.next_state = self._nstep_buffer[-1].next_state
+            nstep_sarsd.done = self._nstep_buffer[-1].done
+            # if self._nstep_buffer[-1].done:
+            #     nstep_sarsd.done = 1
         return nstep_sarsd
 
     def add(self, sarsd):
@@ -47,14 +59,14 @@ class ReplayBuffer:
         Adds sarsd to nstep buffer.
         If nstep buffer is full, adds to replay buffer first
         """
-        if len(self._nstep_buffer) == self.nstep_return:
-            nstep_sarsd = self.get_nstep_sarsd()
-            self._add_to_replay(nstep_sarsd)
         self._nstep_buffer.append(sarsd)
         if sarsd.done:
             while len(self._nstep_buffer) > 0:
-                nstep_sarsd = self.get_nstep_sarsd()
+                nstep_sarsd = self.pop_nstep_sarsd()
                 self._add_to_replay(nstep_sarsd)
+        elif len(self._nstep_buffer) == self.nstep_return:
+            nstep_sarsd = self.pop_nstep_sarsd()
+            self._add_to_replay(nstep_sarsd)
 
     def _add_to_replay(self, sarsd):
         """

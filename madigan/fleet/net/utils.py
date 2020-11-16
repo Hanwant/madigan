@@ -52,27 +52,18 @@ def orthogonal_initialization(m, gain=1.):
     """
     From 'Exact solutions to the nonlinear dynamics of learning in deep
     linear neural networks. Saxe et al (2013)'.
-    Implementation based on:
-    https://github.com/Lasagne/Lasagne/blob/c5cda0967f2278a41db6494b89bd2cd2dc15aa29/lasagne/init.py#L356
-
     """
     if isinstance(m, (nn.Linear, nn.Conv1d, nn.Conv2d)):
-        shape = m.weight.shape
-        flat_shape = (shape[0], torch.prod(torch.tensor(shape[1:])).item())
-        randn = torch.randn(*flat_shape)
-        u, _, v = torch.svd(randn)
-        w = v.view(shape) if v.shape == flat_shape else u
-        # m.weight.data = nn.Parameter(w)
-        m.weight.data = w
+        nn.init.orthogonal_(m.weight, gain=gain)
         if m.bias is not None:
             nn.init.constant_(m.bias, 0)
 
 
 def calc_conv_out_shape(in_shape: Union[tuple, int], layers: List[nn.Module]):
     """
-    Calculates output shape of input_shape going through a list of pytorch convolutional layers
+    Calculates output shape of input_shape going through the given conv layers
     in_shape: (H, W)
-    layers: list of convolution layers
+    layers: list of pytorch convolution layers
     """
     shape = in_shape
     padding_classes2d = (nn.ConstantPad2d, nn.ReflectionPad2d,

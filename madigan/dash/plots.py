@@ -11,27 +11,30 @@ import pyqtgraph as pg
 ############# Factory Methods ######################################################
 ####################################################################################
 def make_train_plots(agent_type, title=None, **kw):
-    if agent_type in ("DQN", "IQN"):
+    if agent_type in ("DQN", "IQN", "DQNReverser"):
         return TrainPlotsDQN(title=title, **kw)
-    if agent_type in ("DDPG", ):
+    if agent_type in ("DDPG", "DDPGDiscretized"):
         return TrainPlotsActorCritic(title=title, **kw)
-    raise NotImplementedError(f"Train plot widget for agent_type: {agent_type}"+\
-                                "has not been implemented")
+    raise NotImplementedError(
+        f"Train plot widget for agent_type: {agent_type}"+\
+        " has not been implemented")
 
 def make_test_episode_plots(agent_type, title=None, **kw):
-    if agent_type in ("DQN", "IQN"):
+    if agent_type in ("DQN", "IQN", "DQNReverser"):
         return TestEpisodePlotsDQN(title=title, **kw)
-    if agent_type in ("DDPG", ):
+    if agent_type in ("DDPG", "DDPGDiscretized"):
         return TestEpisodePlotsActorCritic(title=title, **kw)
-    raise NotImplementedError(f"Test episode plot widget for agent_type: {agent_type}"+\
-                                "has not been implemented")
+    raise NotImplementedError(
+        f"Test episode plot widget for agent_type: {agent_type}"+\
+        " has not been implemented")
 def make_test_history_plots(agent_type, title=None, **kw):
-    if agent_type in ("DQN", "IQN"):
+    if agent_type in ("DQN", "IQN", "DQNReverser"):
         return TestHistoryPlotsDQN(title=title, **kw)
-    if agent_type in ("DDPG", ):
+    if agent_type in ("DDPG", "DDPGDiscretized"):
         return TestHistoryPlotsActorCritic(title=title, **kw)
-    raise NotImplementedError(f"Test History plot widget for agent_type: {agent_type}"+\
-                                "has not been implemented")
+    raise NotImplementedError(
+        f"Test History plot widget for agent_type: {agent_type}"+\
+        " has not been implemented")
 
 ####################################################################################
 ############# Training Plots  ######################################################
@@ -169,8 +172,6 @@ class TrainPlotsActorCritic(TrainPlots):
         self.lines['Qt'].setData(y=data['Qt'], pen=self.colours['Qt'])
 
 
-
-TrainPlotsDDPG = TrainPlotsActorCritic
 
 ####################################################################################
 ############# Test Episode Plots  ##################################################
@@ -541,7 +542,6 @@ class TestEpisodePlotsActorCritic(TestEpisodePlots):
         # self.lines['action'].setLookupTable(cmap.getLookupTable())
 
 
-TestEpisodePlotsDDPG = TestEpisodePlotsActorCritic
 
 ####################################################################################
 ############# Test History Plots  ##################################################
@@ -558,15 +558,15 @@ class TestHistoryPlots(QGridLayout):
                         'cash': (0, 255, 255), 'margin': (255, 86, 0)}
         self.data = None
         self.plots = {}
-        self.plots['equity'] = self.graphs.addPlot(title='Equity Over Episodes',
-                                                   bottom='training_steps',
-                                                   left='Denomination currency')
-        self.plots['reward'] = self.graphs.addPlot(title='Mean Returns over Episodes',
-                                                   bottom='training_steps',
-                                                   left='returns (proportion)')
-        self.plots['margin'] = self.graphs.addPlot(title='Mean Cash over Episodes',
-                                                   bottom='training steps',
-                                                   left='returns (proportion)')
+        self.plots['equity'] = self.graphs.addPlot(
+            title='Equity Over Episodes', bottom='training_steps',
+            left='Denomination currency')
+        self.plots['reward'] = self.graphs.addPlot(
+            title='Mean Returns over Episodes', bottom='training_steps',
+            left='returns (proportion)')
+        self.plots['margin'] = self.graphs.addPlot(
+            title='Mean Cash over Episodes', bottom='training steps',
+            left='returns (proportion)')
         self.plots['equity'].addLegend()
         self.plots['equity'].showGrid(1, 1)
         self.plots['reward'].showGrid(1, 1)
@@ -595,9 +595,11 @@ class TestHistoryPlots(QGridLayout):
                                            pen=self.colours['final_equity'])
         self.lines['mean_reward'].setData(y=data['mean_reward'],
                                           pen=self.colours['mean_reward'])
-        # self.lines['mean_transaction_cost'].setData(y=data['mean_transaction_cost'],
-        #                                             pen=self.colours['mean_transaction_cost'])
-        # self.lines['margin'].setData(y=data['cash'], pen=self.colours['margin'])
+        # self.lines['mean_transaction_cost'].setData(
+        # y=data['mean_transaction_cost'],
+        # pen=self.colours['mean_transaction_cost'])
+        # self.lines['margin'].setData(y=data['cash'],
+        # pen=self.colours['margin'])
 
     def set_datapath(self, path):
         self.datapath = path
@@ -626,8 +628,7 @@ class TestHistoryPlotsDQN(TestHistoryPlots):
         if data is None or len(data) == 0:
             data = {k: [] for k in self.lines.keys()}
         self.lines['mean_qvals'].setData(y=data['mean_qvals'],
-                                            pen=self.colours['mean_qvals'])
+                                         pen=self.colours['mean_qvals'])
 
 
 TestHistoryPlotsActorCritic = TestHistoryPlotsDQN
-TestHistoryPlotsDDPG = TestHistoryPlotsActorCritic

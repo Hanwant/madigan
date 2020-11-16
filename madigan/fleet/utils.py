@@ -15,7 +15,7 @@ def get_model_class(agent_type, model_type):
     """
     model_na = NotImplementedError(f"{model_type} not Implemented" +\
                                    f"for agent {agent_type}")
-    if agent_type in ("DQN", ):
+    if agent_type in ("DQN", "DQNReverser"):
         if model_type in ("ConvNet", ):
             return ConvNet
         raise model_na
@@ -23,11 +23,12 @@ def get_model_class(agent_type, model_type):
         if model_type in ("ConvNet", "ConvNetIQN"):
             return ConvNetIQN
         raise model_na
-    if agent_type in ("DDPG", ):
+    if agent_type in ("DDPG", "DDPGDiscretized"):
         if model_type == "ConvCriticQ":
             return ConvCriticQ
         if model_type == "ConvPolicyDeterministic":
             return ConvPolicyDeterministic
         raise model_na
 
-    raise NotImplementedError(f"models for agent {agent_type} not Implemented")
+    raise NotImplementedError(f"model {model_type} for agent " +
+                              "{agent_type} not Implemented")

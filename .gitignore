@@ -1,9 +1,11 @@
 **/__pycache__/
 **/build/
+**/experiments/
 *.so
 build/
 
 *.hdf5
+*.h5
 
 .ipynb_checkpoints
 

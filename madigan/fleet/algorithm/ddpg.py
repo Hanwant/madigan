@@ -29,29 +29,15 @@ class DDPG(OffPolicyActorCritic):
     The method for training a single batch is self.train_step(sarsd) where
     sarsd is a class with ndarray members (I.e of shape (bs, time, feats))
     """
-    def __init__(
-            self,
-            env,
-            preprocessor,
-            input_shape: tuple,
-            action_space: ActionSpace,
-            discount: float,
-            nstep_return: int,
-            replay_size: int,
-            replay_min_size: int,
-            batch_size: int,
-            expl_noise_sd: float,
-            test_steps: int,
-            savepath: Union[Path, str],
-            double_dqn: bool,
-            tau_soft_update: float,
-            model_class_critic: str,
-            model_class_actor: str,
-            lr_critic: float,
-            lr_actor: float,
-            model_config: Union[dict, Config],
-            proximal_portfolio_penalty: float
-    ):
+    def __init__(self, env, preprocessor, input_shape: tuple,
+                 action_space: ActionSpace, discount: float, nstep_return: int,
+                 replay_size: int, replay_min_size: int, batch_size: int,
+                 expl_noise_sd: float, test_steps: int,
+                 savepath: Union[Path, str], double_dqn: bool,
+                 tau_soft_update: float, model_class_critic: str,
+                 model_class_actor: str, lr_critic: float, lr_actor: float,
+                 model_config: Union[dict, Config],
+                 proximal_portfolio_penalty: float):
         super().__init__(env, preprocessor, input_shape, action_space,
                          discount, nstep_return, replay_size, replay_min_size,
                          batch_size, expl_noise_sd, test_steps, savepath)
@@ -100,7 +86,7 @@ class DDPG(OffPolicyActorCritic):
         # add an extra asset for cash holdings
         # used in representation of port weights
         # I.e returned by env.ledgerNormedFull
-        action_space = ContinuousActionSpace(-1., 1., config.n_assets+1, 1)
+        action_space = ContinuousActionSpace(-1., 1., config.n_assets + 1, 1)
         aconf = config.agent_config
         savepath = Path(config.basepath) / config.experiment_id / 'models'
         return cls(env, preprocessor, input_shape, action_space,
@@ -111,8 +97,7 @@ class DDPG(OffPolicyActorCritic):
                    config.model_config.critic_model_class,
                    config.model_config.actor_model_class,
                    config.optim_config.lr_critic, config.optim_config.lr_actor,
-                   config.model_config,
-                   aconf.proximal_portfolio_penalty)
+                   config.model_config, aconf.proximal_portfolio_penalty)
 
     @property
     def env(self):
@@ -137,8 +122,11 @@ class DDPG(OffPolicyActorCritic):
         return self._action_space
 
     @torch.no_grad()
-    def get_qvals(self, state, action: torch.Tensor = None,
-                  target=False, device=None):
+    def get_qvals(self,
+                  state: State,
+                  action: torch.Tensor = None,
+                  target=False,
+                  device=None):
         """
         External interface - for inference and env interaction
         Takes in numpy arrays
@@ -187,7 +175,6 @@ class DDPG(OffPolicyActorCritic):
         units = amounts[..., 1:] / self.env.currentPrices  # element wise div
         return units
 
-
     def get_transactions(self, state, target=False, device=None):
         actions = self.get_actions(state, target, device)
         transactions = self.actions_to_transactions(actions)
@@ -205,6 +192,8 @@ class DDPG(OffPolicyActorCritic):
                                     dtype=torch.float32).to(self.device)
             port = torch.as_tensor(state.portfolio[:, -1],
                                    dtype=torch.float32).to(self.device)
+
+
 #         timestamp = torch.as_tensor(state.timestamp)
         return State(price, port, state.timestamp)
 
@@ -212,7 +201,8 @@ class DDPG(OffPolicyActorCritic):
         state = self.prep_state_tensors(sarsd.state, batch=True)
         #         action = np.rint(sarsd.action // self.lot_unit_value) + self.action_atoms//2
         # action = self.transactions_to_actions(sarsd.action)
-        action = torch.as_tensor(sarsd.action, dtype=torch.float32,
+        action = torch.as_tensor(sarsd.action,
+                                 dtype=torch.float32,
                                  device=self.device)
         reward = torch.as_tensor(sarsd.reward,
                                  dtype=torch.float32,
@@ -277,14 +267,15 @@ class DDPG(OffPolicyActorCritic):
     def train_step_actor(self, state):
         action = self.actor_b(state).squeeze(-1)
         loss_actor = -self.critic_t(state, action).mean()
-        port_penalty = ((action - state.portfolio) ** 2).mean()
+        port_penalty = ((action - state.portfolio)**2).mean()
         # norm_penalty = (1.*action.shape[0] - action.sum()) ** 2
         loss_actor += self.proximal_portfolio_penalty * port_penalty
         # loss_actor += self.norm_penalty * norm_penalty
         self.opt_actor.zero_grad()
         loss_actor.backward()
         nn.utils.clip_grad_norm_(self.actor_b.parameters(),
-                                 max_norm=1., norm_type=2)
+                                 max_norm=1.,
+                                 norm_type=2)
         self.opt_actor.step()
         return loss_actor.detach().item()
 
@@ -350,3 +341,31 @@ class DDPG(OffPolicyActorCritic):
             elif np.sign(portfolio[i]) == np.sign(action):
                 transactions[i] = 0.
         return transactions
+
+
+class DDPGDiscretized(DDPG):
+    @classmethod
+    def from_config(cls, config):
+        inst = super().from_config(config)
+        aconf = config.agent_config
+        inst.transaction_thresh = aconf.transaction_thresh
+        return inst
+
+    def action_to_transaction(self, actions: torch.Tensor) -> np.ndarray:
+        """
+        Takes output from net and converts to transaction units
+        Given current ledgerNormedFull - portfolio weights (incl cash)
+        and current prices
+        """
+        current_port = self.env.ledgerNormedFull
+        # actions = actions.cpu().numpy()
+        desired_port = actions / actions.sum(axis=-1)
+        # max_amount = self.env.availableMargin * 0.25
+        amount_weights = (desired_port - current_port)
+        # amounts = ((desired_port - current_port) * self.env.equity
+        #            ).clip(-max_amount, max_amount)
+        amount_weights = np.where(
+            amount_weights.abs() < self.transaction_thresh, 0., amount_weights)
+        amounts = amount_weights * self.env.equity
+        units = amounts[..., 1:] / self.env.currentPrices  # element wise div
+        return units

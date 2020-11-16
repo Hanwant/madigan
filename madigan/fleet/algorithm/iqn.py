@@ -159,9 +159,9 @@ class IQN(DQN):
                                             self.action_atoms)
         quantiles_next = (quantiles_next * one_hot).sum(-1)
         assert quantiles_next.shape[1:] == (self.nTau2, self.n_assets)
-        Gt = reward[:, None, None] + (~done[:, None, None] *\
-                                (self.discount ** self.nstep_return) *\
-                                quantiles_next)
+        Gt = reward[:, None, None] + (~done[:, None, None] *
+                                      (self.discount ** self.nstep_return) *
+                                      quantiles_next)
         assert Gt.shape[1:] == (self.nTau2, self.n_assets)
         return Gt
 
@@ -184,16 +184,6 @@ class IQN(DQN):
         loss, td_error = self.loss_fn(Qt, Gt, tau1)
         self.opt.zero_grad()
         loss.backward()
-        # with torch.no_grad():
-        #     total_norm = 0.
-        #     for p in self.model_b.parameters():
-        #         param_norm = p.grad.data.norm(2)
-        #         total_norm += param_norm.item()**2
-        #     total_norm = total_norm ** (1./2)
-        #     if total_norm >= .5:
-        #         print(total_norm)
-        # torch.nn.utils.clip_grad_norm_(self.model_b.parameters(), max_norm=1.,
-        #                                norm_type=2)
         self.opt.step()
 
         self.update_target()

@@ -20,23 +20,23 @@ env_dict={"state_price": {"shape": obs_shape},
           "discounts": {}}
 
 def make_data_dict(n):
-    data={"state_price": np.random.randn(n, obs_shape),
-          "state_portfolio": np.random.randn(n, action_shape),
-          "action": np.random.randn(n, action_shape),
-          "reward": np.random.randn(n).astype(np.float32),
-          "next_state_price": np.random.randn(n, obs_shape),
-          "next_state_portfolio": np.random.randn(n, action_shape),
+    data={"state_price": np.random.randn(n, obs_shape).astype(np.float32),
+          "state_portfolio": np.random.randn(n, action_shape).astype(np.float32),
+          "action": np.random.randn(n, action_shape).astype(np.float32),
+          "reward": np.random.randn(n).astype(np.float32).astype(np.float32),
+          "next_state_price": np.random.randn(n, obs_shape).astype(np.float32),
+          "next_state_portfolio": np.random.randn(n, action_shape).astype(np.float32),
           "done": np.random.binomial(1, 0.1, n),
-          "discounts": np.random.randn(n)}
+          "discounts": np.random.randn(n).astype(np.float32)}
     return data
 
 def make_data_tuple(n):
-    return (np.random.randn(n, obs_shape),
-            np.random.randn(n, action_shape), # port
-            np.random.randn(n, action_shape), # actions for each asset
-            np.random.randn(n),
-            np.random.randn(n, obs_shape),
-            np.random.randn(n, action_shape),
+    return (np.random.randn(n, obs_shape).astype(np.float32),
+            np.random.randn(n, action_shape).astype(np.float32), # port
+            np.random.randn(n, action_shape).astype(np.float32), # actions for each asset
+            np.random.randn(n).astype(np.float32),
+            np.random.randn(n, obs_shape).astype(np.float32),
+            np.random.randn(n, action_shape).astype(np.float32),
             np.random.binomial(1, 0.1, n))
 
 def add_RBP_dict(rbp, data):
@@ -70,7 +70,7 @@ def test_sarsd_same(sample_py, sample_cy):
                     sample_cy['next_state_price'], sample_cy['next_state_portfolio'],
                     sample_cy['done']])):
         try:
-            np.testing.assert_allclose(a, b.squeeze()[:-1])
+            np.testing.assert_allclose(a, b.squeeze(), atol=1e-6)
         except AssertionError as E:
             print(E)
             print('data num: ', i)
@@ -98,7 +98,7 @@ def test_nstep_logic():
     add_RBC_dict(rbc, data)
     sample_py = rbp.get_full()
     sample_cy = rbc.get_all_transitions()
-    import ipdb; ipdb.set_trace()
+    # import ipdb; ipdb.set_trace()
     test_sarsd_same(sample_py, sample_cy)
 
 

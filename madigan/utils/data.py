@@ -7,6 +7,11 @@ class State:
     portfolio: np.ndarray
     timestamp: int
 
+@dataclass
+class Action:
+    action: np.ndarray
+    transaction: np.ndarray
+
 
 @dataclass
 class SARSD:

@@ -161,6 +161,7 @@ def make_config(
         discrete_action_atoms=11,  # Agent/Model spec
         lot_unit_value=1_000,  # Agent parameter
         unit_size_proportion_avM=0.1,
+        transaction_thresh=0.02,
         proximal_portfolio_penalty=0.5,
 
         # MODEL ###############################################################
@@ -237,6 +238,8 @@ def make_config(
         'eps_decay': expl_eps_decay,
         'expl_noise_sd': expl_noise_sd,
         'reward_clip': reward_clip,
+        'transaction_thresh': transaction_thresh,
+        'unit_size_proportion_avM': unit_size_proportion_avM,
         'proximal_portfolio_penalty': proximal_portfolio_penalty,
     }
     config = dict(

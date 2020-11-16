@@ -1,8 +1,11 @@
 import os
 from typing import Union
 from pathlib import Path
+from random import random
+
 import numpy as np
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 
 from .base import OffPolicyQ
@@ -92,8 +95,7 @@ class DQN(OffPolicyQ):
         preprocessor = make_preprocessor(config)
         input_shape = preprocessor.feature_output_shape
         atoms = config.discrete_action_atoms
-        action_space = DiscreteRangeSpace((-atoms//2, atoms//2 + 1),
-                                          config.n_assets)
+        action_space = DiscreteRangeSpace((0, atoms), config.n_assets)
         aconf = config.agent_config
         unit_size = aconf.unit_size_proportion_avM
         savepath = Path(config.basepath)/config.experiment_id/'models'
@@ -126,30 +128,24 @@ class DQN(OffPolicyQ):
         Action space object which can be sampled from
         outputs transaction units
         """
-        units = self.unit_size * self.env.availableMargin / self.env.currentPrices
-        self._action_space.action_multiplier = units
+        # units = self.unit_size * self.env.availableMargin \
+        #     / self.env.currentPrices
+        # self._action_space.action_multiplier = units
         return self._action_space
 
 
-    def actions_to_transactions(self, actions: torch.Tensor)->np.ndarray:
+    def action_to_transaction(self, actions: torch.Tensor)->np.ndarray:
         """
         Takes output from net and converts to transaction units
         """
-        units = self.unit_size * self.env.availableMargin / self.env.currentPrices
-        actions_centered = (actions - (self.action_atoms // 2)).cpu().numpy()
+        units = self.unit_size * self.env.availableMargin \
+            / self.env.currentPrices
+        # actions_centered = (actions - (self.action_atoms // 2)).cpu().numpy()
+        # transactions = actions_centered * units
+        actions_centered = (actions - (self.action_atoms // 2))
+        if isinstance(actions_centered, torch.Tensor):
+            actions_centered = actions_centered.cpu().numpy()
         return actions_centered * units
-
-    def transactions_to_actions(self, transactions: np.ndarray) -> np.ndarray:
-        """
-        takes transactions and converts them to -1, 0, 1
-        Assumes only 3 actions atm
-        """
-        # actions = np.rint((prices*transactions) // self.lot_unit_value) + (self.action_atoms//2)
-        if self.action_atoms == 3:
-            actions = ternarize_array(transactions) + self.action_atoms // 2
-        else:
-            raise NotImplementedError("transaction to actions only implemented for ternary actions")
-        return actions
 
     @torch.no_grad()
     def get_qvals(self, state, target=False, device=None):
@@ -172,7 +168,7 @@ class DQN(OffPolicyQ):
         """
         qvals = self.get_qvals(state, target=target, device=device)
         actions = qvals.max(-1)[1][:, 0] # get rid of last dim
-        return self.actions_to_transactions(actions)
+        return actions
 
 
     def __call__(self, state: State, target: bool = False, raw_qvals: bool = False,
@@ -192,8 +188,8 @@ class DQN(OffPolicyQ):
     def prep_sarsd_tensors(self, sarsd, device=None):
         state = self.prep_state_tensors(sarsd.state, batch=True)
 #         action = np.rint(sarsd.action // self.lot_unit_value) + self.action_atoms//2
-        action = self.transactions_to_actions(sarsd.action)
-        action = torch.as_tensor(action, dtype=torch.long, device=self.device)#[..., 0]
+        # action = self.transactions_to_actions(sarsd.action)
+        action = torch.as_tensor(sarsd.action, dtype=torch.long, device=self.device)#[..., 0]
         reward = torch.as_tensor(sarsd.reward, dtype=torch.float32, device=self.device)
         next_state = self.prep_state_tensors(sarsd.next_state, batch=True)
         done = torch.as_tensor(sarsd.done, dtype=torch.bool, device=self.device)
@@ -236,6 +232,8 @@ class DQN(OffPolicyQ):
 
         self.opt.zero_grad()
         loss.backward()
+        nn.utils.clip_grad_norm_(self.model_b.parameters(), max_norm=1.,
+                                 norm_type=2)
         self.opt.step()
 
         td_error = (Gt-Qt).abs().mean().detach().item()
@@ -292,4 +290,50 @@ class DQN(OffPolicyQ):
                 pass
             elif np.sign(portfolio[i]) == np.sign(action):
                 transactions[i] = 0.
+        return transactions
+
+
+class DQNReverser(DQN):
+    """
+    Extends the action space of DQN to include an action for closing positions
+    """
+
+    @classmethod
+    def from_config(cls, config):
+        env = make_env(config)
+        preprocessor = make_preprocessor(config)
+        input_shape = preprocessor.feature_output_shape
+        atoms = config.discrete_action_atoms + 1
+        action_space = DiscreteRangeSpace((0, atoms),
+                                          config.n_assets)
+        aconf = config.agent_config
+        unit_size = aconf.unit_size_proportion_avM
+        savepath = Path(config.basepath)/config.experiment_id/'models'
+        return cls(env, preprocessor, input_shape, action_space, aconf.discount,
+                   aconf.nstep_return, aconf.replay_size, aconf.replay_min_size,
+                   aconf.eps, aconf.eps_decay, aconf.eps_min, aconf.batch_size,
+                   config.test_steps, unit_size, savepath,
+                   aconf.double_dqn, aconf.tau_soft_update,
+                   config.model_config.model_class, config.model_config,
+                   config.optim_config.lr
+                   )
+
+    def action_to_transaction(self, actions: Union[torch.Tensor, np.ndarray]
+                              ) -> np.ndarray:
+        """
+        Takes output from net and converts to transaction units
+        """
+        units = self.unit_size * self._env.availableMargin \
+            / self._env.currentPrices
+        actions_centered = (actions - (self.action_atoms // 2))
+        if isinstance(actions_centered, torch.Tensor):
+            actions_centered = actions_centered.cpu().numpy()
+        transactions = actions_centered * units
+        for i, act in enumerate(actions):
+            if act == 0:
+                current_holding = self._env.ledger[i]
+                if current_holding != 0:
+                    transactions[i] = -current_holding
+                else:
+                    transactions[i] = 0.
         return transactions
