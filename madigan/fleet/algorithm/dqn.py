@@ -133,6 +133,11 @@ class DQN(OffPolicyQ):
         # self._action_space.action_multiplier = units
         return self._action_space
 
+    def abs_norm(self, port: torch.Tensor):
+        return port / port.abs().sum(-1, keepdim=True)
+
+    def renorm(self, abs_norm_port):
+        return abs_norm_port * 1/abs_norm_port.sum(-1, keepdim=True)
 
     def action_to_transaction(self, actions: torch.Tensor)->np.ndarray:
         """
@@ -182,13 +187,10 @@ class DQN(OffPolicyQ):
         else:
             price = torch.as_tensor(state.price, dtype=torch.float32).to(self.device)
             port = torch.as_tensor(state.portfolio[:, -1], dtype=torch.float32).to(self.device)
-#         timestamp = torch.as_tensor(state.timestamp)
-        return State(price, port, state.timestamp)
+        return State(price, self.abs_norm(port), state.timestamp)
 
     def prep_sarsd_tensors(self, sarsd, device=None):
         state = self.prep_state_tensors(sarsd.state, batch=True)
-#         action = np.rint(sarsd.action // self.lot_unit_value) + self.action_atoms//2
-        # action = self.transactions_to_actions(sarsd.action)
         action = torch.as_tensor(sarsd.action, dtype=torch.long, device=self.device)#[..., 0]
         reward = torch.as_tensor(sarsd.reward, dtype=torch.float32, device=self.device)
         next_state = self.prep_state_tensors(sarsd.next_state, batch=True)

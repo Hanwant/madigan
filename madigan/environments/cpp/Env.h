@@ -69,6 +69,10 @@ namespace madigan{
     { return defaultPortfolio_->ledgerNormed();}
     Ledger ledgerNormedFull() const
     { return defaultPortfolio_->ledgerNormedFull();}
+    Ledger ledgerAbsNormed() const
+    { return defaultPortfolio_->ledgerAbsNormed();}
+    Ledger ledgerAbsNormedFull() const
+    { return defaultPortfolio_->ledgerAbsNormedFull();}
     const Ledger&  meanEntryPrices() const { return defaultPortfolio_->meanEntryPrices(); }
 
     string dataSourceType() const { return dataSourceType_; }

@@ -136,11 +136,12 @@ def test_port_ledger():
     current_prices = synth.currentPrices()
     for assetIdx, units in zip([0, 1, 2, 3], [1000, 2000, -4000, 1000]):
         port1.handleTransaction(assetIdx, current_prices[assetIdx], units, 0.)
+    ATOL = 1e-8
     assert abs((1-port1.ledgerNormed.sum())*port1.equity \
-               - (port1.cash - port1.borrowedMargin)) < 1e-8
+               - (port1.cash - port1.borrowedMargin)) < ATOL
     # Since port1.borrowedMargin should be 0. given full requiredMargin of 1.
-    assert abs((1-port1.ledgerNormed.sum())*port1.equity - port1.cash) < 1e-8
-    assert abs(port1.ledgerNormedFull.sum() - 1.) < 1e-8
+    assert abs((1-port1.ledgerNormed.sum())*port1.equity - port1.cash) < ATOL
+    assert abs(port1.ledgerNormedFull.sum() - 1.) < ATOL
 
     port2 = Portfolio("port_2", assets=assets, initCash=1_000_000)
     port2.setDataSource(synth)
@@ -149,8 +150,14 @@ def test_port_ledger():
     for assetIdx, units in zip([0, 1, 2, 3], [1000, 2000, -4000, 1000]):
         port2.handleTransaction(assetIdx, current_prices[assetIdx], units, 0.)
     assert abs((1-port2.ledgerNormed.sum())*port2.equity \
-               - (port2.cash-port2.borrowedMargin)) < 1e-8
-    assert abs(port1.ledgerNormedFull.sum() - 1.) < 1e-8
+               - (port2.cash-port2.borrowedMargin)) < ATOL
+    assert abs(port1.ledgerNormedFull.sum() - 1.) < ATOL
+    # abs norm ledger
+    # ledgerAbsNormed == ledgerNormed / ledgerNormed.abs().sum()
+    renormed_port = (port1.ledgerAbsNormedFull *
+                       1/port1.ledgerAbsNormedFull.sum())
+    np.testing.assert_allclose(renormed_port, port1.ledgerNormedFull)
+
 
 def test_account_init():
     assets = Assets(['EURUSD', 'GBPUSD', 'BTCUSD', 'ETHBTC'])

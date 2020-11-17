@@ -340,6 +340,17 @@ PYBIND11_MODULE(env, m){
                            " (- borrowedMargin)"
                            " normalized by total equity",
                            py::return_value_policy::move)
+    .def_property_readonly("ledgerAbsNormed", &Portfolio::ledgerAbsNormed,
+                           "returns current ledger for the default portfolio"
+                           " normalized by abs position sizes and cash balance"
+                           " prevents numerical instability when using equity",
+                           py::return_value_policy::move)
+    .def_property_readonly("ledgerAbsNormedFull", &Portfolio::ledgerAbsNormedFull,
+                           "returns current ledger along with cash holdings"
+                           " (- borrowedMargin)"
+                           " normalized by abs position sizes and cash balance"
+                           " prevents numerical instability when using equity",
+                           py::return_value_policy::move)
     .def("setRequiredMargin", (void (Portfolio::*)(double)) &Portfolio::setRequiredMargin,
          "set required Margin level for port, takes proportion as input"
          " I.e 0.1 for 10% margin or 10x levarage",
@@ -711,11 +722,22 @@ PYBIND11_MODULE(env, m){
     .def_property_readonly("ledgerNormed", &Env::ledgerNormed,
                            "returns current ledger for the default portfolio"
                            " normalized by position sizes and cash balance - I.e equity",
-                           py::return_value_policy::copy)
+                           py::return_value_policy::move)
+    .def_property_readonly("ledgerAbsNormed", &Env::ledgerAbsNormed,
+                           "returns current ledger for the default portfolio"
+                           " normalized by abs position sizes and cash balance"
+                           " prevents numerical instability when using equity",
+                           py::return_value_policy::move)
     .def_property_readonly("ledgerNormedFull", &Env::ledgerNormedFull,
                            "returns current ledger along with cash holdings"
                            " (- borrowedMargin)"
                            " normalized by total equity",
+                           py::return_value_policy::move)
+    .def_property_readonly("ledgerAbsNormedFull", &Env::ledgerAbsNormedFull,
+                           "returns current ledger along with cash holdings"
+                           " (- borrowedMargin)"
+                            " normalized by abs position sizes and cash balance"
+                            " prevents numerical instability when using equity",
                            py::return_value_policy::move)
     .def_property_readonly("equity",  &Env::equity,
                            "returns net equity")
@@ -787,7 +809,7 @@ PYBIND11_MODULE(env, m){
 }
 
 //======================================================================
-//==================  Testing Passing data to and from python ==========
+//=========== Testing Passing dict/map data to and from python =========
 //======================================================================
 // typedef std::unordered_map<string, int> strintMap;
 // typedef std::unordered_map<string, std::any> stranyMap;

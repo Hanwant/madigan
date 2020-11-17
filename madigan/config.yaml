@@ -50,7 +50,7 @@ data_source_type: SimpleTrend
 discrete_action_atoms: 3
 discrete_actions: true
 env_type: Synth
-experiment_id: DQNReverser_Trend_Roller_trans02_5step_grad_norm_clip_discount.999
+experiment_id: DQNReverser_Trend_Roller_trans02_5step_grad_norm_clip_discount.999_abs_norm_port
 init_cash: 1000000
 log_freq: 10000
 lot_unit_value: 10000
