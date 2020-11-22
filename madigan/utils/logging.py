@@ -2,7 +2,8 @@ from typing import Union
 from pathlib import Path
 import pandas as pd
 
-def save_to_hdf(path: Union[str, Path], key: str, df: pd.DataFrame, append_if_exists: bool=True):
+def save_to_hdf(path: Union[str, Path], key: str, df: pd.DataFrame,
+                append_if_exists: bool=True):
     """
     Generic for saving df to hdf5 (and appending by default - useful for
     fast i/o of logs)

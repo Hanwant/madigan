@@ -42,15 +42,17 @@ data_source_config:
   - 125
   noise:
   - .0
-  dY:
-  - 0.01
+  dYMin:
+  - 0.005
+  dYMax:
+  - 0.02
   start:
   - 5.0
 data_source_type: SimpleTrend
 discrete_action_atoms: 3
 discrete_actions: true
 env_type: Synth
-experiment_id: DQNReverser_Trend_Roller_trans02_5step_grad_norm_clip_discount.999_abs_norm_port
+experiment_id: DQNReverser_Trend_Roller_trans.2_noisy_variable_trend
 init_cash: 1000000
 log_freq: 10000
 lot_unit_value: 10000

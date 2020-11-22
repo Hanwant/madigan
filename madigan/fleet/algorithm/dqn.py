@@ -139,7 +139,7 @@ class DQN(OffPolicyQ):
     def renorm(self, abs_norm_port):
         return abs_norm_port * 1/abs_norm_port.sum(-1, keepdim=True)
 
-    def action_to_transaction(self, actions: torch.Tensor)->np.ndarray:
+    def action_to_transaction(self, actions: torch.Tensor) -> np.ndarray:
         """
         Takes output from net and converts to transaction units
         """
@@ -247,17 +247,15 @@ class DQN(OffPolicyQ):
         """ Hard update, copies weights """
         self.model_t.load_state_dict(self.model_b.state_dict())
 
-    def save_state(self, branch=None):
-        branch = branch or "main"
+    def save_state(self, branch="main"):
         # self.save_checkpoint("main")
         state = {'state_dict_b': self.model_b.state_dict(),
                  'state_dict_t': self.model_t.state_dict(),
-                  'training_steps': self.training_steps,
-                  'env_steps': self.env_steps, 'eps': self.eps}
+                 'training_steps': self.training_steps,
+                 'env_steps': self.env_steps, 'eps': self.eps}
         torch.save(state, self.savepath/f'{branch}.pth')
 
-    def load_state(self, branch=None):
-        branch = branch or "main"
+    def load_state(self, branch="main"):
         state = torch.load(self.savepath/f'{branch}.pth')
         self.model_b.load_state_dict(state['state_dict_b'])
         self.model_t.load_state_dict(state['state_dict_t'])

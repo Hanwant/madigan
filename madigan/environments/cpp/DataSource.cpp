@@ -356,26 +356,32 @@ namespace madigan{
   }
 
   void SimpleTrend::initParams(std::vector<double> trendProb, std::vector<int> minPeriod,
-                                std::vector<int> maxPeriod, std::vector<double> noise,
-                                std::vector<double> start, std::vector<double> dY) {
+                               std::vector<int> maxPeriod, std::vector<double> noise,
+                               std::vector<double> start, std::vector<double> dYMin,
+                               std::vector<double> dYMax) {
     if ((trendProb.size() == minPeriod.size()) && (minPeriod.size() == maxPeriod.size())
-        && (maxPeriod.size() == noise.size()) && (noise.size() == start.size())){
+        && (maxPeriod.size() == noise.size()) && (noise.size() == start.size())
+        && (start.size() == dYMin.size()) && (dYMin.size() == dYMax.size())){
       this->trendProb=trendProb;
       this->minPeriod=minPeriod;
       this->maxPeriod=maxPeriod;
       this->noise=noise;
-      this->dY=dY;
+      this->dYMin=dYMin;
+      this->dYMax=dYMax;
       currentData_.resize(trendProb.size());
       for (int i=0; i<trendProb.size(); i++){
         noiseDist.push_back(std::normal_distribution<double>(0., noise[i]));
-        trendLenPicker.push_back(std::uniform_int_distribution<int>
+        trendLenDist.push_back(std::uniform_int_distribution<int>
                                  (minPeriod[i], maxPeriod[i]));
+        dYDist.push_back(std::uniform_real_distribution<double>
+                                 (dYMin[i], dYMax[i]));
         trending.push_back(false);
         std::string assetName = "SimpleTrend_" + std::to_string(i);
         this->assets.push_back(Asset(assetName));
         currentData_ << start[i]; // default starting val
         currentDirection.push_back(1);
         currentTrendLen.push_back(0);
+        dY.push_back(0.);
       }
       this->nAssets_ = assets.size();
     }
@@ -388,12 +394,14 @@ namespace madigan{
 
   SimpleTrend::SimpleTrend(std::vector<double> trendProb, std::vector<int> minPeriod,
                            std::vector<int> maxPeriod, std::vector<double> noise,
-                           std::vector<double> start, std::vector<double> dY) {
-    initParams(trendProb, minPeriod, maxPeriod, noise, start, dY);
+                           std::vector<double> start, std::vector<double> dYMin,
+                           std::vector<double> dYMax) {
+    initParams(trendProb, minPeriod, maxPeriod, noise, start, dYMin, dYMax);
   }
 
   SimpleTrend::SimpleTrend(): SimpleTrend({0.001, 0.001}, {100, 500}, {200, 1500},
-                                          {1. ,0.1}, {10., 15.}, {0.001, 0.01}){}
+                                          {1. ,0.1}, {10., 15.},
+                                          {0.001, 0.01}, {0.003, 0.03}){}
 
   SimpleTrend::SimpleTrend(Config config){
     bool allParamsPresent{true};
@@ -402,7 +410,8 @@ namespace madigan{
       allParamsPresent = false;
     }
     Config params = std::any_cast<Config>(config["data_source_config"]);
-    for (auto key: {"trendProb", "minPeriod", "maxPeriod", "noise", "start", "dY"}){
+    for (auto key: {"trendProb", "minPeriod", "maxPeriod", "noise", "start",
+                    "dYMin", "dYMax"}){
       if (params.find(key) == params.end()){
         allParamsPresent=false;
         throw ConfigError("data_Source_config doesn't have all required constructor arguments");
@@ -412,9 +421,10 @@ namespace madigan{
     vector<int> minPeriod = std::any_cast<vector<int>>(params["minPeriod"]);
     vector<int> maxPeriod = std::any_cast<vector<int>>(params["maxPeriod"]);
     vector<double> noise = std::any_cast<vector<double>>(params["noise"]);
-    vector<double> dY = std::any_cast<vector<double>>(params["dY"]);
+    vector<double> dYMin = std::any_cast<vector<double>>(params["dYMin"]);
+    vector<double> dYMax = std::any_cast<vector<double>>(params["dYMax"]);
     vector<double> start = std::any_cast<vector<double>>(params["start"]);
-    initParams(trendProb, minPeriod, maxPeriod, noise, start, dY);
+    initParams(trendProb, minPeriod, maxPeriod, noise, start, dYMin, dYMax);
   }
 
   SimpleTrend::SimpleTrend(pybind11::dict py_config):
@@ -435,8 +445,8 @@ namespace madigan{
         if (rand < trendProb[i]){
           trending[i] = true;
           currentDirection[i] = (uniformDist(generator) < 0.5)? -1: 1;
-          // std::cout << currentDirection[i] << "\n";
-          currentTrendLen[i] = trendLenPicker[i](generator);
+          currentTrendLen[i] = trendLenDist[i](generator);
+          dY[i] = dYDist[i](generator);
         }
       }
       if (y <= 0.01){

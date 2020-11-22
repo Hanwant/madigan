@@ -52,7 +52,7 @@ class Config(dict):
             if not path.parent.is_dir():
                 path.mkdir(parents=True)
             save_config(self, path)
-        exp_path = Path(self.basepath)
+        exp_path = Path(self.basepath)/self.experiment_id
         if not exp_path.is_dir():
             exp_path.mkdir(parents=True)
         save_config(self, exp_path / "config.yaml")

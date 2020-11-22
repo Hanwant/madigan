@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 import pickle
 from copy import deepcopy
+from pathlib import Path
 from random import random
 from typing import List, Tuple, Union
 
@@ -31,9 +32,10 @@ class Agent(ABC):
         self._action_space = action_space
         self.discount = discount
         self.nstep_return = nstep_return
-        self.savepath = savepath
+        self.savepath = Path(savepath)
         self.training_steps = 0
         self.env_steps = 0
+        self.branch = 0
         # if not self.savepath.is_dir():
         #     self.savepath.mkdir(parents=True)
         # if (self.savepath/'main.pth').is_file():
@@ -104,12 +106,39 @@ class Agent(ABC):
         return self.get_action(*args, **kw)
 
     @abstractmethod
-    def load_state(self):
-        pass
+    def load_state(self, branch: str = "main"):
+        """
+        Loads models and state from self.savepath/{branch}.pth
+        branch: str = branch name
+        state has to include:
+            - env_steps
+            - training_steps
+        optional:
+            - model state
+            - eps
+            - lr
+            - etc
+        """
 
     @abstractmethod
-    def save_state(self):
-        pass
+    def save_state(self, branch: str = "main"):
+        """
+        Saves models and state into self.savepath/{branch}.pth
+        Overwrites it exists
+        branch: str = branch name
+        state has to include:
+            - env_steps
+            - training_steps
+        optional:
+            - model state
+            - eps
+            - lr
+            - etc
+        """
+
+    def checkpoint(self):
+        check = self.savepath/f'checkpoint_{self.training_steps}.pth'
+        self.save_state(check)
 
 
 class OffPolicyQ(Agent):
@@ -350,12 +379,13 @@ class OffPolicyActorCritic(Agent):
             sarsd = SARSD(state, action, reward, next_state, done)
             self.buffer.add(sarsd)
 
-            if done:
+            if done or self._env.equity > 1e15:
                 self.reset_state()
                 state = self._preprocessor.current_data()
                 running_reward = 0.
             else:
                 state = next_state
+
 
             if len(self.buffer) > self.replay_min_size:
                 _trn_metrics = self.train_step()

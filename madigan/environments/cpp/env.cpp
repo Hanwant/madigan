@@ -246,16 +246,16 @@ PYBIND11_MODULE(env, m){
     .def("currentData", (PriceVector& (SineAdder::*) ()) &SineAdder::currentData,
          "Get current data points",
          py::return_value_policy::reference);
-
   _SimpleTrend.def(py::init<>())
     .def(py::init<py::dict>(), py::arg("config_dict"))
     .def(py::init<
          vector<double>, vector<int>,
          vector<int>, vector<double>,
-         vector<double>, vector<double>> (),
+         vector<double>, vector<double>,
+         vector<double>> (),
          py::arg("trend_prob"), py::arg("min_period"),
          py::arg("max_period"), py::arg("noise"),
-         py::arg("start"), py::arg("dY"))
+         py::arg("dYMin"), py::arg("dYMax"), py::arg("start"))
 
     .def_property_readonly("currentTime", &SimpleTrend::currentTime,
                            "get the current timestamp",

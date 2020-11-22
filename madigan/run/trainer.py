@@ -1,8 +1,10 @@
 import os
+import shutil
 from pathlib import Path
 from random import random
 import logging
 from typing import Union
+from queue import Queue
 import yaml
 
 from tqdm import tqdm
@@ -10,9 +12,12 @@ import numpy as np
 import pandas as pd
 import torch
 import matplotlib.pyplot as plt
+
+import zmq
+
 from ..utils import SARSD, State, ReplayBuffer, save_to_hdf, load_from_hdf
 from ..utils.metrics import list_2_dict, reduce_train_metrics, test_summary
-from ..utils.config import save_config
+from ..utils.config import save_config, Config
 from ..utils.plotting import make_grid
 from ..utils.preprocessor import make_preprocessor
 from ..fleet import make_agent, DQN
@@ -59,6 +64,19 @@ class Trainer:
         # self.test_metrics_cols = ('cash', 'equity', 'margin', 'returns')
         self.test_metrics_cols = None # equivalent to saving all mertrics
         self.config.save()
+        self.server_port = 9000
+        self.init_server()
+
+    def init_server(self, port: int = None):
+        port = port or self.server_port
+        self.context = zmq.Context()
+        self.socket = self.context.socket(zmq.PAIR)
+        self.socket.setsockopt(zmq.LINGER, 0)
+        # self.socket.setsockopt(zmq.LINGER, 0)
+        self.socket.bind(f'tcp://{self.server_host}:{self.server_port}')
+        self.poller = zmq.Poller()
+        self.poller.register(self.socket, zmq.POLLIN | zmq.POLLOUT)
+        self.recvque = Queue()
 
     @classmethod
     def from_config(cls, config, device=None, **kwargs):
@@ -73,8 +91,9 @@ class Trainer:
             train_metrics = list_2_dict(train_metrics)
             train_metrics = reduce_train_metrics(train_metrics, ['Gt', 'Qt', 'rewards'])
             train_df = pd.DataFrame(train_metrics)
-            save_to_hdf(self.logdir/'train.hdf5', 'train', train_df,
-                        append_if_exists=append)
+            # save_to_hdf(self.logdir/'train.hdf5', 'train', train_df,
+            #             append_if_exists=append)
+            train_df.to_hdf(self.logdir/'train.hdf5', 'train', append=append)
         if len(test_metrics):
             # if self.test_metrics_cols is not None:
             #     test_metrics = dict(filter(lambda x: x[0] in self.test_metrics_cols,
@@ -82,7 +101,7 @@ class Trainer:
             self.logger.info(f'logging {len(test_metrics)} test runs')
             for (env_step, test_run) in test_metrics:
                 test_df = pd.DataFrame(test_run)
-                test_filename = self.logdir/(f'test_env_steps_{env_step}'+\
+                test_filename = self.logdir/(f'test_env_steps_{env_step}'+ \
                     f'_episode_steps_{len(test_df)}.hdf5')
                 test_df.to_hdf(test_filename, 'full_run', append=False)
                 summary = test_summary(test_df)
@@ -95,7 +114,8 @@ class Trainer:
 
     def load_logs(self):
         train_logs = pd.read_hdf(self.logdir/'train.hdf5', 'train')
-        test_logs = self.load_latest_test_run()
+        # test_logs = self.load_latest_test_run()
+        test_logs = pd.read_hdf(self.logdir/'test.hdf5', 'run_history')
         return train_logs, test_logs
 
     def load_latest_test_run(self):
@@ -108,6 +128,70 @@ class Trainer:
         test_metrics = self.agent.test_episode(test_steps=test_steps,
                                                reset=reset)
         return pd.DataFrame(test_metrics)
+
+    def revert_to_checkpoint(self, checkpoint_id: str):
+        raise NotImplementedError("reverting to checkpoint for main not impl")
+
+    def branch_from_checkpoint(self, checkpoint: Union[str, int]):
+        """
+        Creates a child branch using a previous checkpoint as a branching point
+        checkpoint: may be either an integer (# of training steps)
+                    or a str corresponding to the checkpoint name/filename
+        """
+        checks = [(f[0], f[1].stem, f[1].name) for f in self.get_checkpoints()]
+        checkpoint_id = None
+        for check in checks:
+            if checkpoint in check:
+                if checkpoint_id is not None:
+                    raise ValueError("duplicate matches for checkpoint found" +
+                                     f"; {checkpoint} -> {checkpoint_id} " +
+                                     f"and {checkpoint} -> {check}")
+                checkpoint_id = check[1]
+        if checkpoint_id is None:
+            raise ValueError(f"Checkpoint {checkpoint} doesn't exist")
+        self.agent.load_state(checkpoint_id)
+        new_exp_id = self.config.experiment_id + f"_branch_{checkpoint_id}"
+        self.branch_experiment(new_exp_id)
+        exp_path = Path(self.config.basepath)/new_exp_id
+        # Filter test episodes after checkpoint ###############################
+        steps = [(int(f.name.split('_')[3]), f)
+                 for f in (exp_path/'logs').iterdir()
+                 if len(f.name.split('_')) > 1]
+        steps_to_delete = [s for s in steps if s[0] > self.agent.training_steps]
+        for step, test_episode in steps_to_delete:
+            Path(test_episode).unlink()
+        train_df, test_df = self.load_logs()
+        # Filter train metrics after checkpoint ###############################
+        # train_df = train_df[train_df['training_steps'] < self.agent.training_steps]
+        train_df = train_df.iloc[:self.agent.training_steps]
+        train_df.to_hdf(self.logdir/'train.hdf', key='train', mode='w')
+        # Filter test metrics after checkpoint ################################
+        test_df = test_df[test_df['training_steps'] < self.agent.training_steps]
+        test_df.to_hdf(self.logdir/'test.hdf', key='run_history', mode='w')
+
+    def get_checkpoints(self):
+        checks = [(int(f.stem.split('_')[1]), f)
+                  for f in self.agent.savepath.iterdir()
+                  if len(f.name.split('_')) > 1]
+        checks.sort(reverse=True)
+        return checks
+
+    def branch_experiment(self, new_exp_id: str):
+        old_exp_id = self.config.experiment_id
+        old_exp_path = Path(self.config.basepath)/old_exp_id
+        new_exp_path = Path(self.config.basepath)/new_exp_id
+        new_exp_path.mkdir()
+        self.config.experiment_id = new_exp_id
+        # Copy over logs and models from parent experiment
+        for dirr in ('logs', 'models'):
+            (new_exp_path/dirr).mkdir()
+            for _file in (old_exp_path/dirr).iterdir():
+                shutil.copy(_file, new_exp_path/dirr/_file.name)
+        self.config.save()  # automatically saves to experiment path
+        replay_buff_path = old_exp_path/'replay_buffer.pkl'
+        if replay_buff_path.is_file():
+            shutil.copy(replay_buff_path, new_exp_path/'replay_buffer.pkl')
+        self = Trainer.from_config(self.config)  # automatically do init
 
     def train(self, nsteps=None):
         """
@@ -151,6 +235,7 @@ class Trainer:
 
         progress_bar = tqdm(total=i+nsteps, colour='#9fc693')
         progress_bar.update(i)
+        # max_running_reward = 0.
         try:
             while True:
                 train_metric = next(train_loop)
@@ -158,6 +243,8 @@ class Trainer:
                 training_steps_taken = self.agent.training_steps - i
                 progress_bar.update(training_steps_taken)
                 i = self.agent.training_steps
+                # max_running_reward = max(max_running_reward,
+                #                          train_metric[-1]['running_reward'])
 
                 if steps_since_test > test_freq:
                     self.logger.info("Testing Model")
@@ -166,7 +253,8 @@ class Trainer:
 
                 if steps_since_save > model_save_freq:
                     self.logger.info("Saving Agent State")
-                    self.agent.save_state()
+                    self.agent.checkpoint()  # checkpoint history
+                    self.agent.save_state()  # main lineage
                     steps_since_save = 0
 
                 if steps_since_flush > flush_freq:
@@ -201,6 +289,11 @@ class Trainer:
             train_metrics, test_metrics = self.load_logs()
             progress_bar.close()
             return train_metrics, test_metrics
+
+
+    def run_server(self, port: int = None):
+        while True:
+            msg = self.socket.recv_json()
 
 
 

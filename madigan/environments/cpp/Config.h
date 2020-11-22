@@ -162,7 +162,8 @@ namespace madigan{
                                            });
           if (genParamsFound != dict.end()){
             pybind11::dict genParams = dict[pybind11::str("data_source_config")];
-            for (auto key: {"trend_prob", "min_period", "max_period", "noise", "dY", "start"}){
+            for (auto key: {"trend_prob", "min_period", "max_period", "noise", "dYMin",
+                            "dYMax", "start"}){
               auto keyFound=std::find_if(genParams.begin(), dict.end(),
                                          [key](const std::pair<pybind11::handle, pybind11::handle>& pair){
                                            return string(pybind11::str(pair.first)) == key;
@@ -175,7 +176,8 @@ namespace madigan{
             vector<int> minPeriod;
             vector<int> maxPeriod;
             vector<double> noise;
-            vector<double> dY;
+            vector<double> dYMin;
+            vector<double> dYMax;
             vector<double> start;
             for(auto& item: genParams){
               string key = string(pybind11::str(item.first));
@@ -191,8 +193,11 @@ namespace madigan{
               if(key == "noise"){
                 noise = item.second.cast<vector<double>>();
               }
-              if(key == "dY"){
-                dY= item.second.cast<vector<double>>();
+              if(key == "dYMin"){
+                dYMin = item.second.cast<vector<double>>();
+              }
+              if(key == "dYMax"){
+                dYMax = item.second.cast<vector<double>>();
               }
               if(key == "start"){
                 start = item.second.cast<vector<double>>();
@@ -204,7 +209,8 @@ namespace madigan{
                                             {"minPeriod", minPeriod},
                                             {"maxPeriod", maxPeriod},
                                             {"noise", noise },
-                                            {"dY", dY},
+                                            {"dYMin", dYMin},
+                                            {"dYMax", dYMax},
                                             {"start", start}}
                 }
               });

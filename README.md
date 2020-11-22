@@ -23,24 +23,97 @@ reward -> equity returns / sharpe, transaction costs***<br>
 
 
 ### Main Components
-- Input Space
-- Objective / Reward Function
-- Core Rl Algorthm
-- Function Approximation
-#### Input Space
+- #### Environment
+A suitable formalization and implementation of an environment is required to
+create autonomous systems. Should serve the roles of Broker & Exchange.
+- #### Objective Function
+Objective function and reward shaping for rl should reflect the objectives of a trader. I.e risk-adjusted returns, margin constraints, transaction costs etc
+- #### Input Space
 The input space refers to the representation of data which is presented to any
 model or agent. This may be a matrix with dimensions corresponding to time, asset
 , features etc. Or it could be a flat vector containing the corresponding
-compressed information. The choice of history length, features and how to represent relationships between assets should be robust such that
-
+compressed information.
+- #### RL Algorithms
+Rl algorithms should be as simple as possible, whilst advanced methods should still
+be considered and tested.
+- #### Function Approximation
+Given an RL algorithm, a suitable model must be placed as the core agent.
+Neural Networks are good general function approximators, and despite high degrees of
+freedom, can often generalize well, are composable and provide opportunity for customization.
 
 
 ## Timeline
+### November
+Validate methods on synthetic data and create a taxonomy of models and 
+hyper-parameters.
+### December
+Apply methods to real data - financial time series of varying sources. 
+### January
+Polish.
+
+
+## Progress - Detailed Components
+- Env is written primarily in c++, with python bindings. Components are bare minimum to perform accounting calculations. Core compuational unit is the Portfolio Class, 
+it keeps a ledger of positions and performs transactions as well as providing 
+risk checking funcitons. Accounts act as containers of portfolios and are wrapped inside a Broker Class which provides parameters for handling transactions such as slippage, transaction cost, etc as well as coordinating the portfolio computations. 
+Main components and features have tests - both of accounting logic and of passing
+data structures between python / c++.
+- The core software framework comprises of the Env, Agent, Preprocessor and 
+Trainer Classes. The Env is restricted to being as static as possible, so that 
+agents must all interface with it in the same way - by passing a vector of desired
+purchases (buy/sell) in units of the indexed assets. Agents with both discrete
+and continuous action spaces must translate their model ouputs to assets units
+desired for purchase. This allows for a standardized environment.
+- The Agent Class contains not just the models being trained but also a reference to the environment (can be queried for accounting info) and the logic required to
+train. The interface for training if provided as a generator method which 
+periodically yields a list of training metrics to the caller I.e the Trainer class.
+The Trainer class co-ordinates training and logging by assembling the env and agent 
+components, periodically logging to file, interleaving training with test episodes
+and providing a client-server interface (I.e via zmq) for running training jobs.
+- Preprocessing - Rollers
+- Models -CNNs
+- Dash. A dashboard for viewing the results of rl experiments (and training
+progress which is periodically logged to file). Made using Qt for Python (PyQt5).
+Very important for debugging and interpreting results. Containing graphs of 
+training progress (loss, rewards) as well as inidividual test runs. For NN classification tasks, a browser based dashboard using Bokeh is also there).
+
+## To Do
+- [X] Train agents to trade Sine Waves 
+- [X] Train agents to trade OU Process
+- [X] Train agents to trade trending series
+- [ ] Train agents to trade noisier trending series
+- [ ] Compose many different series and test multi asset allocation
+- [ ] Train on synthetic series with multi asset stat arb opportunities
+- [ ] Train on groups of assets.
+- [ ] Order semantics (I.e Market vs Limit/Timed/Stop etc). 
+- [ ] Wrap Broker, Account, Portfolio into a backtesting co-ordinator (event driven)
+- [ ] Perform backtests and classify agents into a taxonomy (I.e risk profile, 
+long/short bias)
 
 
 
 ## Installation
-
+Requirements: 
+- C++ 17 Compiler
+- CMake
+- Pybind11
+- Eigen
+- CUDA+CuDNN - if using gpu - recccomended
+- Python 3.7 =<
+    - Pytorch 
+    - Numpy
+    - Pandas
+    - HDF5
+    - PyQt5 <br>
+    
+Install python Library via: <br>
+    ```
+    python setup.py install
+    ```<br>
+    or<br>
+    ``` 
+    pip install .
+    ```<br>
 
 
 ## Usage

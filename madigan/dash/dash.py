@@ -104,6 +104,9 @@ class MainWindow( Ui_MainWindow, QtWidgets.QMainWindow):
             print('loading')
             self.load_config(self.config_path)
 
+    def connect_to_server(self, host, port):
+        pass
+
     def choose_experiments_path(self):
         path = QtWidgets.QFileDialog.getExistingDirectory(
             self, 'Choose Folder containing experiments',

@@ -152,7 +152,8 @@ namespace madigan{
     SimpleTrend();
     SimpleTrend(std::vector<double> trendProb, std::vector<int> minPeriod,
                 std::vector<int> maxPeriod, std::vector<double> noise,
-                std::vector<double> dY, std::vector<double> start);
+                std::vector<double> dYMin, std::vector<double> dYMax,
+                std::vector<double> start);
     SimpleTrend(Config config);
     SimpleTrend(pybind11::dict config);
     ~SimpleTrend(){}
@@ -166,7 +167,8 @@ namespace madigan{
   protected:
     virtual void initParams(std::vector<double> trendProb, std::vector<int> minPeriod,
                              std::vector<int> maxPeriod, std::vector<double> noise,
-                             std::vector<double> dY, std::vector<double> start);
+                            std::vector<double> dYMin, std::vector<double> dYMax,
+                            std::vector<double> start);
 
   protected:
     const double dT{1.};
@@ -175,10 +177,13 @@ namespace madigan{
     vector<int> maxPeriod;
     vector<double> noise;
     vector<double> dY;
+    vector<double> dYMin;
+    vector<double> dYMax;
     std::size_t timestamp_;
     std::default_random_engine generator;
-    std::vector<std::uniform_int_distribution<int>> trendLenPicker;
     std::vector<std::normal_distribution<double>> noiseDist;
+    std::vector<std::uniform_real_distribution<double>> dYDist;
+    std::vector<std::uniform_int_distribution<int>> trendLenDist;
     std::uniform_real_distribution<double> uniformDist{0., 1.};
     PriceVector currentData_;
 
