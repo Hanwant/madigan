@@ -273,6 +273,15 @@ class TestEpisodePlots(QGridLayout):
         self.link_x_axes()
         # self.unlink_x_axes()
 
+    def log_adjust(self):
+        for metric, plot in self.plots.items():
+            max_ele = np.nanmax(self.data[metric])
+            min_ele = np.nanmin(self.data[metric])
+            if max_ele - min_ele > 1e10:
+                plot.setLogMode(False, True)
+            else:
+                plot.setLogMode(False, False)
+
 
     def link_x_axes(self):
         for name, plot in self.plots.items():
@@ -337,11 +346,14 @@ class TestEpisodePlots(QGridLayout):
             self.data['ledgerNormed'] = np.array(data['ledgerNormed'])
             assert len(self.data['prices'].shape) == \
                 len(self.data['transactions'].shape) ==\
-                len(self.data['ledgerNormed'].shape) == 2
+                len(self.data['ledgerNormed'].shape) == 2,\
+                "number of assets dims in prices, transactions and ledger" + \
+                "must match"
+        # self.data = {k: np.nan_to_num(v, 0.) for k, v in self.data.items()}
 
-    def set_data(self, data):
-        self.process_data(data)
-        self.clear_plots()
+    def _set_data(self, data):
+        # self.process_data(data)
+        # self.clear_plots()
         if len(data) == 0:
             print('test episode data is empty')
             data = {k: [] for k in self.lines.keys()}
@@ -366,6 +378,14 @@ class TestEpisodePlots(QGridLayout):
             self.update_accounting_table()
             self.positions_table.setRowCount(self.data['ledgerNormed'].shape[1])
             self.update_positions_table()
+        # self.log_adjust()
+
+    def set_data(self, data):
+        self.process_data(data)
+        self.clear_plots()
+        self._set_data(data)
+        self.log_adjust()
+
 
     def update_accounting_table(self):
         current_timepoint = int(self.current_pos_line.value())
@@ -400,18 +420,25 @@ class TestEpisodePlotsDQN(TestEpisodePlots):
         self.plots['qvals'] = self.graphs.addPlot(title="qvals", row=1, col=6)
         self.plots['qvals'].addItem(self.lines['qvals'])
         self.plots['qvals'].showGrid(1, 1)
+        hist = pg.HistogramLUTItem()
+        hist.setImageItem(self.lines['qvals'])
+        self.graphs.addItem(hist, row=1, col=8, colspan=1)
         # self.lines['qvals'].autoLevels()
 
         self.link_x_axes()
 
-    def set_data(self, data):
-        super().set_data(data)
+    def process_data(self, data):
+        super().process_data(data)
+        if isinstance(data['qvals'], (pd.Series, pd.DataFrame)):
+            self.data['qvals'] = np.array(data['qvals'].tolist())
+        else:
+            self.data['qvals'] = np.array(data['qvals'])
+
+    def _set_data(self, data):
+        super()._set_data(data)
         if len(data) == 0:
             return
-        if isinstance(data['qvals'], (pd.DataFrame, pd.Series)):
-            qvals = np.array(data['qvals'].tolist())
-        else:
-            qvals = np.array(data['qvals'])
+        qvals = self.data['qvals']
         assert len(qvals.shape) == 3
         qvals = qvals.reshape(qvals.shape[0], -1)
         self.lines['qvals'].setImage(qvals, axes={'x': 0, 'y': 1})
@@ -526,8 +553,8 @@ class TestEpisodePlotsActorCritic(TestEpisodePlots):
             self.data['action'] = np.array(data['action'])
         assert len(self.data['action'].shape) == 2
 
-    def set_data(self, data):
-        super().set_data(data)
+    def _set_data(self, data):
+        super()._set_data(data)
         if len(data) == 0:
             return
         self.lines['qvals'].setImage(self.data['qvals'], axes={'x': 0, 'y': 1})

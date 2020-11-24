@@ -46,8 +46,8 @@ class MainWindow( Ui_MainWindow, QtWidgets.QMainWindow):
         self.ServerInfo.setColumnCount(4)
         self.ServerInfo.setRowCount(len(self.servers))
         # self.ServerInfo.setData()
-        self.LocalRadio.toggled.connect(self.compSourceToggle)
-        self.ServerRadio.toggled.connect(self.compSourceToggle)
+        self.LocalRadio.toggled.connect(self.setCompSource)
+        self.ServerRadio.toggled.connect(self.setCompSource)
         self.serverInfoCols = ['name', 'pid', 'location', 'status']
         self.ServerInfo.setHorizontalHeaderLabels(self.serverInfoCols)
         for row, server in enumerate(self.servers):
@@ -70,7 +70,7 @@ class MainWindow( Ui_MainWindow, QtWidgets.QMainWindow):
             self.choose_experiments_path)
         # CONFIG TAB
         # self.FilenameLabel.setText('/'.join(self.config_path.parts[-1:]))
-        self.LoadConfigButton.clicked.connect(self.load_config)
+        self.LoadConfigButton.clicked.connect(self.load_experiment)
         self.SaveConfigButton.clicked.connect(self.save_config)
 
         # self.exp_config = load_config(self.config_path)
@@ -79,7 +79,7 @@ class MainWindow( Ui_MainWindow, QtWidgets.QMainWindow):
         self.ParamsEdit.textChanged.connect(self.update_config)
         # EXP TAB
         self.ExperimentsList.currentRowChanged.connect(
-            lambda: self.load_config(
+            lambda: self.load_experiment(
                 self.experiments_path/
                 self.ExperimentsList.item(
                     self.ExperimentsList.currentRow()).text()/
@@ -93,6 +93,11 @@ class MainWindow( Ui_MainWindow, QtWidgets.QMainWindow):
         # Run exp based on config
         self.TestCommand.clicked.connect(lambda: self.run_job('test'))
         self.TrainCommand.clicked.connect(lambda: self.run_job('train'))
+        self.StopCommand.clicked.connect(self.stop_job)
+        # Branching into new experiments
+        self.BranchButton.clicked.connect(self.new_branch)
+        self.BranchCheckpointButton.clicked.connect(
+            self.new_branch_checkpoint)
 
         self.plots = {'train': None, 'test_episodes': None,
                       'test_history': None}  # custom plots
@@ -102,7 +107,7 @@ class MainWindow( Ui_MainWindow, QtWidgets.QMainWindow):
         self.centralwidget.destroyed.connect(self.save_user_cache)
         if self.config_path is not None:
             print('loading')
-            self.load_config(self.config_path)
+            self.load_experiment(self.config_path)
 
     def connect_to_server(self, host, port):
         pass
@@ -114,6 +119,47 @@ class MainWindow( Ui_MainWindow, QtWidgets.QMainWindow):
         self.experiments_path = Path(path) if path != '' else None
         self.load_experiments_list()
 
+    def new_branch(self):
+        if self.worker is None:
+            response = QtWidgets.QMessageBox.information(
+                self, 'Branching semantics',
+                'No worker exists to perform branching, create idle worker?',
+                QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No)
+            if response == QtWidgets.QMessageBox.Yes:
+                self.make_worker('idle')
+                self.new_branch()
+        else:
+            branch, ok = QtWidgets.QInputDialog.getText(
+                self, 'Pick Name for New Branch', 'Branch Name: ',
+                QtWidgets.QLineEdit.Normal, "")
+            if ok:
+                self.worker.trainer.branch_experiment(branch)
+                self.load_experiment(
+                    Path(self.worker.trainer.config.basepath) /
+                    self.worker.trainer.config.experiment_id /
+                    'config.yaml')
+
+    def new_branch_checkpoint(self):
+        if self.worker is None:
+            response = QtWidgets.QMessageBox.information(
+                self, 'Branching Semantics',
+                'No worker exists to perform branching, create idle worker?',
+                QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No)
+            if response == QtWidgets.QMessageBox.Yes:
+                self.make_worker('idle')
+                self.new_branch_checkpoint()
+        else:
+            checkpoints = [check[1].name for check in self.checkpoints]
+            checkpoint, ok = QtWidgets.QInputDialog.getItem(
+                self, 'Pick checkpoint to branch from', 'Checkpoint: ',
+                checkpoints, 0, False)
+            if ok:
+                self.worker.trainer.branch_from_checkpoint(checkpoint)
+                self.load_experiment(
+                    Path(self.worker.trainer.config.basepath) /
+                    self.worker.trainer.config.experiment_id /
+                    'config.yaml')
+
     def load_experiments_list(self):
         experiments = [p.name for p in Path(self.experiments_path).iterdir()
                        if p.is_dir()]
@@ -124,6 +170,18 @@ class MainWindow( Ui_MainWindow, QtWidgets.QMainWindow):
         self.ExperimentsList.clear()
         for exp in experiments:
             self.ExperimentsList.addItem(exp)
+
+    def load_checkpoints_list(self):
+        assert self.exp_config is not None, "can't load checkpoints without config"
+        model_path = Path(self.exp_config.basepath)/ \
+            self.exp_config.experiment_id/'models'
+        self.checkpoints = [(int(f.stem.split('_')[1]), f)
+                            for f in model_path.iterdir()
+                            if len(f.stem.split('_')) > 1]
+        self.checkpoints.sort(reverse=True)
+        self.CheckpointsList.clear()
+        for check in self.checkpoints:
+            self.CheckpointsList.addItem(check[1].name)
 
     def make_plots(self):
         self.remove_plots()  # remove existing plots if they exist
@@ -153,23 +211,30 @@ class MainWindow( Ui_MainWindow, QtWidgets.QMainWindow):
                     self.ServerInfo.item(row, col).setBackground(QColor('#999999'))
 
     def make_worker(self, action: str):
-        if action not in ["test", "train"]:
+        if action not in TrainerWorker.action_types:
             raise ValueError("aciton must be either 'test' or 'train")
-        worker = TrainerWorker(self.exp_config, action)
-        worker.signals.test_metrics.connect(self.test_episode_plots.set_data)
-        worker.signals.train_metrics.connect(self.train_plots.set_data)
-        return worker
+        self.worker = TrainerWorker(self.exp_config, action)
+        self.worker.signals.test_episode_metrics.connect(
+            self.plots['test_episode'].set_data)
+        self.worker.signals.test_history_metrics.connect(
+            self.plots['test_history'].set_data)
+        self.worker.signals.train_metrics.connect(self.plots['train'].set_data)
+        return self.worker
+
+    def remove_worker(self):
+        if self.worker is not None:
+            taken = self.threadpool.tryTake(self.worker)
+            if taken:
+                self.worker = None
+            return taken
+        return True
 
     def run_job(self, action):
-        assert action in ('train', 'test')
+        assert action in TrainerWorker.action_types
         try:
             if self.compSource == "Local":
-                if action == "test":
-                    worker = self.make_worker("test")
-                    self.threadpool.start(worker)
-                elif action == "train":
-                    worker = self.make_worker("train")
-                    self.threadpool.start(worker)
+                worker = self.make_worker(action)
+                self.threadpool.start(worker)
             elif self.compSource == "Server":
                 # if action == 'test':
                     # self.socket.send_pyobj({'signal': 'job', 'action': 'test',
@@ -177,15 +242,20 @@ class MainWindow( Ui_MainWindow, QtWidgets.QMainWindow):
                 # elif action == 'train':
                     # self.socket.send_pyobj({'signal': 'job', 'action': 'train',
                     #                         'config': self.exp_config})
-                raise NotImplementedError
+                raise NotImplementedError(
+                    f"comp source {self.compSource} has not been impl")
         except KeyboardInterrupt:
             pass
         except Exception as E:
             import traceback; traceback.print_exc()
         finally:
-            print('destructing env and agent')
-            del self.trainer
-            self.trainer=None
+            pass
+
+    def stop_job(self):
+        if self.compSource == "Local":
+            if self.worker is not None:
+                print('setting terminate early to true')
+                self.worker.trainer.terminate_early = True
 
     def set_datapath(self, path):
         self.datapath = path
@@ -193,7 +263,7 @@ class MainWindow( Ui_MainWindow, QtWidgets.QMainWindow):
             if plot is not None:
                 plot.set_datapath(path)
 
-    def compSourceToggle(self):
+    def setCompSource(self):
         if self.LocalRadio.isChecked():
             self.compSource = "Local"
         elif self.ServerRadio.isChecked():
@@ -204,20 +274,27 @@ class MainWindow( Ui_MainWindow, QtWidgets.QMainWindow):
         self.exp_config = Config(yaml.safe_load(self.ParamsEdit.toPlainText()))
         # print(self.exp_config)
 
-    def load_config(self, config_path=None):
+    def load_experiment(self, config_path=None):
         config_path = config_path or Path(self.get_file(load=True))
         try:
             if config_path is not None and config_path != "":
                 self.config_path = config_path
                 old_agent_type = self.exp_config.agent_type
                 self.exp_config = Config(load_config(self.config_path))
-                self.ParamsEdit.setText(str(yaml.safe_dump(self.exp_config.to_dict())))
-                path = Path(self.exp_config.basepath)/self.exp_config.experiment_id/'logs'
+                self.ParamsEdit.setText(
+                    str(yaml.safe_dump(self.exp_config.to_dict())))
+                path = Path(self.exp_config.basepath)/ \
+                    self.exp_config.experiment_id/'logs'
                 if self.exp_config.agent_type != old_agent_type:
                     self.make_plots()
                 self.FilenameLabel.setText('/'.join(self.config_path.parts[-2:]))
                 # set new datapath and let plots load new data
                 self.set_datapath(path)
+            self.load_checkpoints_list()
+            if self.remove_worker():
+                print('worker removed')
+            else:
+                print('worker could not be removed - might still be running')
         except Exception as E:
             self.log(E)
 

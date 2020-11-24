@@ -91,8 +91,9 @@ PYBIND11_MODULE(env, m){
   py::class_<Synth, DataSource>_Synth(m, "Synth");
   py::class_<SawTooth, Synth>_SawTooth(m, "SawTooth");
   py::class_<Triangle, Synth>_Triangle(m, "Triangle");
-  py::class_<SineAdder, Synth>_SineAdder(m, "SineAdder");
+  py::class_<SineAdder, DataSource>_SineAdder(m, "SineAdder");
   py::class_<SimpleTrend, DataSource>_SimpleTrend(m, "SimpleTrend");
+  py::class_<Composite, DataSource>_Composite(m, "Composite");
 
   py::class_<Portfolio>_Portfolio(m, "Portfolio");
   py::class_<Account>_Account(m, "Account");
@@ -268,6 +269,32 @@ PYBIND11_MODULE(env, m){
          py::return_value_policy::reference)
     .def("currentData", (PriceVector& (SimpleTrend::*) ()) &SimpleTrend::currentData,
          "Get current data points",
+         py::return_value_policy::reference);
+  _Composite.def(py::init<py::dict>(), py::arg("config_dict"))
+    .def_property_readonly("nAssets", &Composite::nAssets,
+                           "number of Assets - length of currentPrices",
+                           py::return_value_policy::move)
+    .def_property_readonly("currentTime", &Composite::currentTime,
+                           "get the current timestamp",
+                           py::return_value_policy::move)
+    .def("getData", (PriceVector& (Composite::*) ()) &Composite::getData,
+         "Get Next data points",
+         py::return_value_policy::reference)
+    .def("currentPrices", (PriceVector& (Composite::*) ()) &Composite::currentPrices,
+         "Get current prices",
+         py::return_value_policy::reference)
+    .def("dataSources", [](const Composite& obj){
+      auto pylist = py::list();
+      for (auto& ptr: obj.dataSources()){
+        auto pyObj = py::cast(*ptr, py::return_value_policy::reference);
+        pylist.append(pyObj);
+      }
+      return pylist;
+    },
+         "Returns reference to vector of unique_ptr<DataSource>",
+         py::return_value_policy::copy)
+    .def("currentData", (PriceVector& (Composite::*) ()) &Composite::currentData,
+         "Get current data - make be raw prices or preprocessed or anything else",
          py::return_value_policy::reference);
 
   _Portfolio.def(py::init<string, Assets, double> (),

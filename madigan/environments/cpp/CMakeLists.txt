@@ -9,23 +9,22 @@ set(CUSTOM_FLAGS "-O3 -march=native -ffast-math -fopenmp -mavx2 -mfma -g")# -DND
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CUSTOM_FLAGS}")
 
 find_package(pybind11 REQUIRED)
-
-include_directories(${pybind11_INCLUDE_DIR})
 # find_package(cctz REQUIRED)
 # find_package(Boost 1.73 COMPONENTS filesystem system iostreams program_options REQUIRED)
 
-# include_directories(${Boost_INCLUDE_DIRS})
-# include_directories(${Boost_LIBRARY_DIRS})
+include_directories(${pybind11_INCLUDE_DIR})
 include_directories(${PYTHON_INCLUDE_PATH})
 link_directories(${PYTHON_INCLUDE_PATH})
+link_libraries(${PYTHON_LIBRARIES})
+# include_directories(${Boost_INCLUDE_DIRS})
+# include_directories(${Boost_LIBRARY_DIRS})
 # link_libraries(${Boost_LIBRARIES})
 # link_libraries(cctz::cctz)
-link_libraries(${PYTHON_LIBRARIES})
 
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CWD ${CMAKE_CURRENT_SOURCE_DIR})
 set(HEADER_FILES Portfolio.h Broker.h Account.h DataSource.h Env.h Config.h)
-set(SOURCE_FILES Portfolio.cpp Broker.cpp Account.cpp DataSource.cpp Env.cpp)
+set(SOURCE_FILES Portfolio.cpp Broker.cpp Account.cpp DataSource.cpp Env.cpp Config.cpp)
 set(TESTFOLDER tests/)
 # pybind11_add_module(env MODULE env.cpp Portfolio.cpp Env.cpp DataSource.cpp Broker.cpp)
 # add_executable(envTest tests/envTest.cpp Portfolio.cpp Env.cpp DataSource.cpp Broker.cpp)

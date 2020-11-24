@@ -64,8 +64,10 @@ class Trainer:
         # self.test_metrics_cols = ('cash', 'equity', 'margin', 'returns')
         self.test_metrics_cols = None # equivalent to saving all mertrics
         self.config.save()
+        self.server_host = 9000
         self.server_port = 9000
-        self.init_server()
+        # self.init_server()
+        self.terminate_early = False
 
     def init_server(self, port: int = None):
         port = port or self.server_port
@@ -73,7 +75,7 @@ class Trainer:
         self.socket = self.context.socket(zmq.PAIR)
         self.socket.setsockopt(zmq.LINGER, 0)
         # self.socket.setsockopt(zmq.LINGER, 0)
-        self.socket.bind(f'tcp://{self.server_host}:{self.server_port}')
+        self.socket.bind(f'tcp://{self.server_host}:{port}')
         self.poller = zmq.Poller()
         self.poller.register(self.socket, zmq.POLLIN | zmq.POLLOUT)
         self.recvque = Queue()
@@ -177,6 +179,8 @@ class Trainer:
         return checks
 
     def branch_experiment(self, new_exp_id: str):
+        if self.config.experiment_id == new_exp_id:
+            raise ValueError("branch name must be different from parent")
         old_exp_id = self.config.experiment_id
         old_exp_path = Path(self.config.basepath)/old_exp_id
         new_exp_path = Path(self.config.basepath)/new_exp_id
@@ -267,9 +271,15 @@ class Trainer:
                 steps_since_save += training_steps_taken
                 steps_since_flush += training_steps_taken
 
+                if self.terminate_early:  # set from external thread
+                    raise StopIteration
+
         except StopIteration:
-            print('Done training')
-            pass
+            if self.terminate_early:
+                print('Training terminated early')
+            else:
+                print('Done training')
+            self.terminate_early = False
 
         except KeyboardInterrupt:
             import ipdb; ipdb.set_trace()

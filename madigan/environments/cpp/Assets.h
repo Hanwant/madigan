@@ -24,6 +24,11 @@ namespace madigan{
     }
   };
 
+  inline std::ostream& operator<<(std::ostream& os, Asset asset){
+    os << asset.code;
+    return os;
+  }
+
   struct Assets :public std::vector<Asset>{
     Assets(){};
     // using std::vector<Asset>::std::vector<Asset>(std::initializer_list);
@@ -43,6 +48,13 @@ namespace madigan{
       }
     }
   };
+
+  inline std::ostream& operator<<(std::ostream& os, Assets assets){
+    for (auto& asset: assets){
+      os << asset << (string)" ";
+    }
+    return os;
+  }
 
   // typedef std::vector<Asset> Assets;
   // template<>

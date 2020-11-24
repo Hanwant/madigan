@@ -244,11 +244,11 @@ class OffPolicyQ(Agent):
                 trn_metrics.append(_trn_metrics)
                 self.training_steps += 1
 
-                if self.env_steps % log_freq == 0:
+                if self.training_steps % log_freq == 0:
                     yield trn_metrics
                     trn_metrics.clear()
 
-                if self.env_steps > max_steps:
+                if self.training_steps > max_steps:
                     yield trn_metrics
                     break
 
@@ -386,18 +386,17 @@ class OffPolicyActorCritic(Agent):
             else:
                 state = next_state
 
-
             if len(self.buffer) > self.replay_min_size:
                 _trn_metrics = self.train_step()
                 _trn_metrics['running_reward'] = running_reward
                 trn_metrics.append(_trn_metrics)
                 self.training_steps += 1
 
-                if self.env_steps % log_freq == 0:
+                if self.training_steps % log_freq == 0:
                     yield trn_metrics
                     trn_metrics.clear()
 
-                if self.env_steps > max_steps:
+                if self.training_steps > max_steps:
                     yield trn_metrics
                     break
 
