@@ -191,7 +191,7 @@ class Ui_MainWindow(object):
 
         self.retranslateUi(MainWindow)
         self.PlotTab.setCurrentIndex(0)
-        self.ExpTab.setCurrentIndex(2)
+        self.ExpTab.setCurrentIndex(1)
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
 
     def retranslateUi(self, MainWindow):

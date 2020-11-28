@@ -131,7 +131,7 @@ class MainWindow( Ui_MainWindow, QtWidgets.QMainWindow):
         else:
             branch, ok = QtWidgets.QInputDialog.getText(
                 self, 'Pick Name for New Branch', 'Branch Name: ',
-                QtWidgets.QLineEdit.Normal, "")
+                QtWidgets.QLineEdit.Normal, self.exp_config.experiment_id)
             if ok:
                 self.worker.trainer.branch_experiment(branch)
                 self.load_experiment(

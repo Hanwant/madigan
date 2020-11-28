@@ -23,8 +23,17 @@ namespace madigan{
 
   using std::vector;
 
+  // class DataSourceBase{
+  //   virtual ~DataSource(){}
+  //   // Data<T> nextData();
+  //   int nAssets() const{ return nAssets_;}
+  //   template<T> virtual const T& getData()=0;
+  //   template<T> virtual const T& currentData() const=0;
+  //   template<T> virtual const T& currentPrices() const=0;
+  //   virtual std::size_t currentTime() const =0;
+  // }
 
-  class DataSource{
+    class DataSource{
   public:
     Assets assets;
     int nAssets_;
@@ -40,6 +49,21 @@ namespace madigan{
     virtual std::size_t currentTime() const =0;
   };
 
+  // The following DataSources load data from files
+  class HDFSource: public DataSource{
+  public:
+    HDFSource();
+    virtual const PriceVector& getData()=0;
+    virtual const PriceVector& currentData() const=0;
+    virtual const PriceVector& currentPrices() const=0;
+    virtual std::size_t currentTime() {return timestamp_; }
+
+  private:
+    std::size_t timestamp_;
+  };
+
+
+  // SYNTHS - The Following DataSources are Synthetic Time Series
   // Composite can combine outputs of many different data sources
   class Composite: public DataSource{
   public:
@@ -50,7 +74,6 @@ namespace madigan{
     Composite(Config config);
     Composite(pybind11::dict config){
       Composite(makeConfigFromPyDict(config));}
-    // int nAssets() const{ return nAssets_;}
     const PriceVector& getData();
     const PriceVector& currentData() const{return currentData_;}
     const PriceVector& currentPrices() const{return currentData_;}
@@ -80,8 +103,6 @@ namespace madigan{
     Synth(Config config);
     Synth(pybind11::dict config);
     ~Synth(){}
-    // Data<T> getData();
-    // int nAssets() const { return nAssets_;}
     const PriceVector& getData() override;
     const pybind11::array_t<double> getData_np() ;
     const PriceVector& currentData() const{ return currentData_;}
@@ -106,9 +127,9 @@ namespace madigan{
     std::normal_distribution<double> noiseDistribution;
     PriceVector currentData_;
   };
+
   class SineAdder: public DataSource{
   public:
-    // using Synth::Synth;
     SineAdder(); // use default values for parameters
     SineAdder(std::vector<double> freq, std::vector<double> mu,
               std::vector<double> amp, std::vector<double> phase,
@@ -141,11 +162,13 @@ namespace madigan{
     std::normal_distribution<double> noiseDistribution;
     PriceVector currentData_;
   };
+
   class SawTooth: public Synth{
   public:
     using Synth::Synth;
     const PriceVector& getData() override;
   };
+
   class Triangle: public Synth{
   public:
     using Synth::Synth;
@@ -157,14 +180,12 @@ namespace madigan{
     Assets assets;
     int nAssets_{0};
   public:
-    OU(); // use default values for parameters
+    OU();
     OU(std::vector<double> mean, std::vector<double> theta,
        std::vector<double> phi, std::vector<double> noise_var);
     OU(Config config);
     OU(pybind11::dict config);
     ~OU(){}
-    // Data<T> getData();
-    // int nAssets() const { return nAssets_;}
     const PriceVector& getData() override;
     const pybind11::array_t<double> getData_np() ;
     const PriceVector& currentData() const{ return currentData_;}
@@ -237,16 +258,14 @@ namespace madigan{
   public:
     TrendOU();
     TrendOU(std::vector<double> trendProb, std::vector<int> minPeriod,
-            std::vector<int> maxPeriod, std::vector<double> noise,
-            std::vector<double> dYMin, std::vector<double> dYMax,
-            std::vector<double> start, std::vector<double> theta,
-            std::vector<double> phi, std::vector<double> noise_var,
-            std::vector<double> emaAlpha);
+            std::vector<int> maxPeriod, std::vector<double> dYMin,
+            std::vector<double> dYMax, std::vector<double> start,
+            std::vector<double> theta, std::vector<double> phi,
+            std::vector<double> noise_var, std::vector<double> emaAlpha);
     TrendOU(Config config);
     TrendOU(pybind11::dict config);
     ~TrendOU(){}
 
-    // int nAssets() const { return nAssets_;}
     const PriceVector& getData() override;
     const PriceVector& currentData() const{ return currentData_;}
     const PriceVector& currentPrices() const{ return currentData_;}
@@ -254,33 +273,33 @@ namespace madigan{
 
   protected:
     virtual void initParams(std::vector<double> trendProb, std::vector<int> minPeriod,
-                            std::vector<int> maxPeriod, std::vector<double> noise,
-                            std::vector<double> dYMin, std::vector<double> dYMax,
-                            std::vector<double> start, std::vector<double> theta,
-                            std::vector<double> phi, std::vector<double> noise_var,
-                            std::vector<double> emaAlpha);
+                            std::vector<int> maxPeriod, std::vector<double> dYMin,
+                            std::vector<double> dYMax, std::vector<double> start,
+                            std::vector<double> theta, std::vector<double> phi,
+                            std::vector<double> noise_var, std::vector<double> emaAlpha);
   protected:
     const double dT{1.};
     std::vector<double> trendProb;
     vector<int> minPeriod;
     vector<int> maxPeriod;
-    vector<double> noise;
     vector<double> dY;
     vector<double> dYMin;
     vector<double> dYMax;
     vector<double> theta;
     vector<double> phi;
-    vector<double> noise_var;
+    vector<double> noiseTrend;
     vector<double> emaAlpha;
     vector<double> ema;
+    std::vector<double> ouMean;
     std::size_t timestamp_{0};
     std::default_random_engine generator;
-    std::vector<std::normal_distribution<double>> trendNoise;
-    std::vector<std::normal_distribution<double>> ouNoise;
+    std::vector<std::normal_distribution<double>> ouNoiseDist;
+    std::vector<std::normal_distribution<double>> trendNoiseDist;
     std::vector<std::uniform_real_distribution<double>> dYDist;
     std::vector<std::uniform_int_distribution<int>> trendLenDist;
     std::uniform_real_distribution<double> uniformDist{0., 1.};
     PriceVector currentData_;
+
 
     std::vector<bool> trending;
     std::vector<int> currentDirection;

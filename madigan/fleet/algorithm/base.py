@@ -137,7 +137,7 @@ class Agent(ABC):
         """
 
     def checkpoint(self):
-        check = self.savepath/f'checkpoint_{self.training_steps}.pth'
+        check = self.savepath/f'checkpoint_{self.training_steps}'
         self.save_state(check)
 
 

@@ -40,19 +40,25 @@ data_source_config:
   - 75
   max_period:
   - 125
-  noise:
-  - .0
+  noise_trend:
+  - .00
+  phi:
+  - .04
+  theta:
+  - .15
+  ema_alpha:
+  - .3
   dYMin:
-  - 0.005
+  - 0.0005
   dYMax:
-  - 0.02
+  - 0.001
   start:
   - 5.0
-data_source_type: SimpleTrend
+data_source_type: TrendOU
 discrete_action_atoms: 3
 discrete_actions: true
 env_type: Synth
-experiment_id: DQNReverser_Trend_Roller_trans.2_noisy_variable_trend
+experiment_id: DQNReverser_TrendOU_trans.02_D_NO_NOISE
 init_cash: 1000000
 log_freq: 10000
 lot_unit_value: 10000

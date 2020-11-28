@@ -511,31 +511,30 @@ namespace madigan{
 
 
   void TrendOU::initParams(std::vector<double> trendProb, std::vector<int> minPeriod,
-                           std::vector<int> maxPeriod, std::vector<double> noise,
-                           std::vector<double> dYMin, std::vector<double> dYMax,
-                           std::vector<double> start, std::vector<double> theta,
-                           std::vector<double> phi, std::vector<double> noise_var,
-                           std::vector<double> emaAlpha){
+                           std::vector<int> maxPeriod, std::vector<double> dYMin,
+                           std::vector<double> dYMax, std::vector<double> start,
+                           std::vector<double> theta, std::vector<double> phi,
+                           std::vector<double> noiseTrend, std::vector<double> emaAlpha){
     if ((trendProb.size() == minPeriod.size()) && (minPeriod.size() == maxPeriod.size())
-        && (maxPeriod.size() == noise.size()) && (noise.size() == start.size())
+        && (maxPeriod.size() == phi.size()) && (phi.size() == noiseTrend.size())
         && (start.size() == dYMin.size()) && (dYMin.size() == dYMax.size())
         && (dYMax.size() == theta.size()) && (theta.size() == phi.size())
-        && (phi.size() == noise_var.size())){
+        && (noiseTrend.size() == emaAlpha.size())){
       this->trendProb=trendProb;
       this->minPeriod=minPeriod;
       this->maxPeriod=maxPeriod;
-      this->noise=noise;
+      this->noiseTrend=noiseTrend;
       this->dYMin=dYMin;
       this->dYMax=dYMax;
       this->theta=theta;
       this->phi=phi;
-      this->noise_var=noise_var;
       this->emaAlpha=emaAlpha;
-      this->ema=start;;
+      this->ema=start;
+      this->ouMean=start;
       currentData_.resize(trendProb.size());
       for (int i=0; i<trendProb.size(); i++){
-        trendNoise.push_back(std::normal_distribution<double>(0., noise[i]));
-        ouNoise.push_back(std::normal_distribution<double>(0., noise_var[i]));
+        ouNoiseDist.push_back(std::normal_distribution<double>(0., phi[i]));
+        trendNoiseDist.push_back(std::normal_distribution<double>(0., noiseTrend[i]));
         trendLenDist.push_back(std::uniform_int_distribution<int>
                                  (minPeriod[i], maxPeriod[i]));
         dYDist.push_back(std::uniform_real_distribution<double>
@@ -558,17 +557,16 @@ namespace madigan{
   }
 
   TrendOU::TrendOU(std::vector<double> trendProb, std::vector<int> minPeriod,
-                   std::vector<int> maxPeriod, std::vector<double> noise,
-                   std::vector<double> dYMin, std::vector<double> dYMax,
-                   std::vector<double> start, std::vector<double> theta,
-                   std::vector<double> phi, std::vector<double> noise_var,
-                   std::vector<double> emaAlpha) {
-    initParams(trendProb, minPeriod, maxPeriod, noise, dYMin, dYMax, start,
-               theta, phi, noise_var, emaAlpha);
+                   std::vector<int> maxPeriod, std::vector<double> dYMin,
+                   std::vector<double> dYMax, std::vector<double> start,
+                   std::vector<double> theta, std::vector<double> phi,
+                   std::vector<double> noiseTrend, std::vector<double> emaAlpha) {
+    initParams(trendProb, minPeriod, maxPeriod, dYMin, dYMax, start,
+               theta, phi, noiseTrend, emaAlpha);
   }
 
-  TrendOU::TrendOU(): TrendOU({0.001, 0.001}, {100, 500}, {200, 1500},
-                              {1. ,0.1}, {0.001, 0.01},
+  TrendOU::TrendOU(): TrendOU({0.001, 0.001}, {100, 500},
+                              {200, 1500}, {0.001, 0.01},
                               {0.003, 0.03}, {10., 15.},
                               {1., 0.5}, {2., 2.1},
                               {1., 1.2}, {0.1, 0.2}){}
@@ -580,8 +578,8 @@ namespace madigan{
       allParamsPresent = false;
     }
     Config params = std::any_cast<Config>(config["data_source_config"]);
-    for (auto key: {"trendProb", "minPeriod", "maxPeriod", "noise", "dYMin",
-                    "dYMax", "start", "theta", "phi", "noise_var", "emaAlpha"}){
+    for (auto key: {"trendProb", "minPeriod", "maxPeriod", "dYMin",
+                    "dYMax", "start", "theta", "phi", "noiseTrend", "emaAlpha"}){
       if (params.find(key) == params.end()){
         allParamsPresent=false;
         throw ConfigError((string)"data_Source_config doesn't have all required"
@@ -591,16 +589,15 @@ namespace madigan{
     vector<double> trendProb = std::any_cast<vector<double>>(params["trendProb"]);
     vector<int> minPeriod = std::any_cast<vector<int>>(params["minPeriod"]);
     vector<int> maxPeriod = std::any_cast<vector<int>>(params["maxPeriod"]);
-    vector<double> noise = std::any_cast<vector<double>>(params["noise"]);
     vector<double> dYMin = std::any_cast<vector<double>>(params["dYMin"]);
     vector<double> dYMax = std::any_cast<vector<double>>(params["dYMax"]);
     vector<double> start = std::any_cast<vector<double>>(params["start"]);
     vector<double> theta = std::any_cast<vector<double>>(params["theta"]);
     vector<double> phi = std::any_cast<vector<double>>(params["phi"]);
-    vector<double> noise_var = std::any_cast<vector<double>>(params["noise_var"]);
+    vector<double> noiseTrend = std::any_cast<vector<double>>(params["noiseTrend"]);
     vector<double> emaAlpha = std::any_cast<vector<double>>(params["emaAlpha"]);
-    initParams(trendProb, minPeriod, maxPeriod, noise, dYMin, dYMax, start,
-               theta, phi, noise_var, emaAlpha);
+    initParams(trendProb, minPeriod, maxPeriod, dYMin, dYMax, start,
+               theta, phi, noiseTrend, emaAlpha);
   }
 
   TrendOU::TrendOU(pybind11::dict py_config):
@@ -609,19 +606,25 @@ namespace madigan{
   const PriceVector& TrendOU::getData(){
     for (int i=0; i < nAssets_; i++){
       double& y = currentData_[i];
-      // OU PROCESS
-      y += theta[i] * (ema[i]-y) * dT + y * phi[i] * ouNoise[i](generator);
-      // TRENDING PROCESS
       if(trending[i]){
         double& x = currentData_(i);
-        y += y * dY[i] * currentDirection[i];
+        y += y * (dY[i] * currentDirection[i] + trendNoiseDist[i](generator));
         currentTrendLen[i] -= 1;
         if (currentTrendLen[i] == 0){
           trending[i] = false;
+          ouMean[i] = y;
         }
-        ema[i] += emaAlpha[i] * y + (1-emaAlpha[i]) * ema[i];
+        y = std::max(0.01, y);
+        if (y <= .1){
+          currentDirection[i] = 1;
+        }
+        // ema[i] += emaAlpha[i] * y + (1-emaAlpha[i]) * ema[i];
       }
       else{
+        double ou_noise = y*ouNoiseDist[i](generator);
+        double ou_reverting_component = theta[i] * (ouMean[i] - y);
+        // ou_process = theta[i] * (ema[i]-y) * dT + y * phi[i] * ouNoise[i](generator);
+        y += ou_reverting_component + ou_noise;
         double rand = uniformDist(generator);
         if (rand < trendProb[i]){
           trending[i] = true;
@@ -630,11 +633,7 @@ namespace madigan{
           dY[i] = dYDist[i](generator);
         }
       }
-      if (y <= .1){
-        currentDirection[i] = 1;
-      }
-      y += y*trendNoise[i](generator);
-      y = std::max(0.01, y);
+      // y += y*trendNoise[i](generator);
     }
     timestamp_ += 1;
     return currentData_;

@@ -244,8 +244,8 @@ namespace madigan {
   }
 
    Config makeTrendOUConfigFromPyDict(pybind11::dict genParams){
-    for (auto key: {"trend_prob", "min_period", "max_period", "noise", "dYMin",
-                    "dYMax", "start", "theta", "phi", "noise_var", "ema_alpha"}){
+    for (auto key: {"trend_prob", "min_period", "max_period", "dYMin",
+                    "dYMax", "start", "theta", "phi", "noise_trend", "ema_alpha"}){
       auto keyFound=std::find_if(genParams.begin(), genParams.end(),
                                  [key](const std::pair<pybind11::handle, pybind11::handle>& pair){
                                    return string(pybind11::str(pair.first)) == key;
@@ -257,13 +257,12 @@ namespace madigan {
     vector<double> trendProb;
     vector<int> minPeriod;
     vector<int> maxPeriod;
-    vector<double> noise;
     vector<double> dYMin;
     vector<double> dYMax;
     vector<double> start;
     vector<double> theta;
     vector<double> phi;
-    vector<double> noise_var;
+    vector<double> noiseTrend;
     vector<double> emaAlpha;
     for(auto& item: genParams){
       string key = string(pybind11::str(item.first));
@@ -275,9 +274,6 @@ namespace madigan {
       }
       if(key == "max_period"){
         maxPeriod= item.second.cast<vector<int>>();
-      }
-      if(key == "noise"){
-        noise = item.second.cast<vector<double>>();
       }
       if(key == "dYMin"){
         dYMin = item.second.cast<vector<double>>();
@@ -294,8 +290,8 @@ namespace madigan {
       if(key == "phi"){
         phi = item.second.cast<vector<double>>();
       }
-      if(key == "noise_var"){
-        noise_var = item.second.cast<vector<double>>();
+      if(key == "noise_trend"){
+        noiseTrend= item.second.cast<vector<double>>();
       }
       if(key == "ema_alpha"){
         emaAlpha = item.second.cast<vector<double>>();
@@ -306,13 +302,12 @@ namespace madigan {
       {"data_source_config", Config{{"trendProb", trendProb},
                                     {"minPeriod", minPeriod},
                                     {"maxPeriod", maxPeriod},
-                                    {"noise", noise },
                                     {"dYMin", dYMin},
                                     {"dYMax", dYMax},
                                     {"start", start},
                                     {"theta", theta},
                                     {"phi", phi},
-                                    {"noise_var", noise_var},
+                                    {"noiseTrend", noiseTrend},
                                     {"emaAlpha", emaAlpha}}
       }
     };
