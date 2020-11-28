@@ -22,6 +22,8 @@ namespace madigan{
   typedef Eigen::VectorXi ActionVector;
   typedef Eigen::VectorXd PriceVector;
   typedef Eigen::Map<const PriceVector> PriceVectorMap;
+  typedef Eigen::MatrixXd BidAskMatrix;
+  typedef Eigen::Map<const BidAskMatrix> BidAskMatrixMap;
   typedef Eigen::VectorXd AmountVector;
   typedef Eigen::VectorXd Ledger;
   typedef Eigen::Map<const Ledger> LedgerMap;
@@ -95,7 +97,6 @@ namespace madigan{
     return os;
   }
 
-  // struct BrokerResponseBase;
   template<typename T>
   struct BrokerResponse {
     std::string event;
@@ -136,27 +137,14 @@ namespace madigan{
 
   template<typename T>
   struct EnvInfo{
-    // std::unique_ptr<BrokerResponseBase> brokerResponse;
     BrokerResponse<T> brokerResponse;
     EnvInfo(){};
-    // EnvInfo(std::unique_ptr<BrokerResponse> brokerResp): brokerResponse(brokerResp){};
     EnvInfo(BrokerResponse<T> brokerResp): brokerResponse(brokerResp){};
     virtual ~EnvInfo(){};
   };
 
   using EnvInfoSingle = EnvInfo<double>;
   using EnvInfoMulti = EnvInfo<PriceVector>;
-
-  // struct SRDI{
-  //   State state;
-  //   double reward;
-  //   bool done;
-  //   std::unique_ptr<Info> info;
-  // };
-
-  // typedef std::tuple<State, double, bool, std::unique_ptr<Info>> SRDI;
-  // typedef std::tuple<State, double, bool, EnvInfo<double>> SRDI;
-  // typedef std::tuple<State, double, bool, EnvInfo<PriceVector>> SRDI;
 
   template<typename T>
   using SRDI = std::tuple<State, double, bool, EnvInfo<T>>;

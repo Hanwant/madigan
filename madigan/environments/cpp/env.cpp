@@ -62,6 +62,7 @@ void declareEnvInfo(py::module& m, const string& className){
     .def_readonly("brokerResponse", &Class::brokerResponse);
 }
 
+
 PYBIND11_MODULE(env, m){
   m.doc() = "Environment Components, including Portfolio, Broker, DataGenerator and Env classes";
 
@@ -69,6 +70,7 @@ PYBIND11_MODULE(env, m){
     // .def(py::init<py::dict> (), py::arg("config"))
     // .def(py::init<Config> (), py::arg("config"));
     // .def(py::init<py::dict> (), py::arg("dict"));
+
 
 
   // Declared and defined in the same order

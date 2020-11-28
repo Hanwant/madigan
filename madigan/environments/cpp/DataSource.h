@@ -23,33 +23,50 @@ namespace madigan{
 
   using std::vector;
 
-  // class DataSourceBase{
-  //   virtual ~DataSource(){}
-  //   // Data<T> nextData();
-  //   int nAssets() const{ return nAssets_;}
-  //   template<T> virtual const T& getData()=0;
-  //   template<T> virtual const T& currentData() const=0;
-  //   template<T> virtual const T& currentPrices() const=0;
-  //   virtual std::size_t currentTime() const =0;
-  // }
+  // template<class T>
+  // std::unique_ptr<DataSource<T>> makeDataSource(string dataSourceType);
+  // template<class T>
+  // std::unique_ptr<DataSource<T>> makeDataSource(string dataSourceType, Config config);
 
-    class DataSource{
+
+  // template<class T>
+  // class DataSource{
+  // public:
+  //   Assets assets;
+  //   int nAssets_;
+  // public:
+  //   // virtual ~DataSource(){}
+  //   int nAssets() const{ return nAssets_;}
+  //   const T& getData();
+  //   const T& currentData() const;
+  //   const T& currentPrices() const;
+  //   std::size_t currentTime() const;
+  // };
+
+  // template<>
+  class DataSource{
   public:
     Assets assets;
     int nAssets_;
   public:
-    // DataSource(const DataSource&) =delete;
-    // DataSource& operator=(const DataSource&) =delete;
-    virtual ~DataSource(){}
-    // Data<T> nextData();
     int nAssets() const{ return nAssets_;}
+
     virtual const PriceVector& getData()=0;
     virtual const PriceVector& currentData() const=0;
     virtual const PriceVector& currentPrices() const=0;
     virtual std::size_t currentTime() const =0;
   };
+  class DataSourceBidAsk;
 
-  // The following DataSources load data from files
+  using DataSourceTick = DataSource;
+
+  std::unique_ptr<DataSource> makeDataSource(string dataSourceType);
+  std::unique_ptr<DataSource> makeDataSource(string dataSourceType, Config config);
+
+
+
+
+  // The following DataSource<PriceVector>s load data from files
   class HDFSource: public DataSource{
   public:
     HDFSource();
@@ -63,7 +80,7 @@ namespace madigan{
   };
 
 
-  // SYNTHS - The Following DataSources are Synthetic Time Series
+  // SYNTHS - The Following DataSource<PriceVector>s are Synthetic Time Series
   // Composite can combine outputs of many different data sources
   class Composite: public DataSource{
   public:
@@ -87,7 +104,7 @@ namespace madigan{
 
   };
 
-
+  // Base for Periodic Wave funcitons I.e sine, triangle, sawtooth
   class Synth: public DataSource{
   public:
     Assets assets;
@@ -103,7 +120,7 @@ namespace madigan{
     Synth(Config config);
     Synth(pybind11::dict config);
     ~Synth(){}
-    const PriceVector& getData() override;
+    const PriceVector& getData() ;
     const pybind11::array_t<double> getData_np() ;
     const PriceVector& currentData() const{ return currentData_;}
     const PriceVector& currentPrices() const{ return currentData_;}
@@ -141,7 +158,7 @@ namespace madigan{
     SineAdder(pybind11::dict config);
     int nAssets() const{ return nAssets_;}
     ~SineAdder(){}
-    const PriceVector& getData() override;
+    const PriceVector& getData() ;
     const PriceVector& currentData() const{ return currentData_;}
     const PriceVector& currentPrices() const{ return currentData_;}
     std::size_t currentTime() const { return timestamp_; }
@@ -166,13 +183,13 @@ namespace madigan{
   class SawTooth: public Synth{
   public:
     using Synth::Synth;
-    const PriceVector& getData() override;
+    const PriceVector& getData();
   };
 
   class Triangle: public Synth{
   public:
     using Synth::Synth;
-    const PriceVector& getData() override;
+    const PriceVector& getData();
   };
 
   class OU: public DataSource{
@@ -186,7 +203,7 @@ namespace madigan{
     OU(Config config);
     OU(pybind11::dict config);
     ~OU(){}
-    const PriceVector& getData() override;
+    const PriceVector& getData();
     const pybind11::array_t<double> getData_np() ;
     const PriceVector& currentData() const{ return currentData_;}
     const PriceVector& currentPrices() const{ return currentData_;}
@@ -220,7 +237,7 @@ namespace madigan{
     ~SimpleTrend(){}
 
     // int nAssets() const { return nAssets_;}
-    const PriceVector& getData() override;
+    const PriceVector& getData();
     const PriceVector& currentData() const{ return currentData_;}
     const PriceVector& currentPrices() const{ return currentData_;}
     std::size_t currentTime() const { return timestamp_; }
@@ -266,7 +283,7 @@ namespace madigan{
     TrendOU(pybind11::dict config);
     ~TrendOU(){}
 
-    const PriceVector& getData() override;
+    const PriceVector& getData() ;
     const PriceVector& currentData() const{ return currentData_;}
     const PriceVector& currentPrices() const{ return currentData_;}
     std::size_t currentTime() const { return timestamp_; }
@@ -307,19 +324,6 @@ namespace madigan{
 
   };
 
-  std::unique_ptr<DataSource> makeDataSource(string dataSourceType);
-  std::unique_ptr<DataSource> makeDataSource(string dataSourceType, Config config);
-
-
-  // class PySynth: public Synth{
-  // public:
-  //   using Synth::Synth;
-
-  //   const PriceVector& getData() override {
-  //     PYBIND11_OVERLOAD(const PriceVector&,
-  //                       Synth,
-  //                       getData, );
-  //   }
 
 } // namespace madigan
 

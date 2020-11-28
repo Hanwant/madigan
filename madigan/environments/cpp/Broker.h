@@ -12,6 +12,7 @@
 #include "Account.h"
 
 namespace madigan{
+
   typedef std::unordered_map<std::string, Account*> AccountBook;
 
   struct Order{

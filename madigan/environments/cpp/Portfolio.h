@@ -15,6 +15,7 @@
 
 namespace madigan{
 
+
   class Account; // forward declare for friend class declaration below
 
   using std::string;
@@ -33,7 +34,7 @@ namespace madigan{
     Portfolio& operator=(const Portfolio&& other)=delete;
     ~Portfolio()=default;
 
-    void setDataSource(DataSource* source);
+    void setDataSource(DataSourceTick* source);
     void setRequiredMargin(double reqMargin){ requiredMargin_=reqMargin;}
     void setMaintenanceMargin(double maintenanceMargin){
       maintenanceMargin_=maintenanceMargin;}
@@ -42,7 +43,7 @@ namespace madigan{
     Assets assets() const {return assets_;}
     std::unordered_map<string, unsigned int> assetIdx() const;
     unsigned int assetIdx(const string code) const;
-    const DataSource* dataSource() const{ return dataSource_;}
+    const DataSourceTick* dataSource() const{ return dataSource_;}
     const PriceVectorMap& currentPrices() const { return currentPrices_;}
     const Ledger&  meanEntryPrices() const { return meanEntryPrices_; }
 
@@ -122,9 +123,9 @@ namespace madigan{
     bool registeredDataSource{false};
     std::vector<double> defaultPrices_; // just to have some default prices (init to 0.) when datasource is na
     PriceVectorMap currentPrices_{nullptr, 0};
-    DataSource* dataSource_{nullptr};
+    DataSourceTick* dataSource_{nullptr};
 
-      };
+  };
 
 
 } /*namespace madigan*/

@@ -92,7 +92,7 @@ void testAccount(){
   for (auto& acc: {account1, account2, account3}){
     const PortfolioBook portBook= acc.portfolioBook();
     const Portfolio& port=acc.portfolio();
-    const DataSource* datSource=acc.dataSource();
+    const DataSourceTick* datSource=acc.dataSource();
     assert(&port == &(acc.defaultPortfolio())); // check pointers to same object
     assert(dataSource.getData().isApprox(port.currentPrices()));
     assert(dataSource.getData().isApprox(datSource->currentData()));
@@ -101,7 +101,7 @@ void testAccount(){
     }
   }
   for (const auto& port: account4.portfolios()){
-    const DataSource* datSource{nullptr};
+    const DataSourceTick* datSource{nullptr};
     datSource=port.dataSource();
     assert(dataSource.getData().isApprox(port.currentPrices()));
     assert(dataSource.getData().isApprox(datSource->currentData()));
@@ -128,7 +128,7 @@ void testBroker(){
   Broker broker3(account1);
   Broker broker4(account1.portfolio());
   Synth dataSource = Synth();
-  DataSource* pdataSource = &dataSource;
+  DataSourceTick* pdataSource = &dataSource;
 
   assert(&account1 != &broker3.account("acc01"));
   assert(&account1.portfolio() != &broker3.account("acc01").portfolio());
@@ -145,7 +145,7 @@ void testBroker(){
     const PriceVectorMap& accountRef= broker.account().currentPrices();
     const PriceVectorMap& portfolioRef= broker.account().portfolio().currentPrices();
     const Portfolio& portfolio = broker.account().portfolio();
-    const  DataSource* datSource=portfolio.dataSource();
+    const  DataSourceTick* datSource=portfolio.dataSource();
     const PriceVector& portfolioRef2=datSource->currentData();
     assert(dataSource.getData().isApprox(brokerRef));
     assert(dataSource.getData().isApprox(accountRef));

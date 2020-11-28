@@ -175,11 +175,6 @@ namespace madigan{
   }
 
   double Account::initCash() const{
-    // double sum{0.};
-    // for (const auto& port: portfolios_){
-    //   sum += port.initCash();
-    // }
-    // return sum;
     return std::accumulate(portfolios_.begin(), portfolios_.end(), 0.,
                            [] (double sum, const Portfolio& port){ return sum+(port.initCash()); });
   }

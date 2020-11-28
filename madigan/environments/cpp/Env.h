@@ -14,15 +14,14 @@ namespace py=pybind11;
 
 namespace madigan{
 
-
   class Env{
   public:
     Config config;
   public:
-    // Env(DataSource* dataSource): dataSource(dataSource){
+    // Env(DataSource<PriceVector>* dataSource): dataSource(dataSource){
     //   assets = dataSource->assets;
     // };
-    // inline Env(std::unique_ptr<DataSource> dataSource, Assets assets, double initCash);
+    // inline Env(std::unique_ptr<DataSource<PriceVector>> dataSource, Assets assets, double initCash);
     Env(string sourceType, Assets assets, double initCash): assets_(assets), initCash_(initCash),
                                                             dataSourceType_(sourceType){
       reset(); }

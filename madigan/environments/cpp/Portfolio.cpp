@@ -117,7 +117,7 @@ namespace madigan{
     assetsRegistered = true;
   }
 
-  void Portfolio::setDataSource(DataSource* source){
+  void Portfolio::setDataSource(DataSourceTick* source){
     dataSource_ = source;
     new (&currentPrices_) PriceVectorMap(source->currentData().data(), source->currentData().size());
     registeredDataSource = true;
