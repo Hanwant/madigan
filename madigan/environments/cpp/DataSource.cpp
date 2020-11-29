@@ -6,6 +6,70 @@
 
 namespace madigan{
 
+  std::unique_ptr<DataSource> makeDataSource(string dataSourceType){
+    if(dataSourceType == "Synth"){
+      return make_unique<Synth>();
+    }
+    else if (dataSourceType == "SawTooth"){
+      return make_unique<SawTooth>();
+    }
+    else if (dataSourceType == "Triangle"){
+      return make_unique<Triangle>();
+    }
+    else if (dataSourceType == "SineAdder"){
+      return make_unique<SineAdder>();
+    }
+    else if (dataSourceType == "OU"){
+      return make_unique<OU>();
+    }
+    else if (dataSourceType == "SimpleTrend"){
+      return make_unique<SimpleTrend>();
+    }
+    else if (dataSourceType == "TrendOU"){
+      return make_unique<TrendOU>();
+    }
+    else{
+      std::stringstream ss;
+      ss << "Default Constructor for ";
+      ss << dataSourceType;
+      ss << " as dataSource is not implemented";
+      throw NotImplemented(ss.str());
+    }
+  }
+
+  std::unique_ptr<DataSource> makeDataSource(string dataSourceType, Config config){
+    if(dataSourceType == "Synth"){
+      return make_unique<Synth>(config);
+    }
+    else if (dataSourceType == "SawTooth"){
+      return make_unique<SawTooth>(config);
+    }
+    else if (dataSourceType == "Triangle"){
+      return make_unique<Triangle>(config);
+    }
+    else if (dataSourceType == "SineAdder"){
+      return make_unique<SineAdder>(config);
+    }
+    else if (dataSourceType == "OU"){
+      return make_unique<OU>(config);
+    }
+    else if (dataSourceType == "SimpleTrend"){
+      return make_unique<SimpleTrend>(config);
+    }
+    else if (dataSourceType == "TrendOU"){
+      return make_unique<TrendOU>(config);
+    }
+    else if (dataSourceType == "Composite"){
+      return make_unique<Composite>(config);
+    }
+    else{
+      std::stringstream ss;
+      ss << "Constructor from config for";
+      ss << dataSourceType;
+      ss << " as dataSource is not implemented";
+      throw NotImplemented(ss.str());
+    }
+  }
 
   Composite::Composite(Config config){
     bool allParamsPresent{true};
