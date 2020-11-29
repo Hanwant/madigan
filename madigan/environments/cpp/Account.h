@@ -38,13 +38,13 @@ namespace madigan{
     void addPortfolio(Assets assets, double initCash);
     void setDefaultPortfolio(string portId);
     void setDefaultPortfolio(Portfolio* portfolio);
-    void setDataSource(DataSource* source);
+    void setDataSource(DataSourceTick* source);
     void setRequiredMargin(double reqMargin);
     void setRequiredMargin(string portID, double reqMargin);
     void setMaintenanceMargin(double maintenanceMargin);
     void setMaintenanceMargin(string portID, double maintenanceMargin);
 
-    const DataSource* dataSource() const {return dataSource_;}
+    const DataSourceTick* dataSource() const {return dataSource_;}
     const PriceVectorMap& currentPrices() const{ return currentPrices_;}
 
     Assets assets(){ return assets_;}
@@ -122,7 +122,7 @@ namespace madigan{
     std::vector<double> defaultPrices_;
     bool registeredDataSource{false};
     PriceVectorMap currentPrices_{nullptr, 0};
-    DataSource* dataSource_{nullptr};
+    DataSourceTick* dataSource_{nullptr};
 
   };
 

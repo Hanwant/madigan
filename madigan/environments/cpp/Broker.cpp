@@ -65,7 +65,7 @@ namespace madigan {
   }
 
 
-  void Broker::setDataSource(DataSource* source){
+  void Broker::setDataSource(DataSourceTick* source){
     dataSource_ = source;
     new (&currentPrices_) PriceVectorMap(source->currentData().data(), source->currentData().size());
     for(auto&& acc: accounts_){

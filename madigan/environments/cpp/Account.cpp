@@ -165,7 +165,7 @@ namespace madigan{
   //   return portfolioBook_[];
   // }
 
-  void Account::setDataSource(DataSource* source){
+  void Account::setDataSource(DataSourceTick* source){
     dataSource_ = source;
     new (&currentPrices_) PriceVectorMap(source->currentData().data(), source->currentData().size());
     for (auto&& port: portfolios_){

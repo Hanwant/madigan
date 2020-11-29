@@ -6,7 +6,8 @@
 
 namespace madigan{
 
-  std::unique_ptr<DataSource> makeDataSource(string dataSourceType){
+  template<>
+  std::unique_ptr<DataSource<PriceVector>> makeDataSource(string dataSourceType){
     if(dataSourceType == "Synth"){
       return make_unique<Synth>();
     }
@@ -37,7 +38,9 @@ namespace madigan{
     }
   }
 
-  std::unique_ptr<DataSource> makeDataSource(string dataSourceType, Config config){
+  template<>
+  std::unique_ptr<DataSource<PriceVector>> makeDataSource(string dataSourceType,
+                                                          Config config){
     if(dataSourceType == "Synth"){
       return make_unique<Synth>(config);
     }
@@ -81,7 +84,7 @@ namespace madigan{
     for (auto singleSource: params){
       string dataSourceType = std::any_cast<string>(singleSource.first);
       Config config = std::any_cast<Config>(singleSource.second);
-      std::unique_ptr<DataSource> source = makeDataSource(dataSourceType, config);
+      std::unique_ptr<DataSource> source = makeDataSource<PriceVector>(dataSourceType, config);
       dataSources_.emplace_back(std::move(source));
     }
     for(const auto& source: dataSources_){

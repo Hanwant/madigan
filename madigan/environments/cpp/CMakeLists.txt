@@ -16,6 +16,7 @@ include_directories(${pybind11_INCLUDE_DIR})
 include_directories(${PYTHON_INCLUDE_PATH})
 link_directories(${PYTHON_INCLUDE_PATH})
 link_libraries(${PYTHON_LIBRARIES})
+link_libraries(${HDF5_LIBRARIES})
 # include_directories(${Boost_INCLUDE_DIRS})
 # include_directories(${Boost_LIBRARY_DIRS})
 # link_libraries(${Boost_LIBRARIES})
@@ -49,6 +50,7 @@ add_custom_command(TARGET envTest POST_BUILD
 
 # message(STATUS "Boost version: ${Boost_VERSION}")
 message(STATUS "Python Version: ${PYTHON_VERSION_MAJOR}.${PYTHON_VERSION_MINOR}")
+message("HDF INCLUDE DIRS and LIBS ${HDF5_INCLUDE_DIRS} ${HDF5_LIBRARIES}")
 
 #If boost version is newer than CMake version then this is needed
 # if(NOT TARGET Boost::filesystem)

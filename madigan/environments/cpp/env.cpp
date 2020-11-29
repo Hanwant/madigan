@@ -89,13 +89,13 @@ PYBIND11_MODULE(env, m){
   py::bind_map<std::unordered_map<string, Portfolio>>(m, "PortfolioBook");
   py::bind_map<std::unordered_map<string, Account>>(m, "AccountBook");
 
-  py::class_<DataSource>_DataSource(m, "DataSource");
-  py::class_<Synth, DataSource>_Synth(m, "Synth");
+  py::class_<DataSourceTick>_DataSourceTick(m, "DataSourceTick");
+  py::class_<Synth, DataSourceTick>_Synth(m, "Synth");
   py::class_<SawTooth, Synth>_SawTooth(m, "SawTooth");
   py::class_<Triangle, Synth>_Triangle(m, "Triangle");
-  py::class_<SineAdder, DataSource>_SineAdder(m, "SineAdder");
-  py::class_<SimpleTrend, DataSource>_SimpleTrend(m, "SimpleTrend");
-  py::class_<Composite, DataSource>_Composite(m, "Composite");
+  py::class_<SineAdder, DataSourceTick>_SineAdder(m, "SineAdder");
+  py::class_<SimpleTrend, DataSourceTick>_SimpleTrend(m, "SimpleTrend");
+  py::class_<Composite, DataSourceTick>_Composite(m, "Composite");
 
   py::class_<Portfolio>_Portfolio(m, "Portfolio");
   py::class_<Account>_Account(m, "Account");

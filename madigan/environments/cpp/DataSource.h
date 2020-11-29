@@ -23,28 +23,22 @@ namespace madigan{
 
   using std::vector;
 
-  // template<class T>
-  // std::unique_ptr<DataSource<T>> makeDataSource(string dataSourceType);
-  // template<class T>
-  // std::unique_ptr<DataSource<T>> makeDataSource(string dataSourceType, Config config);
-
-
-  // template<class T>
-  // class DataSource{
-  // public:
-  //   Assets assets;
-  //   int nAssets_;
-  // public:
-  //   // virtual ~DataSource(){}
-  //   int nAssets() const{ return nAssets_;}
-  //   const T& getData();
-  //   const T& currentData() const;
-  //   const T& currentPrices() const;
-  //   std::size_t currentTime() const;
-  // };
-
-  // template<>
+  template<class T>
   class DataSource{
+  public:
+    Assets assets;
+    int nAssets_;
+  public:
+    // virtual ~DataSource(){}
+    int nAssets() const;
+    const T& getData();
+    const T& currentData() const;
+    const T& currentPrices() const;
+    std::size_t currentTime() const;
+  };
+
+  template<>
+  class DataSource<PriceVector>{
   public:
     Assets assets;
     int nAssets_;
@@ -56,48 +50,70 @@ namespace madigan{
     virtual const PriceVector& currentPrices() const=0;
     virtual std::size_t currentTime() const =0;
   };
-  class DataSourceBidAsk;
 
-  using DataSourceTick = DataSource;
+  template<>
+  class DataSource<PriceMatrix>{
+  public:
+    Assets assets;
+    int nAssets_;
+  public:
+    int nAssets() const{ return nAssets_;}
+    virtual const PriceMatrix& getData()=0;
+    virtual const PriceMatrix& currentData() const=0;
+    virtual const PriceMatrix& currentPrices() const=0;
+    virtual std::size_t currentTime() const =0;
+  };
 
-  std::unique_ptr<DataSource> makeDataSource(string dataSourceType);
-  std::unique_ptr<DataSource> makeDataSource(string dataSourceType, Config config);
+  using DataSourceBidAsk = DataSource<PriceMatrix>;
+  using DataSourceTick = DataSource<PriceVector>;
 
+  // std::unique_ptr<DataSource> makeDataSource(string dataSourceType);
+  // std::unique_ptr<DataSource> makeDataSource(string dataSourceType, Config config);
+  template<class T>
+  std::unique_ptr<DataSource<T>> makeDataSource(string dataSourceType);
+  template<class T>
+  std::unique_ptr<DataSource<T>> makeDataSource(string dataSourceType, Config config);
+  // extern template std::unique_ptr<DataSource<PriceVector>> makeDataSource(string dataSourceType);
+  // extern template std::unique_ptr<DataSource<PriceVector>> makeDataSource(string dataSourceType,
+  //                                                                  Config config);
 
 
 
   // The following DataSource<PriceVector>s load data from files
-  class HDFSource: public DataSource{
+  class HDFSource: public DataSourceTick{
   public:
-    HDFSource();
+    HDFSource(string datapath, string mainKey,
+              string pricekey, string timestampKey);
+    HDFSource(Config config);
+    HDFSource(pybind11::dict config): HDFSource(makeConfigFromPyDict(config)){}
     virtual const PriceVector& getData()=0;
     virtual const PriceVector& currentData() const=0;
     virtual const PriceVector& currentPrices() const=0;
-    virtual std::size_t currentTime() {return timestamp_; }
+    virtual std::size_t currentTime() {return timestamp_;}
 
   private:
     std::size_t timestamp_;
   };
 
 
-  // SYNTHS - The Following DataSource<PriceVector>s are Synthetic Time Series
+  // SYNTHS - The Following DataSourceTick<PriceVector>s are Synthetic Time Series
   // Composite can combine outputs of many different data sources
-  class Composite: public DataSource{
+  class Composite: public DataSourceTick{
   public:
     Assets assets;
     int nAssets_{0};
   public:
     Composite()=delete;
     Composite(Config config);
-    Composite(pybind11::dict config){
-      Composite(makeConfigFromPyDict(config));}
+    Composite(pybind11::dict config):
+      Composite(makeConfigFromPyDict(config)){}
     const PriceVector& getData();
     const PriceVector& currentData() const{return currentData_;}
     const PriceVector& currentPrices() const{return currentData_;}
     std::size_t currentTime() const{return timestamp_;}
-    const vector<std::unique_ptr<DataSource>>& dataSources() const{ return dataSources_;}
+    const vector<std::unique_ptr<DataSourceTick>>& dataSources() const{ return dataSources_;}
   private:
-    vector<std::unique_ptr<DataSource>> dataSources_;
+    vector<std::unique_ptr<DataSourceTick>> dataSources_;
     PriceVector currentPrices_;
     PriceVector currentData_;
     std::size_t timestamp_;
@@ -105,7 +121,7 @@ namespace madigan{
   };
 
   // Base for Periodic Wave funcitons I.e sine, triangle, sawtooth
-  class Synth: public DataSource{
+  class Synth: public DataSourceTick{
   public:
     Assets assets;
     int nAssets_{0};
@@ -145,7 +161,7 @@ namespace madigan{
     PriceVector currentData_;
   };
 
-  class SineAdder: public DataSource{
+  class SineAdder: public DataSourceTick{
   public:
     SineAdder(); // use default values for parameters
     SineAdder(std::vector<double> freq, std::vector<double> mu,
@@ -192,7 +208,7 @@ namespace madigan{
     const PriceVector& getData();
   };
 
-  class OU: public DataSource{
+  class OU: public DataSourceTick{
   public:
     Assets assets;
     int nAssets_{0};
@@ -225,7 +241,7 @@ namespace madigan{
     PriceVector currentData_;
   };
 
-  class SimpleTrend: public DataSource{
+  class SimpleTrend: public DataSourceTick{
   public:
     SimpleTrend();
     SimpleTrend(std::vector<double> trendProb, std::vector<int> minPeriod,
@@ -271,7 +287,7 @@ namespace madigan{
 
   };
 
-  class TrendOU: public DataSource{
+  class TrendOU: public DataSourceTick{
   public:
     TrendOU();
     TrendOU(std::vector<double> trendProb, std::vector<int> minPeriod,

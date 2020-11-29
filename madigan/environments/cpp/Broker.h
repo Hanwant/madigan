@@ -60,7 +60,7 @@ namespace madigan{
     }
     void setSlippage(double slippagePct=0., double slippageAbs=0.);
     void setTransactionCost(double transactionPct=0., double transactionAbs=0.);
-    void setDataSource(DataSource* source);
+    void setDataSource(DataSourceTick* source);
     void setRequiredMargin(double reqMargin){
       defaultAccount_->setRequiredMargin(reqMargin); }
     void setRequiredMargin(string accID, double reqMargin){
@@ -81,7 +81,7 @@ namespace madigan{
     const AccountBook& accountBook() const{return accountBook_;}
     std::unordered_map<string, Account> accountBookCopy() const;
     const std::vector<Account>& accounts() const{return accounts_;}
-    const DataSource* dataSource() const{return dataSource_;}
+    const DataSourceTick* dataSource() const{return dataSource_;}
     const PriceVectorMap& currentPrices() const{return currentPrices_;}
     const Portfolio& portfolio() const { return *defaultPortfolio_; }
     const Portfolio& portfolio(string portID) const;
@@ -198,7 +198,7 @@ namespace madigan{
     bool registeredDataSource{false};
     PriceVectorMap currentPrices_{nullptr, 0};
 
-    DataSource* dataSource_{nullptr};
+    DataSourceTick* dataSource_{nullptr};
 
     double slippagePct_{0.};
     double slippageAbs_{0.};

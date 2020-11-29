@@ -55,7 +55,7 @@ namespace madigan{
     SRDISingle step(Order order);
     ~Env(){};
 
-    const DataSource*  dataSource() const { return dataSource_.get(); }
+    const DataSourceTick*  dataSource() const { return dataSource_.get(); }
     const Broker*  broker() const { return broker_.get(); }
     const Account*  account() const { return defaultAccount_; }
     const Account*  account(string accID) const { return broker_->accountBook_.at(accID); }
@@ -120,7 +120,7 @@ namespace madigan{
     string dataSourceType_;
     Assets assets_;
     double initCash_;
-    std::unique_ptr<DataSource> dataSource_;
+    std::unique_ptr<DataSourceTick> dataSource_;
     std::unique_ptr<Broker> broker_;
     PriceVectorMap currentPrices_{nullptr, 0};
     Portfolio* defaultPortfolio_{nullptr};
@@ -153,9 +153,9 @@ namespace madigan{
 
   State Env::reset(){
     if (config.size() > 0){
-      dataSource_ = makeDataSource(dataSourceType_, config);
+      dataSource_ = makeDataSource<PriceVector>(dataSourceType_, config);
     }
-    else dataSource_ = makeDataSource(dataSourceType_);
+    else dataSource_ = makeDataSource<PriceVector>(dataSourceType_);
 
     initAccountants();
     return State(currentPrices(), defaultPortfolio_->ledgerNormedFull(),
