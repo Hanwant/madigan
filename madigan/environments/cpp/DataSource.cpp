@@ -65,6 +65,9 @@ namespace madigan{
     else if (dataSourceType == "Composite"){
       return make_unique<Composite>(config);
     }
+    else if (dataSourceType == "HDFSource"){
+      return make_unique<HDFSource>(config);
+    }
     else{
       std::stringstream ss;
       ss << "Constructor from config for";
@@ -72,6 +75,60 @@ namespace madigan{
       ss << " as dataSource is not implemented";
       throw NotImplemented(ss.str());
     }
+  }
+
+  bool checkParametersPresent(Config config, std::vector<string> params){
+    bool allParamsPresent{true};
+    if (config.find("data_source_config") == config.end()){
+      throw ConfigError("config passed but doesn't contain generator params");
+      allParamsPresent = false;
+    }
+    Config params = std::any_cast<Config>(config["data_source_config"]);
+    for (auto key: params){
+      if (params.find(key) == params.end()){
+        allParamsPresent=false;
+        throw ConfigError("generator parameters don't have all required constructor arguments");
+      }
+    }
+    return true;
+  }
+
+  template<class T>
+  T loadVectorFromHDF(string fname, string mainKey, string vectorKey){
+    // H5Easy::File file(fname, H5Easy::File::Read)
+    std::cout << mainKey << ", " << vectorKey << "\n";
+    H5Easy::File file(fname, HighFive::File::ReadOnly);
+    string datasetPath = "/"+mainKey+"/"+vectorKey;
+    size_t len = H5Easy::getSize(file, datasetPath);
+    std::cout << mainKey << ", " << vectorKey << "\n";
+    T out(len);
+    out = H5Easy::load<T>(file, datasetPath);
+    return out;
+  }
+
+  HDFSource::HDFSource(string filepath, string mainKey, string priceKey,
+                       string timestampKey): filepath(filepath),
+                                             mainKey(mainKey),
+                                             priceKey(priceKey),
+                                             timestampKey(timestampKey)
+  {
+    loadData();
+  }
+
+  HDFSource::HDFSource(Config config){
+    
+  }
+
+  void HDFSourfce::loadData(){
+    prices_ = loadVectorFromHDF<PriceVector>(filepath, mainKey, priceKey);
+    timestamps_ = loadVectorFromHDF<TimeVector>(filepath, mainKey, timestampKey);
+  }
+
+  const PriceVector& HDFSource::getData(){
+    currentPrices_(0) = prices_(currentIdx_);
+    timestamp_ = timestamps_(currentIdx_);
+    currentIdx_ += 1;
+    return currentPrices_;
   }
 
   Composite::Composite(Config config){
@@ -154,18 +211,8 @@ namespace madigan{
   }
 
   Synth::Synth(Config config){
-    bool allParamsPresent{true};
-    if (config.find("data_source_config") == config.end()){
-      throw ConfigError("config passed but doesn't contain generator params");
-      allParamsPresent = false;
-    }
-    Config params = std::any_cast<Config>(config["data_source_config"]);
-    for (auto key: {"freq", "mu", "amp", "phase", "dX"}){
-      if (params.find(key) == params.end()){
-        allParamsPresent=false;
-        throw ConfigError("generator parameters don't have all required constructor arguments");
-      }
-    }
+    bool allParamsPresent =
+      checkParametersPresent(config, {"freq", "mu", "amp", "phase", "dX"});
     if (allParamsPresent){
       vector<double> freq = std::any_cast<vector<double>>(params["freq"]);
       vector<double> mu = std::any_cast<vector<double>>(params["mu"]);

@@ -8,6 +8,9 @@
 #include <chrono>
 
 #include <Eigen/Core>
+#include <Eigen/Eigen>
+#include <highfive/H5File.hpp>
+#include <highfive/H5Easy.hpp>
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
 
@@ -22,6 +25,7 @@
 namespace madigan{
 
   using std::vector;
+  using std::size_t;
 
   template<class T>
   class DataSource{
@@ -78,21 +82,30 @@ namespace madigan{
   //                                                                  Config config);
 
 
-
-  // The following DataSource<PriceVector>s load data from files
+  // The following DataSources load data from files
   class HDFSource: public DataSourceTick{
+  public:
+    string filepath;
+    string mainKey;
+    string timestampKey;
+    string priceKey;
   public:
     HDFSource(string datapath, string mainKey,
               string pricekey, string timestampKey);
-    HDFSource(Config config);
-    HDFSource(pybind11::dict config): HDFSource(makeConfigFromPyDict(config)){}
-    virtual const PriceVector& getData()=0;
-    virtual const PriceVector& currentData() const=0;
-    virtual const PriceVector& currentPrices() const=0;
-    virtual std::size_t currentTime() {return timestamp_;}
+    // HDFSource(Config config);
+    // HDFSource(pybind11::dict config): HDFSource(makeConfigFromPyDict(config)){}
+    void loadData();
+    const PriceVector& getData();
+    const PriceVector& currentData() const{return currentPrices_;}
+    const PriceVector& currentPrices() const{return currentPrices_;}
+    std::size_t currentTime() const{return timestamp_;}
 
   private:
+    PriceVector prices_;
+    PriceVector currentPrices_{1};
+    TimeVector timestamps_;
     std::size_t timestamp_;
+    int currentIdx_{0};
   };
 
 

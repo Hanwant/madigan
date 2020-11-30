@@ -27,6 +27,7 @@ namespace madigan{
   typedef Eigen::VectorXd AmountVector;
   typedef Eigen::VectorXd Ledger;
   typedef Eigen::Map<const Ledger> LedgerMap;
+  typedef Eigen::Vector<std::uint64_t, Eigen::Dynamic> TimeVector;
 
   // ================================================================
   // ================== Custom Exceptions for project ===============

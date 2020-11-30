@@ -301,6 +301,14 @@ void testEnvData(){
   std::cout << env.currentPrices() << "\n";
 }
 
+void testHDFSource(){
+  string filepath="/media/hemu/Data/Markets/FX/working_data_aud_nzd.h5";
+  string mainKey="aud_nzd";
+  string priceKey="midprice";
+  string timestampKey="timestamp";
+  HDFSource dataSource(filepath, mainKey, priceKey, timestampKey);
+}
+
 
 int main(){
 
@@ -331,6 +339,9 @@ int main(){
   std::cout<< "===========================================\n";
   std::cout<< "testEnvData();\n";
   testEnvData();
+  std::cout<< "===========================================\n";
+  std::cout<< "testHDFSource();\n";
+  testHDFSource();
   std::cout<< "===========================================\n";
   std::cout<< "TESTS COMPLETED\n";
 

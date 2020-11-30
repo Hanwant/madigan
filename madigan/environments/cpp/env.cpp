@@ -96,6 +96,7 @@ PYBIND11_MODULE(env, m){
   py::class_<SineAdder, DataSourceTick>_SineAdder(m, "SineAdder");
   py::class_<SimpleTrend, DataSourceTick>_SimpleTrend(m, "SimpleTrend");
   py::class_<Composite, DataSourceTick>_Composite(m, "Composite");
+  py::class_<HDFSource, DataSourceTick>_HDFSource(m, "HDFSource");
 
   py::class_<Portfolio>_Portfolio(m, "Portfolio");
   py::class_<Account>_Account(m, "Account");
@@ -297,6 +298,22 @@ PYBIND11_MODULE(env, m){
          py::return_value_policy::copy)
     .def("currentData", (PriceVector& (Composite::*) ()) &Composite::currentData,
          "Get current data - make be raw prices or preprocessed or anything else",
+         py::return_value_policy::reference);
+
+  _HDFSource.def(py::init<string, string, string, string>(),
+                 py::arg("filepath"), py::arg("mainKey"),
+                 py::arg("priceKeu"), py::arg("timestampKey"))
+    .def_property_readonly("nAssets", &HDFSource::nAssets,
+                           "number of Assets - length of currentPrices",
+                           py::return_value_policy::move)
+    .def_property_readonly("currentTime", &HDFSource::currentTime,
+                           "get the current timestamp",
+                           py::return_value_policy::move)
+    .def("getData", (PriceVector& (HDFSource::*) ()) &HDFSource::getData,
+         "Get Next data points",
+         py::return_value_policy::reference)
+    .def("currentPrices", (PriceVector& (HDFSource::*) ()) &HDFSource::currentPrices,
+         "Get current prices",
          py::return_value_policy::reference);
 
   _Portfolio.def(py::init<string, Assets, double> (),

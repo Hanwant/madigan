@@ -85,6 +85,19 @@ namespace madigan {
           throw ConfigError("config for DataSource type SimpleTrend needs data_source_config");
         }
       }
+      else if ( dataSourceType == "HDFSource"){
+        auto genParamsFound=std::find_if(dict.begin(), dict.end(),
+                                         [](const std::pair<pybind11::handle, pybind11::handle>& pair){
+                                           return string(pybind11::str(pair.first)) == "data_source_config";
+                                         });
+        if (genParamsFound != dict.end()){
+          pybind11::dict genParams = dict[pybind11::str("data_source_config")];
+          config = makeHDFSourceConfigFromPyDict(genParams);
+        }
+        else{
+          throw ConfigError("config for DataSource type HDFSource needs data_source_config");
+        }
+      }
       else{
         std::stringstream ss;
         ss << "(Py->C++) Config Parsing for " << dataSourceType << " has not been implemented";
@@ -298,7 +311,7 @@ namespace madigan {
       }
     }
     Config config{
-      {"data_source_type", "SimpleTrend"},
+      {"data_source_type", "TrendOU"},
       {"data_source_config", Config{{"trendProb", trendProb},
                                     {"minPeriod", minPeriod},
                                     {"maxPeriod", maxPeriod},
@@ -311,6 +324,24 @@ namespace madigan {
                                     {"emaAlpha", emaAlpha}}
       }
     };
+    return config;
+  }
+
+  Config makeHDFSourceConfigFromPyDict(pybind11::dict genParams){
+    for (auto key: {"filepath", "main_key", "price_key", "timestamp_key"}){
+      auto keyFound=std::find_if(genParams.begin(), genParams.end(),
+                                 [key](const std::pair<pybind11::handle, pybind11::handle>& pair){
+                                   return string(pybind11::str(pair.first)) == key;
+                                 });
+      if (keyFound == genParams.end()){
+        throw ConfigError(string(key)+" key not found in data_source_config in config");
+      }
+    }
+    Config config{{"data_source_type", "HDFSource"}};
+    for(auto& item: genParams){
+      string key = string(pybind11::str(item.first));
+      config[key] = item.second.cast<string>();
+    }
     return config;
   }
 }
