@@ -7,7 +7,7 @@ import torch
 # import torch.functional
 import torch.nn as nn
 
-from .base import OffPolicyActorCritic
+from .offpolicy_ac import OffPolicyActorCritic
 from ..utils import get_model_class
 from ...utils import ActionSpace, ContinuousActionSpace
 from ...utils.config import Config

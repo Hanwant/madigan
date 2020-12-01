@@ -77,30 +77,22 @@ namespace madigan{
     }
   }
 
-  bool checkParametersPresent(Config config, std::vector<string> params){
-    bool allParamsPresent{true};
-    if (config.find("data_source_config") == config.end()){
-      throw ConfigError("config passed but doesn't contain generator params");
-      allParamsPresent = false;
-    }
-    Config params = std::any_cast<Config>(config["data_source_config"]);
-    for (auto key: params){
-      if (params.find(key) == params.end()){
-        allParamsPresent=false;
-        throw ConfigError("generator parameters don't have all required constructor arguments");
+  bool checkKeysPresent(Config config, std::vector<string> keys){
+    bool allKeysPresent{true};
+    for (auto key: keys){
+      if (config.find(key) == config.end()){
+        allKeysPresent=false;
+        throw ConfigError("Config doesn't contain required key: "+key);
       }
     }
-    return true;
+    return allKeysPresent;
   }
 
   template<class T>
   T loadVectorFromHDF(string fname, string mainKey, string vectorKey){
-    // H5Easy::File file(fname, H5Easy::File::Read)
-    std::cout << mainKey << ", " << vectorKey << "\n";
     H5Easy::File file(fname, HighFive::File::ReadOnly);
     string datasetPath = "/"+mainKey+"/"+vectorKey;
     size_t len = H5Easy::getSize(file, datasetPath);
-    std::cout << mainKey << ", " << vectorKey << "\n";
     T out(len);
     out = H5Easy::load<T>(file, datasetPath);
     return out;
@@ -116,10 +108,20 @@ namespace madigan{
   }
 
   HDFSource::HDFSource(Config config){
-    
+    checkKeysPresent(config, {"data_source_config"});
+    Config params = std::any_cast<Config>(config["data_source_config"]);
+    bool allKeysPresent =
+      checkKeysPresent(params, {"filepath", "main_key","timestamp_key", "price_key"});
+    if (allKeysPresent){
+      filepath = std::any_cast<string>(params["filepath"]);
+      mainKey = std::any_cast<string>(params["main_key"]);
+      timestampKey= std::any_cast<string>(params["timestamp_key"]);
+      priceKey= std::any_cast<string>(params["price_key"]);
+      loadData();
+    }
   }
 
-  void HDFSourfce::loadData(){
+  void HDFSource::loadData(){
     prices_ = loadVectorFromHDF<PriceVector>(filepath, mainKey, priceKey);
     timestamps_ = loadVectorFromHDF<TimeVector>(filepath, mainKey, timestampKey);
   }
@@ -132,10 +134,10 @@ namespace madigan{
   }
 
   Composite::Composite(Config config){
-    bool allParamsPresent{true};
+    bool allKeysPresent{true};
     if (config.find("data_source_config") == config.end()){
       throw ConfigError("config passed but doesn't contain generator params");
-      allParamsPresent = false;
+      allKeysPresent = false;
     }
     Config params = std::any_cast<Config>(config["data_source_config"]);
     for (auto singleSource: params){
@@ -211,9 +213,11 @@ namespace madigan{
   }
 
   Synth::Synth(Config config){
-    bool allParamsPresent =
-      checkParametersPresent(config, {"freq", "mu", "amp", "phase", "dX"});
-    if (allParamsPresent){
+    checkKeysPresent(config, {"data_source_config"});
+    Config params = std::any_cast<Config>(config["data_source_config"]);
+    bool allKeysPresent =
+      checkKeysPresent(params, {"freq", "mu", "amp", "phase", "dX"});
+    if (allKeysPresent){
       vector<double> freq = std::any_cast<vector<double>>(params["freq"]);
       vector<double> mu = std::any_cast<vector<double>>(params["mu"]);
       vector<double> amp = std::any_cast<vector<double>>(params["amp"]);
@@ -311,19 +315,19 @@ namespace madigan{
   }
 
   SineAdder::SineAdder(Config config){
-    bool allParamsPresent{true};
+    bool allKeysPresent{true};
     if (config.find("data_source_config") == config.end()){
       throw ConfigError("config passed but doesn't contain generator params");
-      allParamsPresent = false;
+      allKeysPresent = false;
     }
     Config params = std::any_cast<Config>(config["data_source_config"]);
     for (auto key: {"freq", "mu", "amp", "phase", "dX"}){
       if (params.find(key) == params.end()){
-        allParamsPresent=false;
+        allKeysPresent=false;
         throw ConfigError("generator parameters don't have all required constructor arguments");
       }
     }
-    if (allParamsPresent){
+    if (allKeysPresent){
       vector<double> freq = std::any_cast<vector<double>>(params["freq"]);
       vector<double> mu = std::any_cast<vector<double>>(params["mu"]);
       vector<double> amp = std::any_cast<vector<double>>(params["amp"]);
@@ -416,19 +420,19 @@ namespace madigan{
   OU::OU(): OU({2., 4.3, 3., 0.5}, {1., 0.3, 2., 0.5}, {2., 2.1, 2.2, 2.3}, {1., 1.2, 1.3, 1.}){}
 
   OU::OU(Config config){
-    bool allParamsPresent{true};
+    bool allKeysPresent{true};
     if (config.find("data_source_config") == config.end()){
       throw ConfigError("config passed but doesn't contain generator params");
-      allParamsPresent = false;
+      allKeysPresent = false;
     }
     Config params = std::any_cast<Config>(config["data_source_config"]);
     for (auto key: {"mean", "theta", "phi", "noise_var"}){
       if (params.find(key) == params.end()){
-        allParamsPresent=false;
+        allKeysPresent=false;
         throw ConfigError("generator parameters don't have all required constructor arguments");
       }
     }
-    if (allParamsPresent){
+    if (allKeysPresent){
       vector<double> mean= std::any_cast<vector<double>>(params["mean"]);
       vector<double> theta= std::any_cast<vector<double>>(params["theta"]);
       vector<double> phi = std::any_cast<vector<double>>(params["phi"]);
@@ -504,16 +508,16 @@ namespace madigan{
                                           {0.001, 0.01}, {0.003, 0.03}){}
 
   SimpleTrend::SimpleTrend(Config config){
-    bool allParamsPresent{true};
+    bool allKeysPresent{true};
     if (config.find("data_source_config") == config.end()){
       throw ConfigError("config passed but doesn't contain generator params");
-      allParamsPresent = false;
+      allKeysPresent = false;
     }
     Config params = std::any_cast<Config>(config["data_source_config"]);
     for (auto key: {"trendProb", "minPeriod", "maxPeriod", "noise", "start",
                     "dYMin", "dYMax"}){
       if (params.find(key) == params.end()){
-        allParamsPresent=false;
+        allKeysPresent=false;
         throw ConfigError("data_Source_config doesn't have all required constructor arguments");
       }
     }
@@ -623,16 +627,16 @@ namespace madigan{
                               {1., 1.2}, {0.1, 0.2}){}
 
   TrendOU::TrendOU(Config config){
-    bool allParamsPresent{true};
+    bool allKeysPresent{true};
     if (config.find("data_source_config") == config.end()){
       throw ConfigError("config passed but doesn't contain generator params");
-      allParamsPresent = false;
+      allKeysPresent = false;
     }
     Config params = std::any_cast<Config>(config["data_source_config"]);
     for (auto key: {"trendProb", "minPeriod", "maxPeriod", "dYMin",
                     "dYMax", "start", "theta", "phi", "noiseTrend", "emaAlpha"}){
       if (params.find(key) == params.end()){
-        allParamsPresent=false;
+        allKeysPresent=false;
         throw ConfigError((string)"data_Source_config doesn't have all required"
                           "constructor arguments, missing: " + key );
       }

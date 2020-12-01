@@ -338,10 +338,12 @@ namespace madigan {
       }
     }
     Config config{{"data_source_type", "HDFSource"}};
+    Config data_source_config;
     for(auto& item: genParams){
       string key = string(pybind11::str(item.first));
-      config[key] = item.second.cast<string>();
+      data_source_config[key] = item.second.cast<string>();
     }
+    config["data_source_config"] = data_source_config;
     return config;
   }
 }

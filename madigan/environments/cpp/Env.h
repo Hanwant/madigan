@@ -115,6 +115,7 @@ namespace madigan{
 
   private:
     inline void initAccountants();
+    inline void resetDataSource();
 
   private:
     string dataSourceType_;
@@ -152,14 +153,18 @@ namespace madigan{
   }
 
   State Env::reset(){
-    if (config.size() > 0){
-      dataSource_ = makeDataSource<PriceVector>(dataSourceType_, config);
-    }
-    else dataSource_ = makeDataSource<PriceVector>(dataSourceType_);
-
+    resetDataSource();
     initAccountants();
     return State(currentPrices(), defaultPortfolio_->ledgerNormedFull(),
                  currentTime());
+  }
+  void Env::resetDataSource(){
+    if (dataSourceType_ != "HDFSource"){
+      if (config.size() > 0){
+        dataSource_ = makeDataSource<PriceVector>(dataSourceType_, config);
+      }
+      else dataSource_ = makeDataSource<PriceVector>(dataSourceType_);
+    }
   }
 
   SRDISingle Env::step(){

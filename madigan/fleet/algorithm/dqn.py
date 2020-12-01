@@ -8,7 +8,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .base import OffPolicyQ
+from .offpolicy_q import OffPolicyQ
+from .utils import discrete_action_to_transaction
 from ..utils import get_model_class
 from ...environments import make_env
 from ..net.conv_net import ConvNet
@@ -19,8 +20,8 @@ from ...utils.preprocessor import make_preprocessor
 from ...utils.config import Config
 from ...utils.data import State
 
-
 # p = type('params', (object, ), params)
+
 
 class DQN(OffPolicyQ):
     """
@@ -32,30 +33,17 @@ class DQN(OffPolicyQ):
     use dqn.step(n) to step through n environment interactions
     The method for training a single batch is self.train_step(sarsd) where sarsd is a class with ndarray members (I.e of shape (bs, time, feats))
     """
-    def __init__(self,
-                 env,
-                 preprocessor,
-                 input_shape: tuple,
-                 action_space: ActionSpace,
-                 discount: float,
-                 nstep_return: int,
-                 replay_size: int,
-                 replay_min_size: int,
-                 eps: float,
-                 eps_decay: float,
-                 eps_min: float,
-                 batch_size: int,
-                 test_steps: int,
-                 unit_size: float,
-                 savepath: Union[Path, str],
-                 double_dqn: bool,
-                 tau_soft_update: float,
-                 model_class: str,
-                 model_config: Union[dict, Config],
-                 lr):
-        super().__init__(env, preprocessor, input_shape, action_space, discount, nstep_return,
-                         replay_size, replay_min_size, eps, eps_decay, eps_min,
-                         batch_size, test_steps, unit_size, savepath)
+    def __init__(self, env, preprocessor, input_shape: tuple,
+                 action_space: ActionSpace, discount: float, nstep_return: int,
+                 replay_size: int, replay_min_size: int, eps: float,
+                 eps_decay: float, eps_min: float, batch_size: int,
+                 test_steps: int, unit_size: float, savepath: Union[Path, str],
+                 double_dqn: bool, tau_soft_update: float, model_class: str,
+                 model_config: Union[dict, Config], lr):
+        super().__init__(env, preprocessor, input_shape, action_space,
+                         discount, nstep_return, replay_size, replay_min_size,
+                         eps, eps_decay, eps_min, batch_size, test_steps,
+                         unit_size, savepath)
 
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self._action_space = action_space
@@ -72,21 +60,22 @@ class DQN(OffPolicyQ):
 
         if not self.savepath.is_dir():
             self.savepath.mkdir(parents=True)
-        if (self.savepath/'main.pth').is_file():
+        if (self.savepath / 'main.pth').is_file():
             self.load_state()
         else:
             self.model_t.load_state_dict(self.model_b.state_dict())
 
         # SCHEDULER NOT YET IN USE
-        USE_SCHED=False
+        USE_SCHED = False
         if USE_SCHED:
-            self.lr_sched = torch.optim.lr_scheduler.CyclicLR(self.opt, base_lr=lr,
-                                                              max_lr=1e-2,
-                                                              step_size_up=2000)
+            self.lr_sched = torch.optim.lr_scheduler.CyclicLR(
+                self.opt, base_lr=lr, max_lr=1e-2, step_size_up=2000)
         else:
             # Dummy class for now
             class Sched:
-                def step(self): pass
+                def step(self):
+                    pass
+
             self.lr_sched = Sched()
 
     @classmethod
@@ -98,15 +87,14 @@ class DQN(OffPolicyQ):
         action_space = DiscreteRangeSpace((0, atoms), config.n_assets)
         aconf = config.agent_config
         unit_size = aconf.unit_size_proportion_avM
-        savepath = Path(config.basepath)/config.experiment_id/'models'
-        return cls(env, preprocessor, input_shape, action_space, aconf.discount,
-                   aconf.nstep_return, aconf.replay_size, aconf.replay_min_size,
-                   aconf.eps, aconf.eps_decay, aconf.eps_min, aconf.batch_size,
-                   config.test_steps, unit_size, savepath,
-                   aconf.double_dqn, aconf.tau_soft_update,
-                   config.model_config.model_class, config.model_config,
-                   config.optim_config.lr
-                   )
+        savepath = Path(config.basepath) / config.experiment_id / 'models'
+        return cls(env, preprocessor, input_shape, action_space,
+                   aconf.discount, aconf.nstep_return, aconf.replay_size,
+                   aconf.replay_min_size, aconf.eps, aconf.eps_decay,
+                   aconf.eps_min, aconf.batch_size, config.test_steps,
+                   unit_size, savepath, aconf.double_dqn,
+                   aconf.tau_soft_update, config.model_config.model_class,
+                   config.model_config, config.optim_config.lr)
 
     @property
     def env(self):
@@ -137,20 +125,16 @@ class DQN(OffPolicyQ):
         return port / port.abs().sum(-1, keepdim=True)
 
     def renorm(self, abs_norm_port):
-        return abs_norm_port * 1/abs_norm_port.sum(-1, keepdim=True)
+        return abs_norm_port * 1 / abs_norm_port.sum(-1, keepdim=True)
 
     def action_to_transaction(self, actions: torch.Tensor) -> np.ndarray:
         """
         Takes output from net and converts to transaction units
         """
-        units = self.unit_size * self.env.availableMargin \
-            / self.env.currentPrices
-        # actions_centered = (actions - (self.action_atoms // 2)).cpu().numpy()
-        # transactions = actions_centered * units
-        actions_centered = (actions - (self.action_atoms // 2))
-        if isinstance(actions_centered, torch.Tensor):
-            actions_centered = actions_centered.cpu().numpy()
-        return actions_centered * units
+        return discrete_action_to_transaction(actions, self.action_atoms,
+                                              self.unit_size,
+                                              self.env.availableMargin,
+                                              self.env.currentPrices)
 
     @torch.no_grad()
     def get_qvals(self, state, target=False, device=None):
@@ -172,31 +156,42 @@ class DQN(OffPolicyQ):
         takes in numpy arrays and returns greedy actions
         """
         qvals = self.get_qvals(state, target=target, device=device)
-        actions = qvals.max(-1)[1][:, 0] # get rid of last dim
+        actions = qvals.max(-1)[1][:, 0]  # get rid of last dim
         return actions
 
-
-    def __call__(self, state: State, target: bool = False, raw_qvals: bool = False,
+    def __call__(self,
+                 state: State,
+                 target: bool = False,
+                 raw_qvals: bool = False,
                  max_qvals: bool = False):
         return self.get_action(state, target=target)
 
     def prep_state_tensors(self, state, batch=False, device=None):
         if not batch:
-            price = torch.as_tensor(state.price[None, ...], dtype=torch.float32).to(self.device)
-            port = torch.as_tensor(state.portfolio[None, -1], dtype=torch.float32).to(self.device)
+            price = torch.as_tensor(state.price[None, ...],
+                                    dtype=torch.float32).to(self.device)
+            port = torch.as_tensor(state.portfolio[None, -1],
+                                   dtype=torch.float32).to(self.device)
         else:
-            price = torch.as_tensor(state.price, dtype=torch.float32).to(self.device)
-            port = torch.as_tensor(state.portfolio[:, -1], dtype=torch.float32).to(self.device)
+            price = torch.as_tensor(state.price,
+                                    dtype=torch.float32).to(self.device)
+            port = torch.as_tensor(state.portfolio[:, -1],
+                                   dtype=torch.float32).to(self.device)
         return State(price, self.abs_norm(port), state.timestamp)
 
     def prep_sarsd_tensors(self, sarsd, device=None):
         state = self.prep_state_tensors(sarsd.state, batch=True)
-        action = torch.as_tensor(sarsd.action, dtype=torch.long, device=self.device)#[..., 0]
-        reward = torch.as_tensor(sarsd.reward, dtype=torch.float32, device=self.device)
+        action = torch.as_tensor(sarsd.action,
+                                 dtype=torch.long,
+                                 device=self.device)  #[..., 0]
+        reward = torch.as_tensor(sarsd.reward,
+                                 dtype=torch.float32,
+                                 device=self.device)
         next_state = self.prep_state_tensors(sarsd.next_state, batch=True)
-        done = torch.as_tensor(sarsd.done, dtype=torch.bool, device=self.device)
+        done = torch.as_tensor(sarsd.done,
+                               dtype=torch.bool,
+                               device=self.device)
         return state, action, reward, next_state, done
-
 
     def loss_fn(self, Q_t, G_t):
         return F.smooth_l1_loss(Q_t, G_t)
@@ -209,24 +204,28 @@ class DQN(OffPolicyQ):
         """
         if self.double_dqn:
             behaviour_actions = self.model_b(next_state).max(-1)[1]
-            one_hot = F.one_hot(behaviour_actions, self.action_atoms).to(self.device)
-            greedy_qvals_next = (self.model_t(next_state)*one_hot).sum(-1) # (bs, n_assets, 1)
+            one_hot = F.one_hot(behaviour_actions,
+                                self.action_atoms).to(self.device)
+            greedy_qvals_next = (self.model_t(next_state) * one_hot).sum(
+                -1)  # (bs, n_assets, 1)
         else:
-            greedy_qvals_next = self.model_t(next_state).max(-1)[0] # (bs, n_assets, 1)
+            greedy_qvals_next = self.model_t(next_state).max(-1)[
+                0]  # (bs, n_assets, 1)
         # reward and done have an extended dimension to accommodate for n_assets
         # As actions for different assets are considered in parallel
         Gt = reward[..., None] + (~done[..., None] *
                                   (self.discount**self.nstep_return) *
-                                  greedy_qvals_next) # Gt = (bs, n_assets)
+                                  greedy_qvals_next)  # Gt = (bs, n_assets)
         return Gt
 
     def train_step(self, sarsd=None):
         sarsd = sarsd or self.buffer.sample(self.batch_size)
-        state, action, reward, next_state, done = self.prep_sarsd_tensors(sarsd)
+        state, action, reward, next_state, done = self.prep_sarsd_tensors(
+            sarsd)
 
         action_mask = F.one_hot(action, self.action_atoms).to(self.device)
         qvals = self.model_b(state)
-        Qt = (qvals*action_mask).sum(-1)
+        Qt = (qvals * action_mask).sum(-1)
         Gt = self.calculate_Gt_target(next_state, reward, done)
         assert Qt.shape == Gt.shape
 
@@ -234,14 +233,19 @@ class DQN(OffPolicyQ):
 
         self.opt.zero_grad()
         loss.backward()
-        nn.utils.clip_grad_norm_(self.model_b.parameters(), max_norm=1.,
+        nn.utils.clip_grad_norm_(self.model_b.parameters(),
+                                 max_norm=1.,
                                  norm_type=2)
         self.opt.step()
 
-        td_error = (Gt-Qt).abs().mean().detach().item()
+        td_error = (Gt - Qt).abs().mean().detach().item()
         self.update_target()
-        return {'loss': loss.detach().item(), 'td_error': td_error,
-                'Qt': Qt.detach().mean().item(), 'Gt': Gt.detach().mean().item()}
+        return {
+            'loss': loss.detach().item(),
+            'td_error': td_error,
+            'Qt': Qt.detach().mean().item(),
+            'Gt': Gt.detach().mean().item()
+        }
 
     def update_target_hard(self):
         """ Hard update, copies weights """
@@ -249,14 +253,17 @@ class DQN(OffPolicyQ):
 
     def save_state(self, branch="main"):
         # self.save_checkpoint("main")
-        state = {'state_dict_b': self.model_b.state_dict(),
-                 'state_dict_t': self.model_t.state_dict(),
-                 'training_steps': self.training_steps,
-                 'env_steps': self.env_steps, 'eps': self.eps}
-        torch.save(state, self.savepath/f'{branch}.pth')
+        state = {
+            'state_dict_b': self.model_b.state_dict(),
+            'state_dict_t': self.model_t.state_dict(),
+            'training_steps': self.training_steps,
+            'env_steps': self.env_steps,
+            'eps': self.eps
+        }
+        torch.save(state, self.savepath / f'{branch}.pth')
 
     def load_state(self, branch="main"):
-        state = torch.load(self.savepath/f'{branch}.pth')
+        state = torch.load(self.savepath / f'{branch}.pth')
         self.model_b.load_state_dict(state['state_dict_b'])
         self.model_t.load_state_dict(state['state_dict_t'])
         self.training_steps = state['training_steps']
@@ -297,29 +304,26 @@ class DQNReverser(DQN):
     """
     Extends the action space of DQN to include an action for closing positions
     """
-
     @classmethod
     def from_config(cls, config):
         env = make_env(config)
         preprocessor = make_preprocessor(config)
         input_shape = preprocessor.feature_output_shape
         atoms = config.discrete_action_atoms + 1
-        action_space = DiscreteRangeSpace((0, atoms),
-                                          config.n_assets)
+        action_space = DiscreteRangeSpace((0, atoms), config.n_assets)
         aconf = config.agent_config
         unit_size = aconf.unit_size_proportion_avM
-        savepath = Path(config.basepath)/config.experiment_id/'models'
-        return cls(env, preprocessor, input_shape, action_space, aconf.discount,
-                   aconf.nstep_return, aconf.replay_size, aconf.replay_min_size,
-                   aconf.eps, aconf.eps_decay, aconf.eps_min, aconf.batch_size,
-                   config.test_steps, unit_size, savepath,
-                   aconf.double_dqn, aconf.tau_soft_update,
-                   config.model_config.model_class, config.model_config,
-                   config.optim_config.lr
-                   )
+        savepath = Path(config.basepath) / config.experiment_id / 'models'
+        return cls(env, preprocessor, input_shape, action_space,
+                   aconf.discount, aconf.nstep_return, aconf.replay_size,
+                   aconf.replay_min_size, aconf.eps, aconf.eps_decay,
+                   aconf.eps_min, aconf.batch_size, config.test_steps,
+                   unit_size, savepath, aconf.double_dqn,
+                   aconf.tau_soft_update, config.model_config.model_class,
+                   config.model_config, config.optim_config.lr)
 
-    def action_to_transaction(self, actions: Union[torch.Tensor, np.ndarray]
-                              ) -> np.ndarray:
+    def action_to_transaction(
+            self, actions: Union[torch.Tensor, np.ndarray]) -> np.ndarray:
         """
         Takes output from net and converts to transaction units
         """

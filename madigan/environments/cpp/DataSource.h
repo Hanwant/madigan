@@ -92,8 +92,8 @@ namespace madigan{
   public:
     HDFSource(string datapath, string mainKey,
               string pricekey, string timestampKey);
-    // HDFSource(Config config);
-    // HDFSource(pybind11::dict config): HDFSource(makeConfigFromPyDict(config)){}
+    HDFSource(Config config);
+    HDFSource(pybind11::dict config): HDFSource(makeConfigFromPyDict(config)){}
     void loadData();
     const PriceVector& getData();
     const PriceVector& currentData() const{return currentPrices_;}
