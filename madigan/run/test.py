@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 from ..utils import list_2_dict
 from ..utils.plotting import make_grid
 from ..utils.preprocessor import make_preprocessor
-from ..fleet import make_agent
+from ..modelling import make_agent
 from ..environments import make_env
 
 def get_test_loop(agent, env, preprocessor, nsteps=1000, reset=False, eps=0.,

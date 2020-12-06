@@ -129,7 +129,11 @@ namespace madigan{
   const PriceVector& HDFSource::getData(){
     currentPrices_(0) = prices_(currentIdx_);
     timestamp_ = timestamps_(currentIdx_);
-    currentIdx_ += 1;
+    // restart from beginning after hitting end
+    currentIdx_ = (currentIdx_ + 1) % prices_.size();
+    // For negative indices:
+    // currentIdx_ = (((currentIdx_ + 1) % prices_.size()) + prices_.size()) % prices_.size();
+
     return currentPrices_;
   }
 

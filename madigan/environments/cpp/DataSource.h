@@ -38,6 +38,7 @@ namespace madigan{
     const T& getData();
     const T& currentData() const;
     const T& currentPrices() const;
+    void reset();
     std::size_t currentTime() const;
   };
 
@@ -52,6 +53,7 @@ namespace madigan{
     virtual const PriceVector& getData()=0;
     virtual const PriceVector& currentData() const=0;
     virtual const PriceVector& currentPrices() const=0;
+    virtual void reset()=0;
     virtual std::size_t currentTime() const =0;
   };
 
@@ -65,21 +67,17 @@ namespace madigan{
     virtual const PriceMatrix& getData()=0;
     virtual const PriceMatrix& currentData() const=0;
     virtual const PriceMatrix& currentPrices() const=0;
+    virtual void reset()=0;
     virtual std::size_t currentTime() const =0;
   };
 
   using DataSourceBidAsk = DataSource<PriceMatrix>;
   using DataSourceTick = DataSource<PriceVector>;
 
-  // std::unique_ptr<DataSource> makeDataSource(string dataSourceType);
-  // std::unique_ptr<DataSource> makeDataSource(string dataSourceType, Config config);
   template<class T>
   std::unique_ptr<DataSource<T>> makeDataSource(string dataSourceType);
   template<class T>
   std::unique_ptr<DataSource<T>> makeDataSource(string dataSourceType, Config config);
-  // extern template std::unique_ptr<DataSource<PriceVector>> makeDataSource(string dataSourceType);
-  // extern template std::unique_ptr<DataSource<PriceVector>> makeDataSource(string dataSourceType,
-  //                                                                  Config config);
 
 
   // The following DataSources load data from files
@@ -89,6 +87,7 @@ namespace madigan{
     string mainKey;
     string timestampKey;
     string priceKey;
+    int nAssets{1};
   public:
     HDFSource(string datapath, string mainKey,
               string pricekey, string timestampKey);
@@ -98,6 +97,8 @@ namespace madigan{
     const PriceVector& getData();
     const PriceVector& currentData() const{return currentPrices_;}
     const PriceVector& currentPrices() const{return currentPrices_;}
+    void reset(){}
+    int size(){ return prices_.size();}
     std::size_t currentTime() const{return timestamp_;}
 
   private:
@@ -125,6 +126,9 @@ namespace madigan{
     const PriceVector& currentPrices() const{return currentData_;}
     std::size_t currentTime() const{return timestamp_;}
     const vector<std::unique_ptr<DataSourceTick>>& dataSources() const{ return dataSources_;}
+    void reset() {for (auto& source: dataSources_){
+        source->reset();
+      }}
   private:
     vector<std::unique_ptr<DataSourceTick>> dataSources_;
     PriceVector currentPrices_;
@@ -153,6 +157,7 @@ namespace madigan{
     const pybind11::array_t<double> getData_np() ;
     const PriceVector& currentData() const{ return currentData_;}
     const PriceVector& currentPrices() const{ return currentData_;}
+    void reset(){}
     std::size_t currentTime() const { return timestamp_; }
 
   protected:
@@ -190,6 +195,7 @@ namespace madigan{
     const PriceVector& getData() ;
     const PriceVector& currentData() const{ return currentData_;}
     const PriceVector& currentPrices() const{ return currentData_;}
+    void reset(){}
     std::size_t currentTime() const { return timestamp_; }
   protected:
     void initParams(std::vector<double> freq, std::vector<double> mu,
@@ -236,6 +242,7 @@ namespace madigan{
     const pybind11::array_t<double> getData_np() ;
     const PriceVector& currentData() const{ return currentData_;}
     const PriceVector& currentPrices() const{ return currentData_;}
+    void reset(){}
     std::size_t currentTime() const { return timestamp_; }
 
   protected:
@@ -269,6 +276,7 @@ namespace madigan{
     const PriceVector& getData();
     const PriceVector& currentData() const{ return currentData_;}
     const PriceVector& currentPrices() const{ return currentData_;}
+    void reset(){}
     std::size_t currentTime() const { return timestamp_; }
 
   protected:
@@ -315,6 +323,7 @@ namespace madigan{
     const PriceVector& getData() ;
     const PriceVector& currentData() const{ return currentData_;}
     const PriceVector& currentPrices() const{ return currentData_;}
+    void reset(){}
     std::size_t currentTime() const { return timestamp_; }
 
   protected:

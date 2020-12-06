@@ -34,31 +34,19 @@ assets:
 - sine1
 basepath: /media/hemu/Data/madigan/experiments/
 data_source_config:
-  trend_prob:
-  - .01
-  min_period:
-  - 75
-  max_period:
-  - 125
-  noise_trend:
-  - .00
-  phi:
-  - .04
+  mean:
+  - 10.0
   theta:
   - .15
-  ema_alpha:
-  - .3
-  dYMin:
-  - 0.0005
-  dYMax:
-  - 0.001
-  start:
-  - 5.0
-data_source_type: TrendOU
+  phi:
+  - 4.0
+  noise_var:
+  - 0.1
+data_source_type: OU
 discrete_action_atoms: 3
 discrete_actions: true
 env_type: Synth
-experiment_id: DQNReverser_TrendOU_trans.02_D_NO_NOISE
+experiment_id: DQNReverser_OU_SeriesNet_Test_Smaller
 init_cash: 1000000
 log_freq: 10000
 lot_unit_value: 10000
@@ -66,29 +54,40 @@ maintenance_margin: 0.25
 min_tf: 64
 model_config:
   action_atoms: 3
-  d_model: 1024
+  d_model: 512
   discrete_action_atoms: 3
   discrete_actions: true
   dueling: true
   iqn: true
   lot_unit_value: 10000
   min_tf: 64
-  model_class: ConvNet
+  model_class: SeriesNet
   critic_model_class: ConvCriticQ
   actor_model_class: ConvPolicyDeterministic
   nTau1: 32
   nTau2: 8
   n_layers: 4
   tau_embed_size: 64
+  dilations:
+  - 1
+  - 4
+  - 16
+  - 64
   kernels:
-  - 5
-  - 5
-  channels:
-  - 32
-  - 32
-  strides:
-  - 1
-  - 1
+  - 2
+  - 2
+  - 2
+  - 2
+  channel_dims:
+  - 8
+  - 8
+  - 8
+  - 8
+  dropouts:
+  - 0.0
+  - 0.0
+  - 0.3
+  - 0.5
 model_save_freq: 64000
 n_assets: 1
 optim_config:
@@ -104,12 +103,12 @@ optim_config:
   weight_decay: 0
 parent_id: ''
 preprocessor_config:
-  preprocessor_type: RollerDiscrete
-  window_length: 64
+  preprocessor_type: StackerDiscrete
+  window_length: 128
   timeframes:
   - 64
-preprocessor_type: RollerDiscrete
-required_margin: 1.0
+preprocessor_type: StackerDiscrete
+required_margin: .05
 reward_clip: *id001
 slippage_abs: 0.0
 slippage_rel: 0.0

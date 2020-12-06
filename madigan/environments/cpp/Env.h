@@ -18,27 +18,20 @@ namespace madigan{
   public:
     Config config;
   public:
-    // Env(DataSource<PriceVector>* dataSource): dataSource(dataSource){
-    //   assets = dataSource->assets;
-    // };
-    // inline Env(std::unique_ptr<DataSource<PriceVector>> dataSource, Assets assets, double initCash);
     Env(string sourceType, Assets assets, double initCash): assets_(assets), initCash_(initCash),
                                                             dataSourceType_(sourceType){
-      reset(); }
+      initMembers(); }
 
     Env(string sourceType, Assets assets, double initCash, Config config):
       assets_(assets), initCash_(initCash), dataSourceType_(sourceType), config(config){
-      reset(); }
+      initMembers(); }
     Env(string sourceType, Assets assets, double initCash, pybind11::dict py_config)
       : Env(sourceType, assets, initCash, makeConfigFromPyDict(py_config)){};
 
     Env(const Env& other)=delete;
-    // Env(const Env& other){
-    //   if (other.config.size() > 0){
-    //     return Env(other.dataSourceType, other._assets, other._initCash);
-    //     }
-    //   return Env(other.dataSourceType, other.assets, other.initCash, other.config);
-    // }
+
+    inline void setDataSource(std::unique_ptr<DataSourceTick> dataSource);
+    inline void setDataSource(DataSourceTick* dataSource);
 
     virtual inline State reset();
     virtual inline SRDI<double> step(); // No action - I.e Hold
@@ -114,8 +107,8 @@ namespace madigan{
 
 
   private:
+    inline void initMembers();
     inline void initAccountants();
-    inline void resetDataSource();
 
   private:
     string dataSourceType_;
@@ -136,6 +129,16 @@ namespace madigan{
     double transactionAbs_{0.};
   };
 
+  void Env::initMembers(){
+    // init DataSource
+    if (config.size() > 0){
+      dataSource_ = makeDataSource<PriceVector>(dataSourceType_, config);
+    }else{
+      dataSource_ = makeDataSource<PriceVector>(dataSourceType_);
+    }
+    initAccountants();
+  }
+
   void Env::initAccountants(){
     // Call after assets_, initCash_ and dataSource_ have been initialized
     broker_ = std::make_unique<Broker>(assets_, initCash_);
@@ -152,19 +155,26 @@ namespace madigan{
                                     defaultPortfolio_->ledger().size());
   }
 
+  void Env::setDataSource(unique_ptr<DataSourceTick> dataSource){
+    dataSource_ = std::move(dataSource);
+    broker_->setDataSource(dataSource_.get());
+    const auto& prices = dataSource_->getData();
+    new (&currentPrices_) PriceVectorMap(prices.data(), prices.size());
+  }
+
+  void Env::setDataSource(DataSourceTick *dataSource){ // For passing from python BE CAREFUL
+    dataSource_ = std::unique_ptr<DataSourceTick>(dataSource);
+    broker_->setDataSource(dataSource_.get());
+    const auto& prices = dataSource_->getData();
+    new (&currentPrices_) PriceVectorMap(prices.data(), prices.size());
+  }
+
   State Env::reset(){
-    resetDataSource();
+    dataSource_->reset();
+    // reset Accounting with initCash
     initAccountants();
     return State(currentPrices(), defaultPortfolio_->ledgerNormedFull(),
                  currentTime());
-  }
-  void Env::resetDataSource(){
-    if (dataSourceType_ != "HDFSource"){
-      if (config.size() > 0){
-        dataSource_ = makeDataSource<PriceVector>(dataSourceType_, config);
-      }
-      else dataSource_ = makeDataSource<PriceVector>(dataSourceType_);
-    }
   }
 
   SRDISingle Env::step(){

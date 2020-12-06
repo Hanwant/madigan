@@ -17,7 +17,8 @@ def make_preprocessor(config):
     RollerDiscrete: Rolling summary functions for discrete (fixed) windows
     RollerContinuous: Rolling functions for continuous (variable) time-windows
     """
-    if config.preprocessor_type in ("WindowedStacker", "StackerDiscrete"):
+    if config.preprocessor_type in ("WindowedStacker", "StackerDiscrete",
+                                    "StackerDiscreteReturns"):
         return StackerDiscrete.from_config(config)
     elif config.preprocessor_type in ("StackerContinuous"):
         return StackerContinuous.from_config(config)
@@ -41,7 +42,7 @@ def make_normalizer(norm_type):
     if norm_type == 'lookback_log':
         return lambda x: np.log(x / x[-1])
     if norm_type == 'expanding':
-        return lambda x: x / expanding_mean(x)
+        return lambda x: x / _expanding_mean(x)
 
 
 class PreProcessor(ABC):
@@ -114,6 +115,16 @@ class StackerDiscrete(PreProcessor):
         self.price_buffer.clear()
         self.portfolio_buffer.clear()
         self.time_buffer.clear()
+
+class StackerDiscreteReturns(StackerDiscrete):
+    def current_data(self):
+        price = np.array(self.price_buffer, copy=True)
+        if self.norm:
+            price = self.norm_fn(price)
+        price = np.diff(price)
+        portfolio = np.array(self.portfolio_buffer, copy=True)[1:]
+        timestamp = np.array(self.time_buffer, copy=True)[1:]
+        return State(price, portfolio, timestamp)
 
 
 class StackerContinuous(StackerDiscrete):
@@ -230,10 +241,31 @@ class CustomA(StackerDiscrete):
         return State(price, portfolio, timestamp)
 
 
+class AutoEncoder(PreProcessor):
+    def __init__(self, ):
+        pass
+
+    @abstractmethod
+    def stream(self, data):
+        pass
+
+    @abstractmethod
+    def current_data(self):
+        pass
+
+    @classmethod
+    def from_config(cls, config):
+        return make_preprocessor(config)
+
+    @abstractmethod
+    def initialize_history(self):
+        pass
+
+
 @numba.guvectorize([(numba.float64[:], numba.float64[:])],
                    '(n)->(n)', nopython=True)
 def _expanding_mean(arr, ma):
-    """ expanding/running estimate - equiv to pd.expanding().mean()"""
+    """ expanding/running mean - equiv to pd.expanding().mean()"""
     n = arr.shape[0]
     # ma = np.empty(n)
     w = 1

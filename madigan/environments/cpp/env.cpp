@@ -7,6 +7,7 @@
 #include <pybind11/eigen.h>
 
 #include "DataSource.h"
+#include "PyDataSource.h"
 #include "Portfolio.h"
 #include "Account.h"
 #include "Broker.h"
@@ -71,8 +72,6 @@ PYBIND11_MODULE(env, m){
     // .def(py::init<Config> (), py::arg("config"));
     // .def(py::init<py::dict> (), py::arg("dict"));
 
-
-
   // Declared and defined in the same order
   py::enum_<RiskInfo> _RiskInfo(m, "RiskInfo");
   declareEnvInfo<double>(m, "EnvInfoSingle");
@@ -89,14 +88,14 @@ PYBIND11_MODULE(env, m){
   py::bind_map<std::unordered_map<string, Portfolio>>(m, "PortfolioBook");
   py::bind_map<std::unordered_map<string, Account>>(m, "AccountBook");
 
-  py::class_<DataSourceTick>_DataSourceTick(m, "DataSourceTick");
+  py::class_<DataSourceTick, PyDataSource>_DataSourceTick(m, "DataSourceTick");
   py::class_<Synth, DataSourceTick>_Synth(m, "Synth");
   py::class_<SawTooth, Synth>_SawTooth(m, "SawTooth");
   py::class_<Triangle, Synth>_Triangle(m, "Triangle");
   py::class_<SineAdder, DataSourceTick>_SineAdder(m, "SineAdder");
   py::class_<SimpleTrend, DataSourceTick>_SimpleTrend(m, "SimpleTrend");
   py::class_<Composite, DataSourceTick>_Composite(m, "Composite");
-  py::class_<HDFSource, DataSourceTick>_HDFSource(m, "HDFSource");
+  py::class_<HDFSource, DataSourceTick, PyHDFSource>_HDFSource(m, "HDFSource");
 
   py::class_<Portfolio>_Portfolio(m, "Portfolio");
   py::class_<Account>_Account(m, "Account");
@@ -718,6 +717,9 @@ PYBIND11_MODULE(env, m){
     .def("reset", &Env::reset,
          "reset dataSource and env",
          py::return_value_policy::move)
+    .def("setDataSource", (void (Env::*)(DataSourceTick*)) &Env::setDataSource,
+         "set datasource from python instance subclassing DataSource",
+         py::arg("dataSource"))
     .def("setRequiredMargin", (void (Env::*)(double)) &Env::setRequiredMargin,
          "set required Margin level for default port, takes proportion as input"
          " I.e 0.1 for 10% margin or 10x levarage",

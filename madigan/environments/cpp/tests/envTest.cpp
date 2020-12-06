@@ -303,7 +303,7 @@ void testEnvData(){
 
 void testHDFSource(){
   string filepath="/media/hemu/Data/Markets/FX/working_data_aud_nzd.h5";
-  string mainKey="aud_nzd";
+  string mainKey="aud_nzd/10min";
   string priceKey="midprice";
   string timestampKey="timestamp";
   HDFSource dataSource(filepath, mainKey, priceKey, timestampKey);

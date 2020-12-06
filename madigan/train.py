@@ -7,7 +7,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import torch
 
-from madigan.fleet import make_agent
+from madigan.modelling import make_agent
 # from madigan.environments import  make_env
 # from madigan.environments.cpp import Assets
 from madigan.utils.config import load_config, make_config, save_config
