@@ -35,12 +35,15 @@ def make_normalizer(norm_type):
 
     lookback: norm everything by current price x / x[-1]
     lookback_log: log(x / x[-1])
+    standard_normal: (x-x.mean()) / x.std()
     expanding: norm by an expanding window mean
     """
     if norm_type == 'lookback':
         return lambda x: x / x[-1]
     if norm_type == 'lookback_log':
         return lambda x: np.log(x / x[-1])
+    if norm_type == 'standard_normal':
+        return lambda x: (x-x.mean()) / x.std()
     if norm_type == 'expanding':
         return lambda x: x / _expanding_mean(x)
 

@@ -90,7 +90,7 @@ def test_loop_dqn(agent, env, preprocessor, eps=0., random_starts=0, reset=False
                    'info': info, 'qvals': qvals}
             break
         yield {'state': state, 'reward': reward, 'done': done,
-                'info': info, 'qvals': qvals}
+               'info': info, 'qvals': qvals}
 
 def test_loop_actor_critic(agent, env, preprocessor, eps=0., random_starts=0,
                            reset=False, **params):

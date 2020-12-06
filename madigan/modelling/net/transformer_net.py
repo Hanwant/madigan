@@ -22,6 +22,9 @@ class PortEmbed(nn.Module):
 
 
 class NormalHead(nn.Module):
+    """
+    For use in DQN style discrete agents
+    """
     def __init__(self, d_model, output_shape):
         super().__init__()
         self.n_assets = output_shape[0]
@@ -35,6 +38,9 @@ class NormalHead(nn.Module):
 
 
 class DuelingHead(nn.Module):
+    """
+    For use in DQN style discrete agents
+    """
     def __init__(self, d_model, output_shape):
         super().__init__()
         self.n_assets = output_shape[0]
@@ -128,13 +134,13 @@ class Attention(nn.Module):
 
 
 class MLP(nn.Module):
-    def __init__(self, d_model, d_ff, dropout, activation=gelu):
+    def __init__(self, d_model, d_ff, dropout):
         super().__init__()
         self.fc1 = nn.Linear(d_model, d_ff)
         self.fc2 = nn.Linear(d_ff, d_model)
         self.drop1 = nn.Dropout(dropout)
         self.drop2 = nn.Dropout(dropout)
-        self.actv = activation
+        self.actv = nn.GELU()
 
     def forward(self, x):
         x = self.drop1(self.actv(self.fc1(x)))
@@ -143,6 +149,12 @@ class MLP(nn.Module):
 
 
 class Layer(nn.Module):
+    """
+    Layer unit of transformer
+    In order, performs these computation:
+    attention -> residual sum -> layer norm -
+    -> fc projection -> residual sum -> layer norm
+    """
     def __init__(self,
                  d_model,
                  d_ff,
@@ -150,7 +162,6 @@ class Layer(nn.Module):
                  attn_drop,
                  pre_res_drop,
                  mlp_drop,
-                 activation,
                  max_seqlen=50,
                  norm_eps=1e-05):
         super().__init__()
@@ -160,11 +171,10 @@ class Layer(nn.Module):
         self.attn_drop = attn_drop
         self.pre_res_drop = pre_res_drop
         self.mlp_drop = mlp_drop
-        self.act = activation
         self.max_seqlen = max_seqlen
         self.attn_block = Attention(self.d_model, self.n_heads, self.attn_drop,
                                     self.pre_res_drop, self.max_seqlen)
-        self.mlp_block = MLP(self.d_model, self.d_ff, self.mlp_drop, self.act)
+        self.mlp_block = MLP(self.d_model, self.d_ff, self.mlp_drop)
         self.norm1 = nn.LayerNorm(self.d_model, eps=norm_eps)
         self.norm2 = nn.LayerNorm(self.d_model, eps=norm_eps)
 

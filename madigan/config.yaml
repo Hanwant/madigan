@@ -46,7 +46,7 @@ data_source_type: OU
 discrete_action_atoms: 3
 discrete_actions: true
 env_type: Synth
-experiment_id: DQNReverser_OU_SeriesNet_Test_Smaller
+experiment_id: DQNReverser_OU_Vanilla
 init_cash: 1000000
 log_freq: 10000
 lot_unit_value: 10000
@@ -54,40 +54,29 @@ maintenance_margin: 0.25
 min_tf: 64
 model_config:
   action_atoms: 3
-  d_model: 512
+  actor_model_class: ConvPolicyDeterministic
+  channels:
+  - 32
+  - 32
+  critic_model_class: ConvCriticQ
+  d_model: 1024
   discrete_action_atoms: 3
   discrete_actions: true
   dueling: true
   iqn: true
+  kernels:
+  - 5
+  - 5
   lot_unit_value: 10000
   min_tf: 64
-  model_class: SeriesNet
-  critic_model_class: ConvCriticQ
-  actor_model_class: ConvPolicyDeterministic
+  model_class: ConvNet
   nTau1: 32
   nTau2: 8
   n_layers: 4
-  tau_embed_size: 64
-  dilations:
+  strides:
   - 1
-  - 4
-  - 16
-  - 64
-  kernels:
-  - 2
-  - 2
-  - 2
-  - 2
-  channel_dims:
-  - 8
-  - 8
-  - 8
-  - 8
-  dropouts:
-  - 0.0
-  - 0.0
-  - 0.3
-  - 0.5
+  - 1
+  tau_embed_size: 64
 model_save_freq: 64000
 n_assets: 1
 optim_config:
@@ -104,7 +93,9 @@ optim_config:
 parent_id: ''
 preprocessor_config:
   preprocessor_type: StackerDiscrete
-  window_length: 128
+  window_length: 64
+  norm: true
+  norm_type: standard_normal
   timeframes:
   - 64
 preprocessor_type: StackerDiscrete
