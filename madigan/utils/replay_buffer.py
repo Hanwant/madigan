@@ -39,11 +39,11 @@ def make_env_dict_cpprb(agent_class, obs_shape, action_shape):
     else:
         raise NotImplementedError("cpprb spec has been implemented only for " +
                                   "the following agent_classes: " +
-                                  f"{*DQNTYPES}")
+                                  f"{DQNTYPES}")
     return env_dict
 
 
-class ReplayBufferC(cpprb.ReplayBuffer):
+class ReplayBufferC:
     """
     Acts as a base class and a factory,
     Its children are wrappers for an rb from the cpprb library
@@ -56,6 +56,9 @@ class ReplayBufferC(cpprb.ReplayBuffer):
         raise NotImplementedError()
 
     def sample(self, size):
+        raise NotImplementedError()
+
+    def get_all_transitions(self):
         raise NotImplementedError()
 
     @classmethod
@@ -78,7 +81,8 @@ class ReplayBufferC(cpprb.ReplayBuffer):
                 })
         raise NotImplementedError("cpprb wrapper has been implemented " +
                                   "only for the following agent_classes: " +
-                                  f"{*DQNTYPES}")
+                                  f"{DQNTYPES}")
+
     def save_to_file(self, savepath):
         """
         Extracts transitions and saves them to file
@@ -93,6 +97,7 @@ class ReplayBufferC(cpprb.ReplayBuffer):
             with open(loadpath, 'rb') as f:
                 transitions = pickle.load(f)
                 super().add(transitions)
+
 
 class ReplayBufferC_SARSD(cpprb.ReplayBuffer, ReplayBufferC):
     """
@@ -139,8 +144,8 @@ class ReplayBuffer:
 
     @classmethod
     def from_agent(cls, agent):
-        return cls(agent.rb_size, agent.nstep_return,
-                   agent.agent_agent.discount)
+        return cls(agent.replay_size, agent.nstep_return,
+                   agent.discount)
 
     @classmethod
     def from_config(cls, config):

@@ -29,6 +29,7 @@ def make_preprocessor(config):
     raise NotImplementedError(
         f"{config['preprocessor_type']} is not implemented ")
 
+
 def make_normalizer(norm_type):
     """
     Choices
@@ -47,6 +48,13 @@ def make_normalizer(norm_type):
     if norm_type == 'expanding':
         return lambda x: x / _expanding_mean(x)
 
+def standard_norm(x):
+    """
+    Nan safe version of standard normalization
+    otherwise a lambda is enough I.e lambda x: (x-x.mean()) / x.std()
+    """
+    mean = x.mean()
+    return (x-mean) / np.nan_to_num(x.std(), mean)
 
 class PreProcessor(ABC):
     def __init__(self):
