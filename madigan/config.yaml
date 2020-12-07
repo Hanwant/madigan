@@ -13,9 +13,11 @@ agent_config:
   greedy_eps_testing: 0.0
   iqn: true
   k_huber: 1
+  noisy_net: true
+  noisy_net_sigma: 0.5
   nTau1: 32
   nTau2: 8
-  nstep_return: 5
+  nstep_return: 20
   nsteps: 1000000
   replay_min_size: 50000
   replay_size: 100000
@@ -26,7 +28,7 @@ agent_config:
   tau_soft_update: 0.0001
   train_freq: 4
   type: DQN
-  unit_size_proportion_avM: 0.1
+  unit_size_proportion_avM: 0.05
   proximal_portfolio_penalty: .5
   transaction_thresh: 0.02
 agent_type: DQNReverser
@@ -34,19 +36,31 @@ assets:
 - sine1
 basepath: /media/hemu/Data/madigan/experiments/
 data_source_config:
-  mean:
-  - 10.0
-  theta:
-  - .15
+  dYMax:
+  - 0.001
+  dYMin:
+  - 0.0005
+  ema_alpha:
+  - 0.3
+  max_period:
+  - 200
+  min_period:
+  - 100
+  noise_trend:
+  - 0.001
   phi:
-  - 4.0
-  noise_var:
-  - 0.1
-data_source_type: OU
+  - 0.04
+  start:
+  - 5.0
+  theta:
+  - 0.15
+  trend_prob:
+  - 0.000
+data_source_type: TrendOU
 discrete_action_atoms: 3
 discrete_actions: true
 env_type: Synth
-experiment_id: DQNReverser_OU_Vanilla
+experiment_id: DQNReverser_TRENDOUONLY_Vanilla
 init_cash: 1000000
 log_freq: 10000
 lot_unit_value: 10000
@@ -70,6 +84,8 @@ model_config:
   lot_unit_value: 10000
   min_tf: 64
   model_class: ConvNet
+  noisy_net: true
+  noisy_net_sigma: 0.5
   nTau1: 32
   nTau2: 8
   n_layers: 4
