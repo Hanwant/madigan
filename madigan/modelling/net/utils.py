@@ -39,42 +39,6 @@ def make_conv1d_layers(input_shape,
         conv_layers.append(act())
     return nn.Sequential(*conv_layers)
 
-class PortEmbed(nn.Module):
-    """
-    Create embedding from portfolio
-    """
-    def __init__(self, n_assets, d_model):
-        super().__init__()
-        self.embed = nn.Linear(n_assets, d_model)
-    def forward(self, raw_port):
-        return self.embed(raw_port)
-
-class NormalHead(nn.Module):
-    def __init__(self, d_model, output_shape):
-        super().__init__()
-        self.n_assets = output_shape[0]
-        self.action_atoms = output_shape[1]
-        self.out = nn.Linear(d_model, self.n_assets*self.action_atoms)
-    def forward(self, state_emb):
-        qvals = self.out(state_emb).view(state_emb.shape[0],
-                                         self.n_assets, self.action_atoms)
-        return qvals
-
-class DuelingHead(nn.Module):
-    def __init__(self, d_model, output_shape):
-        super().__init__()
-        self.n_assets = output_shape[0]
-        self.action_atoms = output_shape[1]
-        self.value_net = nn.Linear(d_model, self.n_assets)
-        self.adv_net = nn.Linear(d_model, self.n_assets*self.action_atoms)
-    def forward(self, state_emb):
-        value = self.value_net(state_emb)
-        adv = self.adv_net(state_emb).view(state_emb.shape[0],
-                                           self.n_assets, self.action_atoms)
-        qvals = value[..., None] + adv - adv.mean(-1, keepdim=True)
-        return qvals
-
-
 @torch.no_grad()
 def xavier_initialization(m, linear_range=(-3e-3, 3e-3)):
     if isinstance(m, nn.Linear):

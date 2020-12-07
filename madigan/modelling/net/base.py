@@ -1,16 +1,21 @@
 import torch.nn as nn
 import torch
 
+from .common import NoisyLinear
 
-class QNetwork(nn.Module):
-    def __init__(self, input_shape, output_shape):
+class QNetworkBase(nn.Module):
+    def __init__(self):
         super().__init__()
-        self.input_shape
-        self.output_shape
+        self.noisy_layers = None
 
-    def forward(self, state=None, state_emb=None):
-        raise NotImplementedError
+    def sample_noise(self):
+        if self.noisy_net:
+            for module in self.noisy_layers:
+                module.sample()
 
-    def get_state_emb(self, state):
-        raise NotImplementedError
+    def register_noisy_layers(self):
+        self.noisy_layers = []
+        for module in self.modules():
+            if isinstance(module, NoisyLinear):
+                self.noisy_layers.append(module)
 
