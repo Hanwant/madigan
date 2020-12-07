@@ -151,6 +151,8 @@ def make_config(
         k_huber=1.,
         discount=0.99,  # Agent/Model spec
         tau_soft_update=1e-4,
+        noisy_net: bool = False,
+        noisy_net_sigma: float = 0.5,
         expl_eps=1.,  # Initial eps if eps-greedy  is used for exploration
         expl_eps_min=0.1,
         expl_eps_decay=1e-6,
@@ -192,6 +194,8 @@ def make_config(
         'action_atoms': discrete_action_atoms,
         'dueling': dueling,
         'iqn': iqn,
+        'noisy_net': noisy_net,
+        'noisy_net_sigma': noisy_net_sigma,
         'nTau': nTau1,
         'nTau1': nTau1,
         'nTau2': nTau2,
@@ -233,6 +237,7 @@ def make_config(
         'action_atoms': discrete_action_atoms,
         'tau_soft_update': tau_soft_update,
         'greedy_eps_testing': greedy_eps_testing,
+        'noisy_net': noisy_net,
         'eps': expl_eps,
         'eps_min': expl_eps_min,
         'eps_decay': expl_eps_decay,
