@@ -26,7 +26,10 @@ class OffPolicyActorCritic(Agent):
         # self.eps_decay = max(eps_decay, 1 -
         #                      eps_decay)  # to make sure we use 0.99999 not 1e-5
         # self.eps_min = eps_min
-        self.buffer = ReplayBuffer(replay_size, nstep_return, discount)
+        self.replay_size = replay_size
+        self.nstep_return = nstep_return
+        self.discount = discount
+        self.buffer = ReplayBuffer.from_agent(self)
         self.bufferpath = self.savepath.parent / 'replay.pkl'
         self.replay_min_size = replay_min_size
         self.batch_size = batch_size
@@ -36,13 +39,10 @@ class OffPolicyActorCritic(Agent):
         self.log_freq = 10000
 
     def save_buffer(self):
-        with open(self.bufferpath, 'wb') as f:
-            pickle.dump(self.buffer, f)
+        self.buffer.save_to_file(self.bufferpath)
 
     def load_buffer(self):
-        if self.bufferpath.is_file():
-            with open(self.bufferpath, 'rb') as f:
-                self.buffer = pickle.load(f)
+        self.buffer.load_from_file(self.bufferpath)
 
     @abstractmethod
     def get_qvals(self, state, target=False):

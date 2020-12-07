@@ -47,6 +47,7 @@ class IQN(DQN):
             nstep_return: int,
             replay_size: int,
             replay_min_size: int,
+            noisy_net: bool,
             eps: float,
             eps_decay: float,
             eps_min: float,
@@ -67,9 +68,9 @@ class IQN(DQN):
             k_huber: float):
         super().__init__(env, preprocessor, input_shape, action_space,
                          discount, nstep_return, replay_size, replay_min_size,
-                         eps, eps_decay, eps_min, batch_size, test_steps,
-                         unit_size, savepath, double_dqn, tau_soft_update,
-                         model_class, model_config, lr)
+                         noisy_net, eps, eps_decay, eps_min, batch_size,
+                         test_steps, unit_size, savepath, double_dqn,
+                         tau_soft_update, model_class, model_config, lr)
 
         self.nTau1 = nTau1
         self.nTau2 = nTau2
@@ -89,9 +90,9 @@ class IQN(DQN):
         savepath = Path(config.basepath)/config.experiment_id/'models'
         return cls(env, preprocessor, input_shape, action_space,
                    aconf.discount, aconf.nstep_return, aconf.replay_size,
-                   aconf.replay_min_size, aconf.eps, aconf.eps_decay,
-                   aconf.eps_min, aconf.batch_size, config.test_steps,
-                   unit_size, savepath, aconf.double_dqn,
+                   aconf.replay_min_size, aconf.noisy_net, aconf.eps,
+                   aconf.eps_decay, aconf.eps_min, aconf.batch_size,
+                   config.test_steps, unit_size, savepath, aconf.double_dqn,
                    aconf.tau_soft_update, config.model_config.model_class,
                    config.model_config, config.optim_config.lr,
                    config.agent_config.nTau1, config.agent_config.nTau2,
@@ -166,6 +167,8 @@ class IQN(DQN):
         return Gt
 
     def train_step(self, sarsd=None):
+        self.model_b.sample_noise()
+        self.model_t.sample_noise()
         sarsd = sarsd or self.buffer.sample(self.batch_size)
         state, action, reward, next_state, done = self.prep_sarsd_tensors(
             sarsd)

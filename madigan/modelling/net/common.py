@@ -50,6 +50,12 @@ class DuelingHeadDQN(nn.Module):
         return qvals
 
 class NoisyLinear(nn.Module):
+    """
+    Drop in replacement for normal linear layers
+    Uses factorized gaussian noise - more efficient than independent noise
+    Original in (Fortunato et al, 2017) https://arxiv.org/pdf/1706.10295.pdf
+    Adaptation in (Hessel et al, 2017) https://arxiv.org/pdf/1710.02298.pdf
+    """
     def __init__(self, in_feats, out_feats, sigma=0.5):
         super().__init__()
         self.in_feats = in_feats
@@ -69,21 +75,21 @@ class NoisyLinear(nn.Module):
 
     def reset(self):
         bound = 1 / math.sqrt(self.in_feats)
-        self.mu_q.data.uniform_(-bound, bound)
+        self.mu_w.data.uniform_(-bound, bound)
         self.mu_bias.data.uniform_(-bound, bound)
         self.sigma_w.data.fill_(self.sigma / math.sqrt(self.in_feats))
         self.sigma_bias.data.fill_(self.sigma / math.sqrt(self.out_feats))
 
-    def f(self, x):
+    def factorize(self, x):
         return x.normal_().sign().mul(x.abs().sqrt())
 
     def sample(self):
-        self.eps_p.copy_(self.f(self.eps_p))
-        self.eps_q.copy_(self.f(self.eps_q))
+        self.eps_p.copy_(self.factorize(self.eps_p))
+        self.eps_q.copy_(self.factorize(self.eps_q))
 
     def forward(self, x):
         if self.training:
-            weight = self.mu_w + self.sigma_w * self.eps_q.outer(self.eps_q)
+            weight = self.mu_w + self.sigma_w * torch.ger(self.eps_q, self.eps_p)
             bias = self.mu_bias + self.sigma_bias * self.eps_q.clone()
         else:
             weight = self.mu_w

@@ -26,7 +26,7 @@ class ConvNet(QNetworkBase):
                  strides=[1, 1],
                  dueling=True,
                  preserve_window_len: bool = False,
-                 noisy_net: bool = True,
+                 noisy_net: bool = False,
                  noisy_net_sigma: float = 0.5,
                  **extra):
         """
@@ -53,10 +53,12 @@ class ConvNet(QNetworkBase):
             preserve_window_len=preserve_window_len,
             causal_dim=0)
         conv_out_shape = calc_conv_out_shape(window_len, self.conv_layers)
+
+        self.noisy_net = noisy_net
         Linear = partial(NoisyLinear, sigma=noisy_net_sigma) \
             if noisy_net else nn.Linear
         self.price_project = Linear(conv_out_shape[0] * channels[-1],
-                                       d_model)
+                                    d_model)
         self.port_project = Linear(self.n_assets + 1, d_model)
         if dueling:
             self.output_head = DuelingHeadDQN(d_model,
@@ -66,7 +68,7 @@ class ConvNet(QNetworkBase):
             self.output_head = NormalHeadDQN(d_model,
                                              output_shape,
                                              noisy_net=noisy_net)
-        self.register_noisy_layers()
+        # self.register_noisy_layers()
 
     def get_state_emb(self, state: State):
         """
@@ -107,9 +109,8 @@ class ConvCriticQ(nn.Module):
                  channels=[32, 32],
                  kernels=[5, 5],
                  strides=[1, 1],
-                 dueling=True,
                  preserve_window_len: bool = False,
-                 noisy_net: bool = True,
+                 noisy_net: bool = False,
                  noisy_net_sigma: float = 0.5,
                  **extra):
         super().__init__()

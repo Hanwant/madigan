@@ -7,9 +7,11 @@ Hyperparameter choices, are guided by the paper:
  Krist Papadopoulos, 2018
 """
 from typing import List, Tuple
+from functools import partial
+
 import torch
 import torch.nn as nn
-from .utils import PortEmbed, NormalHead, DuelingHead
+from .common import PortEmbed, NormalHeadDQN, DuelingHeadDQN, NoisyLinear
 from ...utils.data import State
 
 
@@ -50,7 +52,10 @@ class SeriesNetQ(nn.Module):
     """
     def __init__(self, input_shape: Tuple, output_shape: Tuple, d_model: int,
                  channel_dims: List, kernels: List, dilations: List,
-                 dropouts: List, dueling: bool, **extra):
+                 dropouts: List, dueling: bool,
+                 noisy_net: bool = False,
+                 noisy_net_sigma: float = 0.5,
+                 **extra):
         super().__init__()
         if not all([
                 len(channel_dims) == len(hp)
@@ -71,12 +76,16 @@ class SeriesNetQ(nn.Module):
                              dropouts[i]))
         self.layers = nn.ModuleList(self.layers)
         n_assets = output_shape[0]
-        self.port_embed = nn.Linear(n_assets + 1, d_model)
-        self.conv_output_embed = nn.Linear(input_length, d_model)
+        Linear = partial(NoisyLinear, sigma=noisy_net_sigma) \
+            if noisy_net else nn.Linear
+        self.port_embed = Linear(n_assets + 1, d_model)
+        self.conv_output_embed = Linear(input_length, d_model)
         if dueling:
-            self.output_head = DuelingHead(d_model, output_shape)
+            self.output_head = DuelingHeadDQN(d_model, output_shape, noisy_net,
+                                           noisy_net_sigma)
         else:
-            self.output_head = NormalHead(d_model, output_shape)
+            self.output_head = NormalHeadDQN(d_model, output_shape, noisy_net,
+                                          noisy_net_sigma)
         self.output_act_fn = nn.GELU()
         self.apply(self.init)
 

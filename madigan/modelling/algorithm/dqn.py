@@ -35,15 +35,15 @@ class DQN(OffPolicyQ):
     """
     def __init__(self, env, preprocessor, input_shape: tuple,
                  action_space: ActionSpace, discount: float, nstep_return: int,
-                 replay_size: int, replay_min_size: int, eps: float,
-                 eps_decay: float, eps_min: float, batch_size: int,
+                 replay_size: int, replay_min_size: int, noisy_net: bool,
+                 eps: float, eps_decay: float, eps_min: float, batch_size: int,
                  test_steps: int, unit_size: float, savepath: Union[Path, str],
                  double_dqn: bool, tau_soft_update: float, model_class: str,
                  model_config: Union[dict, Config], lr):
         super().__init__(env, preprocessor, input_shape, action_space,
                          discount, nstep_return, replay_size, replay_min_size,
-                         eps, eps_decay, eps_min, batch_size, test_steps,
-                         unit_size, savepath)
+                         noisy_net, eps, eps_decay, eps_min, batch_size,
+                         test_steps, unit_size, savepath)
 
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self._action_space = action_space
@@ -71,8 +71,8 @@ class DQN(OffPolicyQ):
             self.lr_sched = torch.optim.lr_scheduler.CyclicLR(
                 self.opt, base_lr=lr, max_lr=1e-2, step_size_up=2000)
         else:
-            # Dummy class for now
             class Sched:
+                """ Dummy so that self.sched.step() can be called"""
                 def step(self):
                     pass
 
@@ -90,9 +90,9 @@ class DQN(OffPolicyQ):
         savepath = Path(config.basepath) / config.experiment_id / 'models'
         return cls(env, preprocessor, input_shape, action_space,
                    aconf.discount, aconf.nstep_return, aconf.replay_size,
-                   aconf.replay_min_size, aconf.eps, aconf.eps_decay,
-                   aconf.eps_min, aconf.batch_size, config.test_steps,
-                   unit_size, savepath, aconf.double_dqn,
+                   aconf.replay_min_size, aconf.noisy_net, aconf.eps,
+                   aconf.eps_decay, aconf.eps_min, aconf.batch_size,
+                   config.test_steps, unit_size, savepath, aconf.double_dqn,
                    aconf.tau_soft_update, config.model_config.model_class,
                    config.model_config, config.optim_config.lr)
 
@@ -219,6 +219,8 @@ class DQN(OffPolicyQ):
         return Gt
 
     def train_step(self, sarsd=None):
+        self.model_b.sample_noise()
+        self.model_t.sample_noise()
         sarsd = sarsd or self.buffer.sample(self.batch_size)
         state, action, reward, next_state, done = self.prep_sarsd_tensors(
             sarsd)
@@ -315,9 +317,9 @@ class DQNReverser(DQN):
         savepath = Path(config.basepath) / config.experiment_id / 'models'
         return cls(env, preprocessor, input_shape, action_space,
                    aconf.discount, aconf.nstep_return, aconf.replay_size,
-                   aconf.replay_min_size, aconf.eps, aconf.eps_decay,
-                   aconf.eps_min, aconf.batch_size, config.test_steps,
-                   unit_size, savepath, aconf.double_dqn,
+                   aconf.replay_min_size, aconf.noisy_net, aconf.eps,
+                   aconf.eps_decay, aconf.eps_min, aconf.batch_size,
+                   config.test_steps, unit_size, savepath, aconf.double_dqn,
                    aconf.tau_soft_update, config.model_config.model_class,
                    config.model_config, config.optim_config.lr)
 

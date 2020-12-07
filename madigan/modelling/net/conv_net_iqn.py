@@ -135,9 +135,13 @@ class ConvNetIQN(QNetworkBase):
             conv_layers.append(self.act)
         self.conv_layers = nn.Sequential(*conv_layers)
         conv_out_shape = calc_conv_out_shape(window_len, self.conv_layers)
-        self.price_project = nn.Linear(conv_out_shape[0] * channels[-1],
-                                       d_model)
-        self.port_project = nn.Linear(self.n_assets, d_model)
+
+        self.noisy_net = noisy_net
+        Linear = partial(NoisyLinear, sigma=noisy_net_sigma) \
+            if noisy_net else nn.Linear
+        self.price_project = Linear(conv_out_shape[0] * channels[-1],
+                                    d_model)
+        self.port_project = Linear(self.n_assets, d_model)
         self.tau_embed_layer = TauEmbedLayer(tau_embed_size, self.d_model,
                                              noisy_net=noisy_net,
                                              noisy_net_sigma=noisy_net_sigma)
