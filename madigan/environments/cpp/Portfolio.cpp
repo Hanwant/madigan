@@ -284,7 +284,7 @@ namespace madigan{
       // std::cout<< meanEntryPrice<< ", ";
       // std::cout<< units << ", ";
       // std::cout<< currentUnits<< ", \n";
-      meanEntryPrice += // volume weighted average of position entry prices
+      meanEntryPrice += // dollar weighted average of position entry prices
         (transactionPrice - meanEntryPrice) * (units /(units + currentUnits));
       // std::cout << "accum numer, denom : "<<(transactionPrice - meanEntryPrice) <<", "<< (units /(units + currentUnits));
       // std::cout <<"\n";
@@ -306,7 +306,7 @@ namespace madigan{
     // std::cout << "units to buy " << units << "\n";
     // std::cout << "meanEntryPrice " << meanEntryPrice << "\n";
 
-    if (abs(currentUnits) < 0.0000001){
+    if (abs(currentUnits) < 0.000001){
       meanEntryPrice = 0.;
       if (borrowedMarginRef > 0.){
         cash_ -= borrowedMarginRef;

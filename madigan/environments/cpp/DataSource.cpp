@@ -457,7 +457,7 @@ namespace madigan{
   const PriceVector& OU::getData() {
     for (int i=0; i < nAssets_; i++){
       double& x = currentData_(i);
-      x += theta[i]*(mean[i]-x)*dT + phi[i]*noiseDistribution[i](generator);
+      x += (theta[i]*(mean[i]-x)) + x*phi[i]*noiseDistribution[i](generator);
     }
     timestamp_ += 1;
     return currentData_;
@@ -665,8 +665,9 @@ namespace madigan{
   const PriceVector& TrendOU::getData(){
     for (int i=0; i < nAssets_; i++){
       double& y = currentData_[i];
+      // TREND
       if(trending[i]){
-        double& x = currentData_(i);
+        // double& x = currentData_(i);
         y += y * (dY[i] * currentDirection[i] + trendNoiseDist[i](generator));
         currentTrendLen[i] -= 1;
         if (currentTrendLen[i] == 0){
@@ -679,8 +680,9 @@ namespace madigan{
         }
         // ema[i] += emaAlpha[i] * y + (1-emaAlpha[i]) * ema[i];
       }
+      // OU
       else{
-        double ou_noise = y*ouNoiseDist[i](generator);
+        double ou_noise = y*ouNoiseDist[i](generator); // relative to current y
         double ou_reverting_component = theta[i] * (ouMean[i] - y);
         // ou_process = theta[i] * (ema[i]-y) * dT + y * phi[i] * ouNoise[i](generator);
         y += ou_reverting_component + ou_noise;
