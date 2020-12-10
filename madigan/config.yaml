@@ -17,7 +17,7 @@ agent_config:
   noisy_net_sigma: 0.5
   nTau1: 32
   nTau2: 8
-  nstep_return: 20
+  nstep_return: 3
   nsteps: 1000000
   replay_min_size: 50000
   replay_size: 100000
@@ -49,18 +49,18 @@ data_source_config:
   noise_trend:
   - 0.001
   phi:
-  - 0.04
+  - 0.0
   start:
   - 5.0
   theta:
   - 0.15
   trend_prob:
-  - 0.000
+  - 0.1
 data_source_type: TrendOU
 discrete_action_atoms: 3
 discrete_actions: true
 env_type: Synth
-experiment_id: DQNReverser_TRENDOUONLY_Vanilla
+experiment_id: DQNReverser_TRENDOU_TRENDONLY_.1_NoisyNet_Stacker64_StdNorm_trans0.02
 init_cash: 1000000
 log_freq: 10000
 lot_unit_value: 10000
@@ -115,7 +115,7 @@ preprocessor_config:
   timeframes:
   - 64
 preprocessor_type: StackerDiscrete
-required_margin: .05
+required_margin: 1.0
 reward_clip: *id001
 slippage_abs: 0.0
 slippage_rel: 0.0
