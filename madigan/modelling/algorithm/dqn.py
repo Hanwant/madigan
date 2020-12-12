@@ -131,10 +131,17 @@ class DQN(OffPolicyQ):
         """
         Takes output from net and converts to transaction units
         """
-        return discrete_action_to_transaction(actions, self.action_atoms,
-                                              self.unit_size,
-                                              self.env.availableMargin,
-                                              self.env.currentPrices)
+        if self.action_atoms % 2 == 0:
+            raise ValueError("action atoms should be an odd number")
+        units = self.unit_size*self._env.availableMargin/self._env.currentPrices
+        actions_centered = (actions - (self.action_atoms // 2))
+        if isinstance(actions_centered, torch.Tensor):
+            actions_centered = actions_centered.cpu().numpy()
+        return actions_centered * units
+        # return discrete_action_to_transaction(actions, self.action_atoms,
+        #                                       self.unit_size,
+        #                                       self.env.availableMargin,
+        #                                       self.env.currentPrices)
 
     @torch.no_grad()
     def get_qvals(self, state, target=False, device=None):
@@ -334,6 +341,7 @@ class DQNReverser(DQN):
         if isinstance(actions_centered, torch.Tensor):
             actions_centered = actions_centered.cpu().numpy()
         transactions = actions_centered * units
+        # Reverse position if action is '0' and position exists
         for i, act in enumerate(actions):
             if act == 0:
                 current_holding = self._env.ledger[i]

@@ -83,8 +83,7 @@ class IQN(DQN):
         preprocessor = make_preprocessor(config)
         input_shape = preprocessor.feature_output_shape
         atoms = config.discrete_action_atoms
-        action_space = DiscreteRangeSpace((-atoms // 2, atoms // 2 + 1),
-                                          config.n_assets)
+        action_space = DiscreteRangeSpace((0, atoms), config.n_assets)
         aconf = config.agent_config
         unit_size = aconf.unit_size_proportion_avM
         savepath = Path(config.basepath)/config.experiment_id/'models'
@@ -218,3 +217,48 @@ class IQN(DQN):
         assert quantile_loss.shape == huber_loss.shape
 
         return quantile_loss.mean(-1).sum(-1).mean(), td_error.abs().mean()
+
+class IQNReverser(IQN):
+    """
+    Extends the action space of IQN to include an action for closing positions
+    """
+    @classmethod
+    def from_config(cls, config):
+        env = make_env(config)
+        preprocessor = make_preprocessor(config)
+        input_shape = preprocessor.feature_output_shape
+        atoms = config.discrete_action_atoms + 1
+        action_space = DiscreteRangeSpace((0, atoms), config.n_assets)
+        aconf = config.agent_config
+        unit_size = aconf.unit_size_proportion_avM
+        savepath = Path(config.basepath)/config.experiment_id/'models'
+        return cls(env, preprocessor, input_shape, action_space,
+                   aconf.discount, aconf.nstep_return, aconf.replay_size,
+                   aconf.replay_min_size, aconf.noisy_net, aconf.eps,
+                   aconf.eps_decay, aconf.eps_min, aconf.batch_size,
+                   config.test_steps, unit_size, savepath, aconf.double_dqn,
+                   aconf.tau_soft_update, config.model_config.model_class,
+                   config.model_config, config.optim_config.lr,
+                   config.agent_config.nTau1, config.agent_config.nTau2,
+                   config.agent_config.k_huber)
+
+    def action_to_transaction(
+            self, actions: Union[torch.Tensor, np.ndarray]) -> np.ndarray:
+        """
+        Takes output from net and converts to transaction units
+        """
+        units = self.unit_size * self._env.availableMargin \
+            / self._env.currentPrices
+        actions_centered = (actions - (self.action_atoms // 2))
+        if isinstance(actions_centered, torch.Tensor):
+            actions_centered = actions_centered.cpu().numpy()
+        transactions = actions_centered * units
+        # Reverse position if action is idx 0 and position exists
+        for i, act in enumerate(actions):
+            if act == 0:
+                current_holding = self._env.ledger[i]
+                if current_holding != 0:
+                    transactions[i] = -current_holding
+                else:
+                    transactions[i] = 0.
+        return transactions
