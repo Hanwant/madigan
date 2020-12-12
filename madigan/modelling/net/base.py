@@ -2,12 +2,15 @@ import torch.nn as nn
 import torch
 
 from .common import NoisyLinear
+from .utils import orthogonal_initialization
 
 class QNetworkBaseMeta(type):
     def __call__(cls, *args, **kw):
         instance = super().__call__(*args, **kw)
         instance.register_noisy_layers()
+        instance.apply(orthogonal_initialization)
         print('registered noisy layers: ', instance.noisy_layers)
+        print('done orthogonal initialization')
         return instance
 
 class QNetworkBase(nn.Module, metaclass=QNetworkBaseMeta):
