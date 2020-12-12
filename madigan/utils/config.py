@@ -174,6 +174,8 @@ def make_config(
         d_model_project=256,  # dimensionality of model
         n_layers=4,  # number of layer units
         n_feats=1,  # 1 corresponds to an input of just price
+        act_fn: str='silu',
+        preserve_window_len: bool = False,
         lr=1e-3,  # learning rate
         lr_critic=1e-3,  # learning rate
         lr_actor=1e-4,  # learning rate
@@ -200,6 +202,8 @@ def make_config(
         'nTau1': nTau1,
         'nTau2': nTau2,
         'tau_embed_size': tau_embed_size,
+        'act_fn': act_fn,
+        'preserve_window_len': preserve_window_len,
         'discrete_actions': discrete_actions,
         'discrete_action_atoms': discrete_action_atoms,
         'lot_unit_value': lot_unit_value,
