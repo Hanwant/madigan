@@ -20,7 +20,7 @@ from ..utils.metrics import list_2_dict, reduce_train_metrics, test_summary
 from ..utils.config import save_config, Config
 from ..utils.plotting import make_grid
 from ..utils.preprocessor import make_preprocessor
-from ..modelling import make_agent, DQN
+from ..modelling import make_agent
 from ..environments import make_env, get_env_info
 from ..environments.cpp import RiskInfo
 from .test import test

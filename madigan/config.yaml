@@ -31,7 +31,7 @@ agent_config:
   unit_size_proportion_avM: 0.05
   proximal_portfolio_penalty: .5
   transaction_thresh: 0.02
-agent_type: DQNReverser
+agent_type: IQNReverser
 assets:
 - sine1
 basepath: /media/hemu/Data/madigan/experiments/
@@ -43,24 +43,24 @@ data_source_config:
   ema_alpha:
   - 0.3
   max_period:
-  - 200
+  - 1500
   min_period:
-  - 100
+  - 500
   noise_trend:
-  - 0.001
+  - 0.01
   phi:
-  - 0.0
+  - 0.02
   start:
   - 5.0
   theta:
   - 0.15
   trend_prob:
-  - 0.1
+  - 0.00
 data_source_type: TrendOU
 discrete_action_atoms: 3
 discrete_actions: true
 env_type: Synth
-experiment_id: DQNReverser_TRENDOU_TRENDONLY_.1_NoisyNet_Stacker64_StdNorm_trans0.02
+experiment_id: IQNReverser_OU_.04_trans0.02
 init_cash: 1000000
 log_freq: 10000
 lot_unit_value: 10000
@@ -69,6 +69,7 @@ min_tf: 64
 model_config:
   action_atoms: 3
   actor_model_class: ConvPolicyDeterministic
+  act_fn: silu
   channels:
   - 32
   - 32
@@ -89,6 +90,7 @@ model_config:
   nTau1: 32
   nTau2: 8
   n_layers: 4
+  preserve_window_len: false
   strides:
   - 1
   - 1
