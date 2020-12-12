@@ -11,7 +11,7 @@ import pyqtgraph as pg
 ############# Factory Methods ######################################################
 ####################################################################################
 def make_train_plots(agent_type, title=None, **kw):
-    if agent_type in ("DQN", "IQN", "DQNReverser"):
+    if agent_type in ("DQN", "IQN", "DQNReverser", "IQNReverser"):
         return TrainPlotsDQN(title=title, **kw)
     if agent_type in ("DDPG", "DDPGDiscretized"):
         return TrainPlotsActorCritic(title=title, **kw)
@@ -20,7 +20,7 @@ def make_train_plots(agent_type, title=None, **kw):
         " has not been implemented")
 
 def make_test_episode_plots(agent_type, title=None, **kw):
-    if agent_type in ("DQN", "IQN", "DQNReverser"):
+    if agent_type in ("DQN", "IQN", "DQNReverser", "IQNReverser"):
         return TestEpisodePlotsDQN(title=title, **kw)
     if agent_type in ("DDPG", "DDPGDiscretized"):
         return TestEpisodePlotsActorCritic(title=title, **kw)
@@ -28,7 +28,7 @@ def make_test_episode_plots(agent_type, title=None, **kw):
         f"Test episode plot widget for agent_type: {agent_type}"+\
         " has not been implemented")
 def make_test_history_plots(agent_type, title=None, **kw):
-    if agent_type in ("DQN", "IQN", "DQNReverser"):
+    if agent_type in ("DQN", "IQN", "DQNReverser", "IQNReverser"):
         return TestHistoryPlotsDQN(title=title, **kw)
     if agent_type in ("DDPG", "DDPGDiscretized"):
         return TestHistoryPlotsActorCritic(title=title, **kw)
