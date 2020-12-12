@@ -10,8 +10,7 @@ from .data import SARSD, State
 
 # DQNTYPES refers to agents which share the same obs types
 # this includes DDPG as it doesn't store logp
-DQNTYPES = ("OffPolicyQ", "OffPolicyActorCritic", "DQN", "IQN", "DQNReverser",
-            "DDPG")
+DQNTYPES = ("DQN", "IQN", "DQNReverser", "DQNReverser", "DDPG")
 
 
 def make_env_dict_cpprb(agent_class, obs_shape, action_shape):
