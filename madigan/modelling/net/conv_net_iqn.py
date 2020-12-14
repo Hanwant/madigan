@@ -4,9 +4,9 @@ from functools import reduce, partial
 import torch
 import torch.nn as nn
 
-from .common import NoisyLinear
+from .common import NoisyLinear, Conv1DEncoder
 from .base import QNetworkBase
-from .utils import calc_pad_to_conserve, ACT_FN_DICT, Conv1DEncoder
+from .utils import calc_pad_to_conserve, ACT_FN_DICT
 from ...utils.data import State
 
 
@@ -119,24 +119,6 @@ class ConvNetIQN(QNetworkBase):
         self.action_atoms = output_shape[1]
         self.d_model = d_model
         self.act = ACT_FN_DICT[act_fn]()
-        # channels = [input_shape[1]] + channels
-        # conv_layers = []
-        # for i in range(len(kernels)):
-        #     conv = nn.Conv1d(channels[i],
-        #                      channels[i + 1],
-        #                      kernels[i],
-        #                      stride=strides[i])
-        #     conv_layers.append(conv)
-        #     if preserve_window_len:
-        #         arb_input = (window_len, )
-        #         # CAUSAL_DIM=0 assumes 0 is time dimension for input to calc_pad
-        #         causal_pad = calc_pad_to_conserve(arb_input,
-        #                                           conv,
-        #                                           causal_dim=0)
-        #         conv_layers.append(nn.ReplicationPad1d(causal_pad))
-        #     conv_layers.append(self.act)
-        # self.conv_layers = nn.Sequential(*conv_layers)
-        # conv_out_shape = calc_conv_out_shape(window_len, self.conv_layers)
         self.conv_encoder = Conv1DEncoder(
             input_shape,
             kernels,

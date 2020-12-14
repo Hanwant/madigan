@@ -291,9 +291,7 @@ class MainWindow( Ui_MainWindow, QtWidgets.QMainWindow):
                 # set new datapath and let plots load new data
                 self.set_datapath(path)
             self.load_checkpoints_list()
-            if self.remove_worker():
-                print('worker removed')
-            else:
+            if not self.remove_worker():
                 print('worker could not be removed - might still be running')
         except Exception as E:
             self.log(E)

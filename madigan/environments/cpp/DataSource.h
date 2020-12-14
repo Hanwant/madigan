@@ -262,6 +262,40 @@ namespace madigan{
     PriceVector currentData_;
   };
 
+  class OUDynamic: public DataSourceTick{
+  public:
+    Assets assets;
+    int nAssets_{0};
+  public:
+    OUDynamic();
+    OUDynamic(std::vector<double> mean, std::vector<double> theta,
+       std::vector<double> phi, std::vector<double> noise_var);
+    OUDynamic(Config config);
+    OUDynamic(pybind11::dict config);
+    ~OUDynamic(){}
+    const PriceVector& getData();
+    const pybind11::array_t<double> getData_np() ;
+    const PriceVector& currentData() const{ return currentData_;}
+    const PriceVector& currentPrices() const{ return currentData_;}
+    void reset(){}
+    std::size_t currentTime() const { return timestamp_; }
+
+  protected:
+    virtual void initParams(std::vector<double> mean, std::vector<double> theta,
+                            std::vector<double> phi, std::vector<double> noise_var);
+
+  protected:
+    const double dT{1.};
+    vector<double> mean;
+    vector<double> theta;
+    vector<double> phi;
+    vector<double> noise_var;
+    std::size_t timestamp_;
+    std::default_random_engine generator;
+    std::vector<std::normal_distribution<double>> noiseDistribution;
+    PriceVector currentData_;
+  };
+
   class SimpleTrend: public DataSourceTick{
   public:
     SimpleTrend();

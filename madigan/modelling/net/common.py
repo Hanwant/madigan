@@ -95,3 +95,66 @@ class NoisyLinear(nn.Module):
             weight = self.mu_w
             bias = self.mu_bias
         return linear_func(x, weight, bias)
+
+
+class Conv1DLayer(nn.Module):
+    """
+    Block unit for architectures using 1d Convs
+    """
+    def __init__(self, input_shape: tuple, channels_in: int, channels_out: int,
+                 kernel: int, stride: int = None, dilation: int = None,
+                 preserve_window_len: bool = False, act_fn: str = 'gelu',
+                 causal_dim: int = 0):
+        super().__init__()
+        window_len = input_shape[0]
+        self.conv = nn.Conv1d(channels_in, channels_out, kernel, stride=stride,
+                              dilation=dilation)
+        self.preserve_window_len = preserve_window_len
+        self.pad = None
+        if self.preserve_window_len:
+            arb_input = (window_len, )
+            causal_pad = calc_pad_to_conserve(arb_input, self.conv,
+                                              causal_dim=causal_dim)
+            self.pad = nn.ReplicationPad1d(causal_pad)
+        self.act = ACT_FN_DICT[act_fn]()
+        # self.norm = nn.BatchNorm1d(channels_out)
+        self.pool = nn.MaxPool1d(kernel, stride=stride)
+        # self.pool = lambda x: x
+        self.norm = lambda x: x
+
+    def forward(self, x):
+        x = self.conv(x)
+        x = self.pool(self.act(x))
+        if self.preserve_window_len:
+            x = self.pad(x)
+        x = self.norm(x)
+        return x
+
+class Conv1DEncoder(nn.Module):
+    """
+    Wraps and orchestrates a sequence of Conv1DLayers
+    """
+    def __init__(self, input_shape: tuple, channels: list, kernels: list,
+                 strides: list = None, dilations: list = None,
+                 preserve_window_len: bool = False, act_fn: str = 'gelu',
+                 causal_dim: int = 0):
+        super().__init__()
+        if strides is None:
+            strides = [1 for i in range(len(kernels))]
+        assert len(kernels) == len(strides) == len(channels) == len(dilations)
+        assert len(input_shape) == 2
+        window_len = input_shape[0]
+        input_feats = input_shape[1]
+        channels = [input_feats] + channels
+        layers = []
+        for i, kernel in enumerate(kernels):
+            layers.append(Conv1DLayer(input_shape, channels[i],
+                                      channels[i+1],
+                                      kernel, strides[i], dilations[i],
+                                      preserve_window_len, act_fn,
+                                      causal_dim))
+            self.layers = nn.Sequential(*layers)
+
+    def forward(self, x):
+        return self.layers(x)
+

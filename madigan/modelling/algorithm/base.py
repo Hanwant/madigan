@@ -53,12 +53,31 @@ class Agent(ABC):
         pass
 
     @abstractmethod
+    def to(self, device: torch.device):
+        """
+        Put models (any nn.Modules) on to device
+        """
+
+    @abstractmethod
+    def train_mode(self):
+        """
+        Call before training - so modules like BatchNorm and Dropout
+        behave as intended.
+        """
+
+    @abstractmethod
+    def test_mode(self):
+        """
+        Call before inference/testing - so modules like BatchNorm and Dropout
+        behave as intended.
+        """
+
+    @abstractmethod
     def get_action(self, state: State) -> np.ndarray:
         """
-        Fundamental function.
+        Fundamental method when interacting with environment.
         Returns vector of units to purchase (+/-) for each asset
         """
-        pass
 
     @abstractmethod
     def train_step(self, sarsd=None) -> dict:
@@ -67,7 +86,6 @@ class Agent(ABC):
         to perform a batched training step
         Returns a dict of metrics I.e {'loss': loss, 'td_error': td_error}
         """
-        pass
 
     @abstractmethod
     def step(self, n: int) -> List[dict]:
@@ -78,7 +96,6 @@ class Agent(ABC):
         Performs n training steps
         and yields a list of training metrics at the interval specified by config
         """
-        pass
 
     @abstractmethod
     def explore(self, state):
@@ -86,7 +103,6 @@ class Agent(ABC):
         For interacting with the environment in training phase
         I.e may implement an eps-greedy exploration policy
         """
-        pass
 
     @abstractmethod
     def reset_state(self) -> State:

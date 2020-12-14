@@ -2,6 +2,7 @@ import os
 from typing import Union
 from pathlib import Path
 from random import random
+import copy
 
 import numpy as np
 import torch
@@ -18,7 +19,7 @@ from ...utils import default_device, DiscreteActionSpace, DiscreteRangeSpace, te
 from ...utils import ActionSpace
 from ...utils.preprocessor import make_preprocessor
 from ...utils.config import Config
-from ...utils.data import State
+from ...utils.data import State, SARSD
 
 # p = type('params', (object, ), params)
 
@@ -36,10 +37,11 @@ class DQN(OffPolicyQ):
     def __init__(self, env, preprocessor, input_shape: tuple,
                  action_space: ActionSpace, discount: float, nstep_return: int,
                  replay_size: int, replay_min_size: int, noisy_net: bool,
-                 eps: float, eps_decay: float, eps_min: float, batch_size: int,
-                 test_steps: int, unit_size: float, savepath: Union[Path, str],
+                 noisy_net_sigma: float, eps: float, eps_decay: float,
+                 eps_min: float, batch_size: int, test_steps: int,
+                 unit_size: float, savepath: Union[Path, str],
                  double_dqn: bool, tau_soft_update: float, model_class: str,
-                 model_config: Union[dict, Config], lr):
+                 model_config: Union[dict, Config], lr: float):
         super().__init__(env, preprocessor, input_shape, action_space,
                          discount, nstep_return, replay_size, replay_min_size,
                          noisy_net, eps, eps_decay, eps_min, batch_size,
@@ -49,9 +51,13 @@ class DQN(OffPolicyQ):
         self._action_space = action_space
         self.double_dqn = double_dqn
         self.discount = discount
-        self.tau_soft_update = tau_soft_update
+        # safeguard to get 0.001 instead of 0.99
+        self.tau_soft_update = min(tau_soft_update, 1-tau_soft_update)
+
         self.model_class = get_model_class(type(self).__name__, model_class)
         output_shape = (action_space.n, action_space.action_atoms)
+        model_config['noisy_net'] = noisy_net
+        model_config['noisy_net_sigma'] = noisy_net_sigma
         self.model_b = self.model_class(input_shape, output_shape,
                                         **model_config)
         self.model_t = self.model_class(input_shape, output_shape,
@@ -90,7 +96,8 @@ class DQN(OffPolicyQ):
         savepath = Path(config.basepath) / config.experiment_id / 'models'
         return cls(env, preprocessor, input_shape, action_space,
                    aconf.discount, aconf.nstep_return, aconf.replay_size,
-                   aconf.replay_min_size, aconf.noisy_net, aconf.eps,
+                   aconf.replay_min_size, aconf.noisy_net,
+                   aconf.noisy_net_sigma, aconf.eps,
                    aconf.eps_decay, aconf.eps_min, aconf.batch_size,
                    config.test_steps, unit_size, savepath, aconf.double_dqn,
                    aconf.tau_soft_update, config.model_config.model_class,
@@ -109,6 +116,22 @@ class DQN(OffPolicyQ):
         self.model_b.to(self.device)
         self.model_t.to(self.device)
         return self
+
+    def train_mode(self):
+        """
+        Called at start of training.
+        Necessary when using modules like nn.BatchNorm and nn.Dropout
+        """
+        self.model_b.train()
+        self.model_t.train()
+
+    def test_mode(self):
+        """
+        Called before testing and performing inference.
+        Necessary when using modules like nn.BatchNorm and nn.Dropout
+        """
+        self.model_b.eval()
+        self.model_t.eval()
 
     @property
     def action_space(self) -> np.ndarray:
@@ -138,10 +161,6 @@ class DQN(OffPolicyQ):
         if isinstance(actions_centered, torch.Tensor):
             actions_centered = actions_centered.cpu().numpy()
         return actions_centered * units
-        # return discrete_action_to_transaction(actions, self.action_atoms,
-        #                                       self.unit_size,
-        #                                       self.env.availableMargin,
-        #                                       self.env.currentPrices)
 
     @torch.no_grad()
     def get_qvals(self, state, target=False, device=None):
@@ -225,10 +244,10 @@ class DQN(OffPolicyQ):
                                   greedy_qvals_next)  # Gt = (bs, n_assets)
         return Gt
 
-    def train_step(self, sarsd=None):
+    def train_step(self, sarsd: SARSD = None):
         self.model_b.sample_noise()
         self.model_t.sample_noise()
-        sarsd = sarsd or self.buffer.sample(self.batch_size)
+        sarsd = self.buffer.sample(self.batch_size) if sarsd is None else sarsd
         state, action, reward, next_state, done = self.prep_sarsd_tensors(
             sarsd)
 
@@ -308,6 +327,7 @@ class DQN(OffPolicyQ):
                 transactions[i] = 0.
         return transactions
 
+
 class DQNReverser(DQN):
     """
     Extends the action space of DQN to include an action for closing positions
@@ -324,7 +344,8 @@ class DQNReverser(DQN):
         savepath = Path(config.basepath) / config.experiment_id / 'models'
         return cls(env, preprocessor, input_shape, action_space,
                    aconf.discount, aconf.nstep_return, aconf.replay_size,
-                   aconf.replay_min_size, aconf.noisy_net, aconf.eps,
+                   aconf.replay_min_size, aconf.noisy_net,
+                   aconf.noisy_net_sigma, aconf.eps,
                    aconf.eps_decay, aconf.eps_min, aconf.batch_size,
                    config.test_steps, unit_size, savepath, aconf.double_dqn,
                    aconf.tau_soft_update, config.model_config.model_class,
@@ -350,3 +371,41 @@ class DQNReverser(DQN):
                 else:
                     transactions[i] = 0.
         return transactions
+
+
+def curl_train_step_wrapper(self, sarsd: SARSD = None):
+    """
+    Prevents repeating code for agents using CURL.
+    agent.train_step can be substituted with this.
+    """
+    sarsd = sarsd or self.buffer.sample(self.batch_size)
+    state = self.prep_state_tensors(sarsd.state, batch=True)
+    # contrastive unsupervised objective
+    loss_curl = self.model_b.train_contrastive_objective(state)
+    # do normal rl training objective and add 'loss_curl' to output dict
+    return {'loss_curl': loss_curl,
+            **super(type(self), self).train_step(sarsd)}
+
+
+class DQNCURL(DQN):
+    """
+    CURL: Contrastive Unsupervised Representation Learning
+    This agent mainly just wraps the appropriate CURL-enabled nn.Module which
+    contains the actual functionality for performing CURL.
+    Keeping the main logic in the contained nn model maintains code resuability
+    at the higher abstraction of the agent and lets the model take care of
+    internal housekeeping (I.e defining and updating key encoder).
+    """
+    train_step = curl_train_step_wrapper
+
+
+class DQNReverserCURL(DQNReverser):
+    """
+    CURL: Contrastive Unsupervised Representation Learning
+    This agent mainly just wraps the appropriate CURL-enabled nn.Module which
+    contains the actual functionality for performing CURL.
+    Keeping the main logic in the contained nn model maintains code resuability
+    at the higher abstraction of the agent and lets the model take care of
+    internal housekeeping (I.e defining and updating key encoder).
+    """
+    train_step = curl_train_step_wrapper

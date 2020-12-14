@@ -82,6 +82,7 @@ class OffPolicyActorCritic(Agent):
         Accumulates experiences inside self.buffer (replay buffer for offpolicy)
         performs train_step when conditions are met (replay_min_size)
         """
+        self.train_mode()
         trn_metrics = []
         if reset:
             self.reset_state()
@@ -136,6 +137,7 @@ class OffPolicyActorCritic(Agent):
 
     @torch.no_grad()
     def test_episode(self, test_steps=None, reset=True, target=True):
+        self.test_mode()
         test_steps = test_steps or self.test_steps
         if reset:
             self.reset_state(random_port_init=False)

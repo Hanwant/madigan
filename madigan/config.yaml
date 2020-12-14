@@ -19,7 +19,7 @@ agent_config:
   nTau2: 8
   nstep_return: 3
   nsteps: 1000000
-  replay_min_size: 50000
+  replay_min_size: 20000
   replay_size: 100000
   reward_clip: &id001 !!python/tuple
   - -1.0
@@ -31,7 +31,7 @@ agent_config:
   unit_size_proportion_avM: 0.05
   proximal_portfolio_penalty: .5
   transaction_thresh: 0.02
-agent_type: IQNReverser
+agent_type: DQNReverser
 assets:
 - sine1
 basepath: /media/hemu/Data/madigan/experiments/
@@ -43,24 +43,24 @@ data_source_config:
   ema_alpha:
   - 0.3
   max_period:
-  - 1500
+  - 750
   min_period:
-  - 500
+  - 250
   noise_trend:
-  - 0.01
+  - 0.0
   phi:
-  - 0.02
+  - 0.0
   start:
   - 5.0
   theta:
   - 0.15
   trend_prob:
-  - 0.00
+  - 0.1
 data_source_type: TrendOU
 discrete_action_atoms: 3
 discrete_actions: true
 env_type: Synth
-experiment_id: IQNReverser_OU_.04_trans0.02
+experiment_id: DQNReverser_TREND_MEDIUM_NONoise_LONGKERNDilation_trans0.02
 init_cash: 1000000
 log_freq: 10000
 lot_unit_value: 10000
@@ -69,28 +69,33 @@ min_tf: 64
 model_config:
   action_atoms: 3
   actor_model_class: ConvPolicyDeterministic
-  act_fn: silu
+  act_fn: gelu
   channels:
   - 32
   - 32
   critic_model_class: ConvCriticQ
+  curl_momentum_update: 0.001
+  curl_lr: .001
   d_model: 1024
+  dilations:
+  - 3
+  - 3
   discrete_action_atoms: 3
   discrete_actions: true
   dueling: true
   iqn: true
   kernels:
-  - 5
-  - 5
+  - 12
+  - 12
+  curl_latent_size: 64
   lot_unit_value: 10000
   min_tf: 64
   model_class: ConvNet
-  noisy_net: true
-  noisy_net_sigma: 0.5
   nTau1: 32
   nTau2: 8
   n_layers: 4
-  preserve_window_len: false
+  preserve_window_len: true
+  random_crop_ratio: .7
   strides:
   - 1
   - 1

@@ -84,8 +84,7 @@ class OffPolicyQ(Agent):
         Accumulates experiences inside self.buffer (replay buffer for offpolicy)
         performs train_step when conditions are met (replay_min_size)
         """
-        self.model_b.train()
-        self.model_t.train()
+        self.train_mode()
         trn_metrics = []
         if reset:
             self.reset_state()
@@ -146,8 +145,6 @@ class OffPolicyQ(Agent):
 
     @torch.no_grad()
     def test_episode(self, test_steps=None, reset=True, target=True) -> dict:
-        self.model_b.eval()
-        self.model_t.eval()
         test_steps = test_steps or self.test_steps
         if reset:
             self.reset_state()

@@ -457,7 +457,7 @@ namespace madigan{
   const PriceVector& OU::getData() {
     for (int i=0; i < nAssets_; i++){
       double& x = currentData_(i);
-      x += (theta[i]*(mean[i]-x)) + x*phi[i]*noiseDistribution[i](generator);
+      x += (theta[i]*(mean[i]-x)) + mean[i]*phi[i]*noiseDistribution[i](generator);
     }
     timestamp_ += 1;
     return currentData_;

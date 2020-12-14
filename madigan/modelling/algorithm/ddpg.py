@@ -113,6 +113,18 @@ class DDPG(OffPolicyActorCritic):
             net.to(self.device)
         return self
 
+    def train_mode(self):
+        self.critic_b.train()
+        self.critic_t.train()
+        self.actor_b.train()
+        self.actor_t.train()
+
+    def test_mode(self):
+        self.critic_b.eval()
+        self.critic_t.eval()
+        self.actor_b.eval()
+        self.actor_t.eval()
+
     @property
     def action_space(self) -> np.ndarray:
         """

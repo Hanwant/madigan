@@ -7,63 +7,6 @@ import torch.nn as nn
 ACT_FN_DICT = {'relu': nn.ReLU, 'gelu': nn.GELU, 'silu': nn.SiLU,
                'tanhshrink': nn.Tanhshrink, 'none': lambda: lambda x: x}
 
-class Conv1DLayer(nn.Module):
-    """
-    Block unit for architectures using 1d Convs
-    """
-    def __init__(self, input_shape: tuple, channels_in: int, channels_out: int,
-                 kernel: int, stride: Iterable = None,
-                 preserve_window_len: bool = False,
-                 act_fn: str = 'gelu',
-                 causal_dim: int = 0):
-        super().__init__()
-        window_len = input_shape[0]
-        input_feats = input_shape[1]
-        self.conv = nn.Conv1d(channels_in, channels_out, kernel, stride=stride)
-        self.preserve_window_len = preserve_window_len
-        self.pad = None
-        if self.preserve_window_len:
-            arb_input = (window_len, )
-            causal_pad = calc_pad_to_conserve(arb_input, self.conv,
-                                              causal_dim=causal_dim)
-            self.pad = nn.ReplicationPad1d(causal_pad)
-        self.act = ACT_FN_DICT[act_fn]()
-
-    def forward(self, x):
-        x = self.conv(x)
-        if self.preserve_window_len:
-            x = self.pad(x)
-        x = self.act(x)
-        return x
-
-class Conv1DEncoder(nn.Module):
-    """
-    Wraps and orchestrates a sequence of Conv1DLayers
-    """
-    def __init__(self, input_shape: tuple, channels: list, kernels: list,
-                 strides: list = None, preserve_window_len: bool = False,
-                 act_fn: str = 'gelu', causal_dim: int = 0):
-        super().__init__()
-        if strides is None:
-            strides = [1 for i in range(len(kernels))]
-        assert len(kernels) == len(strides) == len(channels)
-        assert len(input_shape) == 2
-        window_len = input_shape[0]
-        input_feats = input_shape[1]
-        channels = [input_feats] + channels
-        layers = []
-        for i, kernel in enumerate(kernels):
-            layers.append(Conv1DLayer(input_shape, channels[i],
-                                      channels[i+1],
-                                      kernel, strides[i],
-                                      preserve_window_len, act_fn,
-                                      causal_dim))
-            self.layers = nn.Sequential(*layers)
-
-    def forward(self, x):
-        return self.layers(x)
-
-
 def make_conv1d_layers(input_shape,
                        kernels,
                        channels,
