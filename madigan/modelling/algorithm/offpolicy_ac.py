@@ -18,7 +18,7 @@ class OffPolicyActorCritic(Agent):
     """
     def __init__(self, env, preprocessor, input_shape,
                  action_space, discount, nstep_return, replay_size,
-                 replay_min_size, batch_size, expl_noise_sd, test_steps,
+                 replay_min_size, batch_size, test_steps,
                  savepath):
         super().__init__(env, preprocessor, input_shape,
                          action_space, discount, nstep_return, savepath)
@@ -33,7 +33,6 @@ class OffPolicyActorCritic(Agent):
         self.bufferpath = self.savepath.parent / 'replay.pkl'
         self.replay_min_size = replay_min_size
         self.batch_size = batch_size
-        self.expl_noise_sd = expl_noise_sd
         self.test_steps = test_steps
         self.n_assets = self.action_space.shape[0]  #  includes cash
         self.log_freq = 10000
@@ -127,14 +126,6 @@ class OffPolicyActorCritic(Agent):
 
             self.env_steps += 1
 
-    def explore(self,
-                state,
-                noise_sd: float = None) -> Tuple[np.ndarray, np.ndarray]:
-        noise_sd = noise_sd or self.expl_noise_sd
-        action = self.get_action(state, target=False).cpu()
-        action += noise_sd * torch.randn_like(action)
-        return action.numpy()[0], self.action_to_transaction(action)[0]
-
     @torch.no_grad()
     def test_episode(self, test_steps=None, reset=True, target=True):
         self.test_mode()
@@ -149,7 +140,7 @@ class OffPolicyActorCritic(Agent):
         while i <= test_steps:
             _tst_metrics = {}
             qvals = self.get_qvals(state, target=target)[0].cpu().numpy()
-            action, transaction = self.explore(state, noise_sd=0.)
+            action, transaction = self.get_action(state, target=target)
             state, reward, done, info = self._env.step(transaction)
             self._preprocessor.stream_state(state)
             state = self._preprocessor.current_data()

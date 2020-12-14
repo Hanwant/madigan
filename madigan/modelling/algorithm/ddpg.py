@@ -1,5 +1,5 @@
 import os
-from typing import Union
+from typing import Union, Tuple
 from pathlib import Path
 
 import numpy as np
@@ -32,18 +32,19 @@ class DDPG(OffPolicyActorCritic):
     def __init__(self, env, preprocessor, input_shape: tuple,
                  action_space: ActionSpace, discount: float, nstep_return: int,
                  replay_size: int, replay_min_size: int, batch_size: int,
-                 expl_noise_sd: float, test_steps: int,
-                 savepath: Union[Path, str], double_dqn: bool,
+                 test_steps: int, savepath: Union[Path, str],
+                 expl_noise_sd: float, double_dqn: bool,
                  tau_soft_update: float, model_class_critic: str,
                  model_class_actor: str, lr_critic: float, lr_actor: float,
                  model_config: Union[dict, Config],
                  proximal_portfolio_penalty: float):
         super().__init__(env, preprocessor, input_shape, action_space,
                          discount, nstep_return, replay_size, replay_min_size,
-                         batch_size, expl_noise_sd, test_steps, savepath)
+                         batch_size, test_steps, savepath)
 
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self._action_space.transform = self.action_to_transaction
+        self.expl_noise_sd = expl_noise_sd
         self.double_dqn = double_dqn
         self.discount = discount
         self.tau_soft_update = tau_soft_update
@@ -53,7 +54,6 @@ class DDPG(OffPolicyActorCritic):
         self.actor_model_class = get_model_class(
             type(self).__name__, model_class_actor)
 
-        # import ipdb; ipdb.set_trace()
 
         self.critic_b = self.critic_model_class(input_shape, self.n_assets, 1,
                                                 **model_config)
@@ -92,7 +92,7 @@ class DDPG(OffPolicyActorCritic):
         return cls(env, preprocessor, input_shape, action_space,
                    aconf.discount, aconf.nstep_return, aconf.replay_size,
                    aconf.replay_min_size, aconf.batch_size,
-                   aconf.expl_noise_sd, config.test_steps, savepath,
+                   config.test_steps, savepath, aconf.expl_noise_sd,
                    aconf.double_dqn, aconf.tau_soft_update,
                    config.model_config.critic_model_class,
                    config.model_config.actor_model_class,
@@ -166,6 +166,15 @@ class DDPG(OffPolicyActorCritic):
         if target:
             return self.actor_t(state).squeeze(-1)
         return self.actor_b(state).squeeze(-1)
+
+    def explore(self,
+                state,
+                noise_sd: float = None) -> Tuple[np.ndarray, np.ndarray]:
+        noise_sd = noise_sd or self.expl_noise_sd
+        action = self.get_action(state, target=False).cpu()
+        action += noise_sd * torch.randn_like(action)
+        return action.numpy()[0], self.action_to_transaction(action)[0]
+
 
     def action_to_transaction(self, actions: torch.Tensor) -> np.ndarray:
         """
