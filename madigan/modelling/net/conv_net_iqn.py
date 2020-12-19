@@ -4,7 +4,7 @@ from functools import reduce, partial
 import torch
 import torch.nn as nn
 
-from .common import NoisyLinear, Conv1DEncoder
+from .common import NoisyLinear, Conv1DEncoder, ConvNetStateEncoder
 from .base import QNetworkBase
 from .utils import calc_pad_to_conserve, ACT_FN_DICT
 from ...utils.data import State
@@ -108,8 +108,8 @@ class ConvNetIQN(QNetworkBase):
         """
         super().__init__()
 
-        assert len(kernels) == len(strides) == len(channels)
-        assert len(input_shape) == 2
+        assert len(input_shape) == 2, \
+            "input_shape should be (window_len, n_feats)"
         window_len = input_shape[0]
         assert window_len >= reduce(lambda x, y: x+y, kernels), \
             "window_length should be at least as long as sum of kernels"
@@ -119,31 +119,24 @@ class ConvNetIQN(QNetworkBase):
         self.action_atoms = output_shape[1]
         self.d_model = d_model
         self.act = ACT_FN_DICT[act_fn]()
-        self.conv_encoder = Conv1DEncoder(
+        self.convnet_state_encoder = ConvNetStateEncoder(
             input_shape,
-            kernels,
+            self.n_assets,
+            d_model,
             channels,
-            strides=strides,
+            kernels,
+            strides,
             preserve_window_len=preserve_window_len,
             act_fn=act_fn,
-            causal_dim=0)
+            noisy_net=noisy_net,
+            noisy_net_sigma=noisy_net_sigma,
+            **extra)
 
         self.noisy_net = noisy_net
-        Linear = partial(NoisyLinear, sigma=noisy_net_sigma) \
-            if noisy_net else nn.Linear
-
-        dummy_input = torch.randn(1, *input_shape[::-1])
-        conv_out_shape = self.conv_encoder(dummy_input).shape
-        self.price_project = Linear(conv_out_shape[-1] * conv_out_shape[-2],
-                                    d_model)
-        # normalized portfolio vector fed to model is number of assets + 1
-        # +1 for cash (base currency) which is also included in the vector
-        self.port_project = Linear(self.n_assets + 1, d_model)
         self.tau_embed_layer = TauEmbedLayer(tau_embed_size, self.d_model,
                                              noisy_net=noisy_net,
                                              noisy_net_sigma=noisy_net_sigma)
         self.nTau = nTau
-        self.noisy_net = noisy_net
         if dueling:
             self.output_head = DuelingHeadIQN(d_model, output_shape,
                                               noisy_net=noisy_net,
@@ -159,15 +152,7 @@ class ConvNetIQN(QNetworkBase):
         Given a State object containing tensors as .price and .portfolio
         attributes, returns an embedding of shape (bs, d_model)
         """
-        price = state.price.transpose(-1,
-                                      -2)  # switch features and time dimension
-        port = state.portfolio
-        price_emb = self.conv_encoder(price).view(price.shape[0], -1)
-        price_emb = self.price_project(price_emb)
-        port_emb = self.port_project(port)
-        state_emb = price_emb * port_emb
-        out = self.act(state_emb)
-        return out
+        return self.convnet_state_encoder(state)
 
     def forward(self,
                 state: State = None,

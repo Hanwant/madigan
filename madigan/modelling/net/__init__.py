@@ -1,6 +1,7 @@
 from .conv_net import ConvNet
 from .conv_net_ddpg import ConvCriticQ as ConvCriticQ_DDPG
 from .conv_net_ddpg import ConvPolicyDeterministic as ConvPolicy_DDPG
+from .conv_net_sac import ConvPolicySACD, TwinQNetwork
 from .conv_net import ConvNetCurl
 from .series_net import SeriesNetQ
 from .conv_net_iqn import ConvNetIQN
@@ -33,12 +34,20 @@ def get_model_class(agent_type, model_type):
         if model_type in ("ConvNet", "ConvNetIQN"):
             return ConvNetIQN
         raise model_na
+    # if agent_type in ("IQNCURL", ):
+    #     if model_type in ("ConvNet", "ConvNetIQN", "ConvNetCurl"):
+    #         return ConvNetIQNCURL
     if agent_type in ("DDPG", "DDPGDiscretized"):
-        if model_type in ("ConvNet", "ConvCriticQ"):
+        if model_type in ("ConvCriticQ", ):
             return ConvCriticQ_DDPG
-        if model_type in ("ConvNet", "ConvPolicyDeterministic"):
+        if model_type in ("ConvPolicyDeterministic", ):
             return ConvPolicy_DDPG
         raise model_na
+    if agent_type in ("SACDiscrete", ):
+        if model_type in ("ConvPolicySACD", ):
+            return ConvPolicySACD
+        if model_type in ("TwinQNetwork", ):
+            return TwinQNetwork
 
     raise NotImplementedError(f"model {model_type} for agent " +
                               "{agent_type} not Implemented")

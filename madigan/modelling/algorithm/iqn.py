@@ -12,7 +12,7 @@ from ..net.conv_net_iqn import ConvNetIQN
 from ...utils import default_device, DiscreteActionSpace, DiscreteRangeSpace, ternarize_array
 from ...utils.preprocessor import make_preprocessor
 from ...utils.config import Config
-from ...utils.data import State
+from ...utils.data import State, SARSD
 
 
 def get_model_class(name):
@@ -48,6 +48,7 @@ class IQN(DQN):
             replay_size: int,
             replay_min_size: int,
             noisy_net: bool,
+            noisy_net_sigma: float,
             eps: float,
             eps_decay: float,
             eps_min: float,
@@ -68,9 +69,10 @@ class IQN(DQN):
             k_huber: float):
         super().__init__(env, preprocessor, input_shape, action_space,
                          discount, nstep_return, replay_size, replay_min_size,
-                         noisy_net, eps, eps_decay, eps_min, batch_size,
-                         test_steps, unit_size, savepath, double_dqn,
-                         tau_soft_update, model_class, model_config, lr)
+                         noisy_net, noisy_net_sigma, eps, eps_decay, eps_min,
+                         batch_size, test_steps, unit_size, savepath,
+                         double_dqn, tau_soft_update, model_class,
+                         model_config, lr)
 
         self.nTau1 = nTau1
         self.nTau2 = nTau2
@@ -82,14 +84,15 @@ class IQN(DQN):
         env = make_env(config)
         preprocessor = make_preprocessor(config)
         input_shape = preprocessor.feature_output_shape
-        atoms = config.discrete_action_atoms
+        atoms = config.discrete_action_atoms + 1
         action_space = DiscreteRangeSpace((0, atoms), config.n_assets)
         aconf = config.agent_config
         unit_size = aconf.unit_size_proportion_avM
         savepath = Path(config.basepath)/config.experiment_id/'models'
         return cls(env, preprocessor, input_shape, action_space,
                    aconf.discount, aconf.nstep_return, aconf.replay_size,
-                   aconf.replay_min_size, aconf.noisy_net, aconf.eps,
+                   aconf.replay_min_size, aconf.noisy_net,
+                   aconf.noisy_net_sigma, aconf.eps,
                    aconf.eps_decay, aconf.eps_min, aconf.batch_size,
                    config.test_steps, unit_size, savepath, aconf.double_dqn,
                    aconf.tau_soft_update, config.model_config.model_class,
@@ -218,47 +221,27 @@ class IQN(DQN):
 
         return quantile_loss.mean(-1).sum(-1).mean(), td_error.abs().mean()
 
-class IQNReverser(IQN):
-    """
-    Extends the action space of IQN to include an action for closing positions
-    """
-    @classmethod
-    def from_config(cls, config):
-        env = make_env(config)
-        preprocessor = make_preprocessor(config)
-        input_shape = preprocessor.feature_output_shape
-        atoms = config.discrete_action_atoms + 1
-        action_space = DiscreteRangeSpace((0, atoms), config.n_assets)
-        aconf = config.agent_config
-        unit_size = aconf.unit_size_proportion_avM
-        savepath = Path(config.basepath)/config.experiment_id/'models'
-        return cls(env, preprocessor, input_shape, action_space,
-                   aconf.discount, aconf.nstep_return, aconf.replay_size,
-                   aconf.replay_min_size, aconf.noisy_net, aconf.eps,
-                   aconf.eps_decay, aconf.eps_min, aconf.batch_size,
-                   config.test_steps, unit_size, savepath, aconf.double_dqn,
-                   aconf.tau_soft_update, config.model_config.model_class,
-                   config.model_config, config.optim_config.lr,
-                   config.agent_config.nTau1, config.agent_config.nTau2,
-                   config.agent_config.k_huber)
 
-    def action_to_transaction(
-            self, actions: Union[torch.Tensor, np.ndarray]) -> np.ndarray:
+class IQNCURL(IQN):
+    """
+    CURL: Contrastive Unsupervised Representation Learning
+    This agent mainly just wraps the appropriate CURL-enabled nn.Module which
+    contains the actual functionality for performing CURL.
+    Keeping the main logic in the contained nn model maintains code resuability
+    at the higher abstraction of the agent and lets the model take care of
+    internal housekeeping (I.e defining and updating key encoder).
+    """
+    def train_step(self, sarsd: SARSD = None):
         """
-        Takes output from net and converts to transaction units
+        wraps train_step() of DQN to include the curl objective
         """
-        units = self.unit_size * self._env.availableMargin \
-            / self._env.currentPrices
-        actions_centered = (actions - (self.action_atoms // 2))
-        if isinstance(actions_centered, torch.Tensor):
-            actions_centered = actions_centered.cpu().numpy()
-        transactions = actions_centered * units
-        # Reverse position if action is idx 0 and position exists
-        for i, act in enumerate(actions):
-            if act == 0:
-                current_holding = self._env.ledger[i]
-                if current_holding != 0:
-                    transactions[i] = -current_holding
-                else:
-                    transactions[i] = 0.
-        return transactions
+        sarsd = sarsd or self.buffer.sample(self.batch_size)
+        state = self.prep_state_tensors(sarsd.state, batch=True)
+        # contrastive unsupervised objective
+        loss_curl = self.model_b.train_contrastive_objective(state)
+        # do normal rl training objective and add 'loss_curl' to output dict
+        return {'loss_curl': loss_curl, **super().train_step(sarsd)}
+
+
+# for temporary backward comp
+IQNReverser = IQN

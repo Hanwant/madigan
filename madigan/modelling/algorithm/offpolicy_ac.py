@@ -35,6 +35,7 @@ class OffPolicyActorCritic(Agent):
         self.batch_size = batch_size
         self.test_steps = test_steps
         self.n_assets = self.action_space.shape[0]  #  includes cash
+        self.action_atoms = self.action_space.action_atoms
         self.log_freq = 10000
 
     def save_buffer(self):
@@ -91,7 +92,8 @@ class OffPolicyActorCritic(Agent):
         running_cost = 0.  # for logging
         max_steps = self.training_steps + n
         while True:
-            action, transaction = self.explore(state)
+            action = self.explore(state).cpu().numpy()
+            transaction = self.action_to_transaction(action)
             _next_state, reward, done, info = self._env.step(transaction)
 
             running_cost += np.sum(info.brokerResponse.transactionCost)
@@ -140,7 +142,8 @@ class OffPolicyActorCritic(Agent):
         while i <= test_steps:
             _tst_metrics = {}
             qvals = self.get_qvals(state, target=target)[0].cpu().numpy()
-            action, transaction = self.get_action(state, target=target)
+            action = self.get_action(state, target=target)
+            transaction = self.action_to_transaction(action)
             state, reward, done, info = self._env.step(transaction)
             self._preprocessor.stream_state(state)
             state = self._preprocessor.current_data()

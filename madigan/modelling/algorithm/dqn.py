@@ -10,7 +10,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from .offpolicy_q import OffPolicyQ
-from .utils import discrete_action_to_transaction
+from .utils import discrete_action_to_transaction, abs_port_norm
 from ..utils import get_model_class
 from ...environments import make_env
 from ..net.conv_net import ConvNet
@@ -89,7 +89,7 @@ class DQN(OffPolicyQ):
         env = make_env(config)
         preprocessor = make_preprocessor(config)
         input_shape = preprocessor.feature_output_shape
-        atoms = config.discrete_action_atoms
+        atoms = config.discrete_action_atoms + 1
         action_space = DiscreteRangeSpace((0, atoms), config.n_assets)
         aconf = config.agent_config
         unit_size = aconf.unit_size_proportion_avM
@@ -144,23 +144,26 @@ class DQN(OffPolicyQ):
         # self._action_space.action_multiplier = units
         return self._action_space
 
-    def abs_norm(self, port: torch.Tensor):
-        return port / port.abs().sum(-1, keepdim=True)
-
-    def renorm(self, abs_norm_port):
-        return abs_norm_port * 1 / abs_norm_port.sum(-1, keepdim=True)
-
-    def action_to_transaction(self, actions: torch.Tensor) -> np.ndarray:
+    def action_to_transaction(
+            self, actions: Union[torch.Tensor, np.ndarray]) -> np.ndarray:
         """
         Takes output from net and converts to transaction units
         """
-        if self.action_atoms % 2 == 0:
-            raise ValueError("action atoms should be an odd number")
-        units = self.unit_size*self._env.availableMargin/self._env.currentPrices
+        units = self.unit_size * self._env.availableMargin \
+            / self._env.currentPrices
         actions_centered = (actions - (self.action_atoms // 2))
         if isinstance(actions_centered, torch.Tensor):
             actions_centered = actions_centered.cpu().numpy()
-        return actions_centered * units
+        transactions = actions_centered * units
+        # Reverse position if action is '0' and position exists
+        for i, act in enumerate(actions):
+            if act == 0:
+                current_holding = self._env.ledger[i]
+                if current_holding != 0:
+                    transactions[i] = -current_holding
+                else:
+                    transactions[i] = 0.
+        return transactions
 
     @torch.no_grad()
     def get_qvals(self, state, target=False, device=None):
@@ -203,13 +206,13 @@ class DQN(OffPolicyQ):
                                     dtype=torch.float32).to(self.device)
             port = torch.as_tensor(state.portfolio[:, -1],
                                    dtype=torch.float32).to(self.device)
-        return State(price, self.abs_norm(port), state.timestamp)
+        return State(price, abs_port_norm(port), state.timestamp)
 
     def prep_sarsd_tensors(self, sarsd, device=None):
         state = self.prep_state_tensors(sarsd.state, batch=True)
         action = torch.as_tensor(sarsd.action,
                                  dtype=torch.long,
-                                 device=self.device)  #[..., 0]
+                                 device=self.device)  # [..., 0]
         reward = torch.as_tensor(sarsd.reward,
                                  dtype=torch.float32,
                                  device=self.device)
@@ -328,65 +331,6 @@ class DQN(OffPolicyQ):
         return transactions
 
 
-class DQNReverser(DQN):
-    """
-    Extends the action space of DQN to include an action for closing positions
-    """
-    @classmethod
-    def from_config(cls, config):
-        env = make_env(config)
-        preprocessor = make_preprocessor(config)
-        input_shape = preprocessor.feature_output_shape
-        atoms = config.discrete_action_atoms + 1
-        action_space = DiscreteRangeSpace((0, atoms), config.n_assets)
-        aconf = config.agent_config
-        unit_size = aconf.unit_size_proportion_avM
-        savepath = Path(config.basepath) / config.experiment_id / 'models'
-        return cls(env, preprocessor, input_shape, action_space,
-                   aconf.discount, aconf.nstep_return, aconf.replay_size,
-                   aconf.replay_min_size, aconf.noisy_net,
-                   aconf.noisy_net_sigma, aconf.eps,
-                   aconf.eps_decay, aconf.eps_min, aconf.batch_size,
-                   config.test_steps, unit_size, savepath, aconf.double_dqn,
-                   aconf.tau_soft_update, config.model_config.model_class,
-                   config.model_config, config.optim_config.lr)
-
-    def action_to_transaction(
-            self, actions: Union[torch.Tensor, np.ndarray]) -> np.ndarray:
-        """
-        Takes output from net and converts to transaction units
-        """
-        units = self.unit_size * self._env.availableMargin \
-            / self._env.currentPrices
-        actions_centered = (actions - (self.action_atoms // 2))
-        if isinstance(actions_centered, torch.Tensor):
-            actions_centered = actions_centered.cpu().numpy()
-        transactions = actions_centered * units
-        # Reverse position if action is '0' and position exists
-        for i, act in enumerate(actions):
-            if act == 0:
-                current_holding = self._env.ledger[i]
-                if current_holding != 0:
-                    transactions[i] = -current_holding
-                else:
-                    transactions[i] = 0.
-        return transactions
-
-
-def curl_train_step_wrapper(self, sarsd: SARSD = None):
-    """
-    Prevents repeating code for agents using CURL.
-    agent.train_step can be substituted with this.
-    """
-    sarsd = sarsd or self.buffer.sample(self.batch_size)
-    state = self.prep_state_tensors(sarsd.state, batch=True)
-    # contrastive unsupervised objective
-    loss_curl = self.model_b.train_contrastive_objective(state)
-    # do normal rl training objective and add 'loss_curl' to output dict
-    return {'loss_curl': loss_curl,
-            **super(type(self), self).train_step(sarsd)}
-
-
 class DQNCURL(DQN):
     """
     CURL: Contrastive Unsupervised Representation Learning
@@ -396,16 +340,17 @@ class DQNCURL(DQN):
     at the higher abstraction of the agent and lets the model take care of
     internal housekeeping (I.e defining and updating key encoder).
     """
-    train_step = curl_train_step_wrapper
+    def train_step(self, sarsd: SARSD = None):
+        """
+        wraps train_step() of DQN to include the curl objective
+        """
+        sarsd = sarsd or self.buffer.sample(self.batch_size)
+        state = self.prep_state_tensors(sarsd.state, batch=True)
+        # contrastive unsupervised objective
+        loss_curl = self.model_b.train_contrastive_objective(state)
+        # do normal rl training objective and add 'loss_curl' to output dict
+        return {'loss_curl': loss_curl, **super().train_step(sarsd)}
 
 
-class DQNReverserCURL(DQNReverser):
-    """
-    CURL: Contrastive Unsupervised Representation Learning
-    This agent mainly just wraps the appropriate CURL-enabled nn.Module which
-    contains the actual functionality for performing CURL.
-    Keeping the main logic in the contained nn model maintains code resuability
-    at the higher abstraction of the agent and lets the model take care of
-    internal housekeeping (I.e defining and updating key encoder).
-    """
-    train_step = curl_train_step_wrapper
+# For temporary backwards-comp
+DQNReverser = DQN

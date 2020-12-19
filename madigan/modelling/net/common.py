@@ -1,10 +1,12 @@
 import math
-from functools import partial
+from functools import partial, reduce
 
 import torch
 import torch.nn as nn
 from torch.nn.functional import linear as linear_func
 
+from .utils import ACT_FN_DICT, calc_pad_to_conserve
+from ...utils.data import State
 
 class PortEmbed(nn.Module):
     """
@@ -158,3 +160,81 @@ class Conv1DEncoder(nn.Module):
     def forward(self, x):
         return self.layers(x)
 
+
+class ConvNetStateEncoder(nn.Module):
+    """
+    Wraps Conv1DEncoder and integrates conditional information I.e portfolio
+    Note that for noisy linear layers to be registered automatically, this
+    must be wrapped in a class inheriting from QNetworkBase.
+
+    Can be used in AC agents I.e DDPG - noisy_net will be false by default
+
+    """
+    def __init__(self,
+                 input_shape: tuple,
+                 n_assets: int,
+                 d_model: int = 512,
+                 channels: list = [32, 32],
+                 kernels: list = [5, 5],
+                 strides: list = [1, 1],
+                 dilations: list = [1, 1],
+                 preserve_window_len: bool = False,
+                 act_fn: str = 'silu',
+                 noisy_net: bool = False,
+                 noisy_net_sigma: float = 0.5,
+                 **extra):
+        """
+        input_shape: (window_length, n_features)
+        """
+        super().__init__()
+
+        window_len = input_shape[0]
+        assert window_len >= reduce(lambda x, y: x+y, kernels), \
+            "window_length should be at least as long as sum of kernels"
+
+        self.input_shape = input_shape
+        self.window_len = window_len
+        self.n_assets = n_assets
+        self.d_model = d_model
+        self.act = ACT_FN_DICT[act_fn]()
+        self.conv_encoder = Conv1DEncoder(
+            input_shape,
+            channels,
+            kernels,
+            strides=strides,
+            dilations=dilations,
+            preserve_window_len=preserve_window_len,
+            act_fn=act_fn,
+            causal_dim=0)
+
+        self.noisy_net = noisy_net
+        self.noisy_net_sigma = noisy_net_sigma
+        Linear = partial(NoisyLinear, sigma=noisy_net_sigma) \
+            if noisy_net else nn.Linear
+
+        # dummy_input = torch.randn(1, *input_shape[::-1])
+        # conv_out_shape = self.conv_encoder(dummy_input).shape
+        # conv_out_size = conv_out_shape[-1] * conv_out_shape[-2]
+        pool_size = d_model // channels[-1]
+        # print(conv_out_shape, conv_out_size, pool_size, d_model)
+        self.price_pool = nn.AdaptiveMaxPool1d(pool_size)
+
+        # normalized portfolio vector fed to model is number of assets + 1
+        # +1 for cash (base currency) which is also included in the vector
+        self.port_project = Linear(self.n_assets + 1, d_model)
+
+    def forward(self, state: State):
+        """
+        Given a State object containing tensors as .price and .portfolio
+        attributes, returns an embedding of shape (bs, d_model)
+        """
+        price = state.price.transpose(-1,
+                                      -2)  # switch features and time dimension
+        port = state.portfolio
+        price_emb = self.conv_encoder(price)
+        price_emb = self.price_pool(price_emb).view(price.shape[0], -1)
+        # price_emb = self.price_project(price_emb)
+        port_emb = self.port_project(port)
+        state_emb = price_emb * port_emb
+        out = self.act(state_emb)
+        return out

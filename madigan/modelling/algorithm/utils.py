@@ -47,3 +47,4 @@ def abs_port_denorm(abs_norm_port: torch.Tensor) -> torch.Tensor:
     To recover original portfolio
     """
     return abs_norm_port * 1 / abs_norm_port.sum(-1, keepdim=True)
+

@@ -9,12 +9,13 @@ import torch
 import torch.nn as nn
 
 from .offpolicy_ac import OffPolicyActorCritic
+from .utils import abs_port_norm
 from ..utils import get_model_class
-from ...utils import ActionSpace, ContinuousActionSpace
+from ...utils import ActionSpace, DiscreteRangeSpace, list_2_dict
 from ...utils.config import Config
 from ...utils.data import State
 from ...utils.preprocessor import make_preprocessor
-from ...environments import make_env
+from ...environments import make_env, get_env_info
 
 
 class SACDiscrete(OffPolicyActorCritic):
@@ -41,49 +42,60 @@ class SACDiscrete(OffPolicyActorCritic):
     def __init__(self, env, preprocessor, input_shape: tuple,
                  action_space: ActionSpace, discount: float, nstep_return: int,
                  replay_size: int, replay_min_size: int, batch_size: int,
-                 target_entropy_ratio: float, test_steps: int,
-                 savepath: Union[Path, str], double_dqn: bool,
-                 tau_soft_update: float, model_class_critic: str,
-                 model_class_actor: str, lr_critic: float, lr_actor: float,
-                 model_config: Union[dict, Config],
-                 proximal_portfolio_penalty: float):
+                 test_steps: int, savepath: Union[Path, str],
+                 learn_entropy_temp: bool, entropy_temp: float,
+                 target_entropy_ratio: float,
+                 double_dqn: bool, tau_soft_update: float,
+                 model_class_critic: str, model_class_actor: str,
+                 lr_critic: float, lr_actor: float,
+                 model_config: Union[dict, Config], unit_size: float):
         super().__init__(env, preprocessor, input_shape, action_space,
                          discount, nstep_return, replay_size, replay_min_size,
-                         batch_size, expl_noise_sd, test_steps, savepath)
+                         batch_size, test_steps, savepath)
 
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self._action_space.transform = self.action_to_transaction
         self.double_dqn = double_dqn
         self.discount = discount
         self.tau_soft_update = tau_soft_update
+        self.unit_size = unit_size
         # output_shape = action_space.output_shape
         self.critic_model_class = get_model_class(
             type(self).__name__, model_class_critic)
         self.actor_model_class = get_model_class(
             type(self).__name__, model_class_actor)
 
-        # 1/|A| == max entropy
-        self.target_entropy = \
-            -math.log(1. / self.action_space.shape[1]) * target_entropy_ratio
-        self.log_temp = torch.zeros(1, requires_grad=True, device=self.device)
-        self.temp = self.log_temp.exp()
-
-        self.critic_b = self.critic_model_class(input_shape, self.n_assets, 1,
+        output_shape = (action_space.n, action_space.action_atoms)
+        self.critic_b = self.critic_model_class(input_shape, output_shape,
                                                 **model_config)
-        self.critic_t = self.critic_model_class(input_shape, self.n_assets, 1,
+        self.critic_t = self.critic_model_class(input_shape, output_shape,
                                                 **model_config)
         for param in self.critic_t.modules():
             param.requires_grad = False
 
-        self.actor = self.actor_model_class(input_shape, self.n_assets, 1,
+        self.actor = self.actor_model_class(input_shape, output_shape,
                                             **model_config)
         self.opt_critic1 = torch.optim.Adam(self.critic_b.Q1.parameters(),
                                             lr=lr_critic)
         self.opt_critic2 = torch.optim.Adam(self.critic_b.Q2.parameters(),
                                             lr=lr_critic)
-        self.opt_actor = torch.optim.Adam(self.actor_b.parameters(),
-                                          lr=lr_actor)
-        self.opt_temp = torch.optim.Adam([self.log_alpha], lr=lr_actor)
+        self.opt_actor = torch.optim.Adam(self.actor.parameters(), lr=lr_actor)
+
+        self.learn_entropy_temp = learn_entropy_temp
+        # 1/|A| == max entropy
+        self.target_entropy_ratio = target_entropy_ratio
+        if learn_entropy_temp:
+            self.target_entropy = \
+                -math.log(1. / self.action_space.action_atoms) * \
+                target_entropy_ratio
+
+            self.log_temp = torch.zeros(1, requires_grad=True,
+                                        device=self.device)
+            self.temp = self._temp
+            self.opt_entropy_temp = torch.optim.Adam([self.log_temp],
+                                                     lr=lr_actor)
+        else:
+            self.temp = entropy_temp
 
         if not self.savepath.is_dir():
             self.savepath.mkdir(parents=True)
@@ -91,9 +103,13 @@ class SACDiscrete(OffPolicyActorCritic):
             self.load_state()
         else:
             self.critic_t.load_state_dict(self.critic_b.state_dict())
-            self.actor_t.load_state_dict(self.actor_b.state_dict())
-        self.proximal_portfolio_penalty = proximal_portfolio_penalty
-        self.norm_penalty = 1.
+
+    @property
+    def _temp(self):
+        """
+        If self.learn_entropy_temp, then this is used for self.temp
+        """
+        return self.log_temp.exp()
 
     @classmethod
     def from_config(cls, config):
@@ -101,20 +117,22 @@ class SACDiscrete(OffPolicyActorCritic):
         preprocessor = make_preprocessor(config)
         input_shape = preprocessor.feature_output_shape
         # add an extra asset for cash holdings
-        # used in representation of port weights
-        # I.e returned by env.ledgerNormedFull
-        action_space = ContinuousActionSpace(-1., 1., config.n_assets + 1, 1)
+        # used in repr of port weights returned by env.ledgerNormedFull
+        atoms = config.discrete_action_atoms + 1
+        action_space = DiscreteRangeSpace((0, atoms), config.n_assets)
         aconf = config.agent_config
+        unit_size = aconf.unit_size_proportion_avM
         savepath = Path(config.basepath) / config.experiment_id / 'models'
         return cls(env, preprocessor, input_shape, action_space,
                    aconf.discount, aconf.nstep_return, aconf.replay_size,
-                   aconf.replay_min_size, aconf.batch_size,
-                   aconf.target_entropy_ratio, config.test_steps, savepath,
-                   aconf.double_dqn, aconf.tau_soft_update,
+                   aconf.replay_min_size, aconf.batch_size, config.test_steps,
+                   savepath, aconf.learn_entropy_temp, aconf.entropy_temp,
+                   aconf.target_entropy_ratio, aconf.double_dqn,
+                   aconf.tau_soft_update,
                    config.model_config.critic_model_class,
                    config.model_config.actor_model_class,
                    config.optim_config.lr_critic, config.optim_config.lr_actor,
-                   config.model_config, aconf.proximal_portfolio_penalty)
+                   config.model_config, unit_size)
 
     @property
     def env(self):
@@ -149,7 +167,10 @@ class SACDiscrete(OffPolicyActorCritic):
         return self._action_space
 
     @torch.no_grad()
-    def get_qvals(self, state: State, target: bool = False):
+    def get_qvals(self,
+                  state: State,
+                  actions: torch.Tensor = None,
+                  target: bool = False):
         """
         External interface - for inference and env interaction
         Takes in numpy arrays
@@ -157,48 +178,57 @@ class SACDiscrete(OffPolicyActorCritic):
         """
         state = self.prep_state_tensors(state)
         if target:
-            return self.critic_t(state)
-        return self.critic_b(state)
+            q1, q2 = self.critic_t(state)
+        else:
+            q1, q2 = self.critic_b(state)
+        if actions is not None:
+            if len(actions.shape) == 2:
+                actions = actions[..., None]
+            actions = torch.LongTensor(actions).to(state.price.device)
+            q1 = q1.gather(-1, actions)[..., 0]
+            q2 = q2.gather(-1, actions)[..., 0]
+        return q1, q2
 
     @torch.no_grad()
-    def get_action(self, state: State, target: bool = False)
+    def get_action(self, state: State, target: bool = False):
         """
         External interface - for inference and env interaction
         takes in numpy arrays and returns greedy actions
         """
         state = self.prep_state_tensors(state)
-        return self.actor.get_action(state).squeeze(-1)
+        return self.actor.get_action(state).squeeze(-1).cpu().numpy()
 
     def explore(self, state: State):
         """
         Used when interacting with env and collecting experiences
         """
+        state = self.prep_state_tensors(state)
         action, action_p, log_action_p = self.actor.sample(state)
         return action
 
-
-    def action_to_transaction(self, actions: torch.Tensor) -> np.ndarray:
+    def action_to_transaction(
+            self, actions: Union[torch.Tensor, np.ndarray]) -> np.ndarray:
         """
         Takes output from net and converts to transaction units
-        Given current ledgerNormedFull - portfolio weights (incl cash)
-        and current prices
         """
-        assert actions.shape[1:] == (self.n_assets, )
-        # cash_pct = self.env.cash / self.env.equity
-        # current_port = np.concatenate(([cash_pct], self.env.ledgerNormed))
-        current_port = self.env.ledgerNormedFull
-        assert abs(current_port.sum() - 1.) < 1e-8
-        # actions = actions.cpu().numpy()
-        desired_port = actions / actions.sum(axis=-1)
-        # max_amount = self.env.availableMargin * 0.25
-        amounts = (desired_port - current_port) * self.env.equity
-        # amounts = ((desired_port - current_port) * self.env.equity
-        #            ).clip(-max_amount, max_amount)
-        units = amounts[..., 1:] / self.env.currentPrices  # element wise div
-        return units
+        units = self.unit_size * self._env.availableMargin \
+            / self._env.currentPrices
+        actions_centered = (actions - (self.action_atoms // 2))
+        if isinstance(actions_centered, torch.Tensor):
+            actions_centered = actions_centered.cpu().numpy()
+        transactions = actions_centered * units
+        # Reverse position if action is '0' and position exists
+        for i, act in enumerate(actions):
+            if act == 0:
+                current_holding = self._env.ledger[i]
+                if current_holding != 0:
+                    transactions[i] = -current_holding
+                else:
+                    transactions[i] = 0.
+        return transactions
 
     def get_transactions(self, state, target=False, device=None):
-        actions = self.get_actions(state, target, device)
+        actions = self.get_action(state, target, device)
         transactions = self.actions_to_transactions(actions)
         return transactions
 
@@ -214,17 +244,13 @@ class SACDiscrete(OffPolicyActorCritic):
                                     dtype=torch.float32).to(self.device)
             port = torch.as_tensor(state.portfolio[:, -1],
                                    dtype=torch.float32).to(self.device)
-
-
 #         timestamp = torch.as_tensor(state.timestamp)
-        return State(price, port, state.timestamp)
+        return State(price, abs_port_norm(port), state.timestamp)
 
     def prep_sarsd_tensors(self, sarsd, device=None):
         state = self.prep_state_tensors(sarsd.state, batch=True)
-        #         action = np.rint(sarsd.action // self.lot_unit_value) + self.action_atoms//2
-        # action = self.transactions_to_actions(sarsd.action)
         action = torch.as_tensor(sarsd.action,
-                                 dtype=torch.float32,
+                                 dtype=torch.long,
                                  device=self.device)
         reward = torch.as_tensor(sarsd.reward,
                                  dtype=torch.float32,
@@ -247,12 +273,9 @@ class SACDiscrete(OffPolicyActorCritic):
         action, action_p, log_action_p = \
             self.actor.sample(next_state)
         qvals_next1, qvals_next2 = self.critic_t(next_state)
-        qvals_next = (action_p * (torch.min(qvals_next1, qvals_next2)
-                                  - self.temp*log_action_p)
-                      ).sum(dim=-1, keepdim=True)
-        print(action_p.shape, qvals_next.shape,
-              torch.min(qvals_next1, qvals_next2).shape,
-              torch.min(qvals_next1, qvals_next2, dim=-1).shape)
+        qvals_next = (action_p * (torch.min(qvals_next1, qvals_next2) -
+                                  self.temp * log_action_p)
+                      ).sum(dim=-1, keepdim=False)
 
         # reward and done have an extended dimension to accommodate for n_assets
         # As actions for different assets are considered in parallel
@@ -261,37 +284,14 @@ class SACDiscrete(OffPolicyActorCritic):
                                   qvals_next)  # Gt = (bs, n_assets)
         return Gt
 
-    def train_step(self, sarsd=None):
-        sarsd = sarsd or self.buffer.sample(self.batch_size)
-        state, action, reward, next_state, done = \
-            self.prep_sarsd_tensors(sarsd)
-        loss_critic1, loss_critic2, Qt1, Qt2, Gt = \
-            self.train_step_critic(state, action, reward, next_state, done)
-        loss_actor, entropy = self.train_step_actor(state, action, reward,
-                                                    next_state, done)
-        loss_entropy = self.train_step_entropy(entropy)
-        td_error = (Qt - Gt).abs()
-        self.update_critic_target()
-        self.update_actor_target()
-        return {
-            'loss_critic1': loss_critic1,
-            'loss_critic2': loss_critic2,
-            'loss_actor': loss_actor,
-            'loss_entropy': loss_entropy,
-            'entropy': entropy,
-            'td_error': td_error.detach().mean().item(),
-            'Qt1': Qt1.detach().mean().item(),
-            'Qt2': Qt2.detach().mean().item(),
-            'Gt': Gt.detach().mean().item()
-        }
-
     def train_step_critic(self, state, action, reward, next_state, done):
         Qt1, Qt2 = self.critic_b(state)
+        Qt1 = Qt1.gather(-1, action)[..., 0]
+        Qt2 = Qt2.gather(-1, action)[..., 0]
         Gt = self.calculate_Gt_target(next_state, reward, done)
-        assert Qt.shape == Gt.shape
 
-        loss_critic1 = self.loss_fn(Qt, Gt)
-        loss_critic2 = self.loss_fn(Qt, Gt)
+        loss_critic1 = nn.functional.mse_loss(Qt1, Gt)
+        loss_critic2 = nn.functional.mse_loss(Qt2, Gt)
 
         self.opt_critic1.zero_grad()
         self.opt_critic2.zero_grad()
@@ -300,19 +300,19 @@ class SACDiscrete(OffPolicyActorCritic):
         self.opt_critic1.step()
         self.opt_critic2.step()
 
-        return (loss_critic1.detach().item(), loss_critic1.detach().item(),
-                Qt1, Qt2, Gt)
+        return (loss_critic1.detach().item(), loss_critic2.detach().item(),
+                Qt1.detach(), Qt2.detach(), Gt)
 
-    def train_step_actor(self, state, action, reward, next_state, done):
-        action, action_p, log_action_p = self.actor.sample(state)
-
+    def train_step_actor(self, state):
+        _, action_p, log_action_p = self.actor.sample(state)
         with torch.no_grad():
-            Qt1, Qt2 = self.critic_b(states)
+            Qt1, Qt2 = self.critic_b(state)
 
-        Qt = (torch.min(Qt1, Qt2) * action_p).sum(dim=-1, keepdim=True)
+        entropy = -(action_p * log_action_p).sum(dim=2, keepdim=True)
+        Qt = (torch.min(Qt1, Qt2) * action_p).sum(dim=2, keepdim=True)
 
-        entropy = -(action_p * log_action_p).sum(dim=-1, keepdim=True)
-        loss_actor = -(Qt - self.temp * entropy).mean()
+        loss_actor = -(Qt + self.temp * entropy).mean()
+
         self.opt_actor.zero_grad()
         loss_actor.backward()
         self.opt_actor.step()
@@ -320,16 +320,45 @@ class SACDiscrete(OffPolicyActorCritic):
 
     def train_step_entropy(self, entropy):
         assert not entropy.requires_grad
-        entropy_loss = -(self.log_temp * (self.target_entropy - entropy)).mean()
-        self.opt_entropy.zero_grad()
-        entropy_loss.backward()
-        self.opt_entropy.step()
-        return entropy_loss.detach().item()
+        loss_entropy = -(self.log_temp *
+                         (self.target_entropy - entropy)).mean()
+        self.opt_entropy_temp.zero_grad()
+        loss_entropy.backward()
+        self.opt_entropy_temp.step()
+        return loss_entropy.detach().item()
+
+    def train_step(self, sarsd=None):
+        sarsd = sarsd or self.buffer.sample(self.batch_size)
+        state, action, reward, next_state, done = \
+            self.prep_sarsd_tensors(sarsd)
+        loss_critic1, loss_critic2, Qt1, Qt2, Gt = \
+            self.train_step_critic(state, action, reward, next_state, done)
+        loss_actor, entropy = self.train_step_actor(state)
+        if self.learn_entropy_temp:
+            loss_entropy = self.train_step_entropy(entropy)
+            temp = self.temp.item()
+        else:
+            loss_entropy = 0.
+            temp = self.temp
+        Qt = torch.min(Qt1, Qt2)
+        td_error = (Qt - Gt).abs()
+        self.update_critic_target()
+        return {
+            'loss_critic1': loss_critic1,
+            'loss_critic2': loss_critic2,
+            'loss_actor': loss_actor,
+            'loss_entropy': loss_entropy,
+            'entropy': entropy.mean().item(),
+            'td_error': td_error.detach().mean().item(),
+            'Qt1': Qt1.detach().mean().item(),
+            'Qt2': Qt2.detach().mean().item(),
+            'Gt': Gt.detach().mean().item(),
+            'entropy_temp': temp
+        }
 
     def update_targets_hard(self):
         """ Hard update, copies weights """
         self.critic_t.load_state_dict(self.critic_b.state_dict())
-        self.actor_t.load_state_dict(self.actor_b.state_dict())
 
     def save_state(self, branch=None):
         branch = branch or "main"
@@ -367,10 +396,10 @@ class SACDiscrete(OffPolicyActorCritic):
             target.data.copy_(self.tau_soft_update * behaviour.data + \
                               (1.-self.tau_soft_update)*target.data)
 
-
     def filter_transactions(self, transactions, portfolio):
         """
         Prevents doubling up on positions
+        May be useful for risk averse testing.
         """
         for i, action in enumerate(transactions):
             if portfolio[i] == 0.:
@@ -379,3 +408,47 @@ class SACDiscrete(OffPolicyActorCritic):
                 transactions[i] = 0.
         return transactions
 
+    def get_action_distribution(self, state: State):
+        state = self.prep_state_tensors(state)
+        action_sampled, action_p, log_action_p = self.actor.sample(state)
+        return action_sampled, action_p, log_action_p
+
+    @torch.no_grad()
+    def test_episode(self, test_steps=None, reset=True, target=True):
+        self.test_mode()
+        test_steps = test_steps or self.test_steps
+        if reset:
+            self.reset_state(random_port_init=False)
+        self._preprocessor.initialize_history(
+            self._env)  # probably already initialized
+        state = self._preprocessor.current_data()
+        tst_metrics = []
+        i = 0
+        while i <= test_steps:
+            _tst_metrics = {}
+            action_greedy = self.get_action(state, target=target)
+            qvals1, qvals2 = (qval[0].cpu().numpy() for qval in self.get_qvals(
+                state, actions=action_greedy, target=target))
+            transaction = self.action_to_transaction(action_greedy)
+            action_sample, action_p, log_action_p = \
+                self.get_action_distribution(state)
+            state, reward, done, info = self._env.step(transaction)
+            self._preprocessor.stream_state(state)
+            state = self._preprocessor.current_data()
+            _tst_metrics['qvals1'] = qvals1
+            _tst_metrics['qvals2'] = qvals2
+            _tst_metrics['action_probs'] = action_p[0].cpu().numpy()
+            _tst_metrics['reward'] = reward
+            _tst_metrics['action'] = action_greedy
+            _tst_metrics['transaction'] = info.brokerResponse.transactionUnits
+            _tst_metrics[
+                'transaction_cost'] = info.brokerResponse.transactionCost
+            # _tst_metrics['info'] = info
+            tst_metrics.append({**_tst_metrics, **get_env_info(self._env)})
+            # tm = tst_metrics[-1]
+            # if tm['equity'] < 0.:
+            #     import ipdb; ipdb.set_trace()
+            if done:
+                break
+            i += 1
+        return list_2_dict(tst_metrics)

@@ -14,15 +14,16 @@ ConvCriticQ = ConvNet
 
 class TwinQNetwork(nn.Module):
     def __init__(self, *args, **kw):
+        super().__init__()
         self.Q1 = ConvCriticQ(*args, **kw)
-        self.Q1 = ConvCriticQ(*args, **kw)
+        self.Q2 = ConvCriticQ(*args, **kw)
 
     def forward(self, state: State):
         q1 = self.Q1(state)
         q2 = self.Q2(state)
         return q1, q2
 
-class ConvPolicySAC(nn.Module):
+class ConvPolicySACD(nn.Module):
     """
     Actor used in Discrete Soft Actor Critic.
     Implementatation follows https://github.com/ku2482/sac-discrete.pytorch
@@ -60,7 +61,7 @@ class ConvPolicySAC(nn.Module):
             **extra)
 
         # conv_out_shape = calc_conv_out_shape(window_len, self.conv_encoder)
-        self.output_head = nn.Linear(d_model, self.n_assets * self.n_actions)
+        self.output_head = nn.Linear(d_model, self.n_assets*self.action_atoms)
         self.apply(orthogonal_initialization)
 
     def get_state_emb(self, state: State):
@@ -79,26 +80,24 @@ class ConvPolicySAC(nn.Module):
         if state_emb is None:
             state_emb = self.get_state_emb(state)  # (bs, d_model)
         action_logits = self.output_head(state_emb).view(state_emb.shape[0],
-                                                   self.n_assets,
-                                                   self.n_actions)
+                                                         self.n_assets,
+                                                         self.action_atoms)
         greedy_actions = action_logits.argmax(dim=-1, keepdim=True)
         return greedy_actions
 
     def sample(self, state: State = None, state_emb: torch.Tensor = None):
-        assert (state is not None) or (state_emb is not None)
+        assert (state is not None) or (state_emb is not None), "pass state or state_emb"
         if state_emb is None:
             state_emb = self.get_state_emb(state)  # (bs, d_model)
-        action_logits = self.output_head(state_emb).view(state_emb.shape[0],
-                                                   self.n_assets,
-                                                   self.n_actions)
-        action_p = nn.functional.softmax(action_logits, dim=-1)
+        action_logits = self.output_head(state_emb).view(
+            state_emb.shape[0], self.n_assets, self.action_atoms)
+        action_p = nn.functional.softmax(action_logits, dim=2)
         action_dist = torch.distributions.Categorical(action_p)
         actions = action_dist.sample()
 
         # avoids numerical instability
         z = (action_p == .0).float() * 1e-8
         log_action_p = (action_p + z).log()
-
         return actions, action_p, log_action_p
 
     def forward(self, state: State = None, state_emb: torch.Tensor = None):
