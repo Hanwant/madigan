@@ -57,13 +57,18 @@ def test_summary(test_metrics: Union[dict, pd.DataFrame]) -> pd.DataFrame:
     I.e drawdown, sharpe etc - sharpe needs timestamps
     """
     df = pd.DataFrame(test_metrics)
+    qvals = {}
+    for qval in ('qvals', 'qvals1', 'qvals2'):
+        if qval in df.columns:
+            qvals['mean_'+qval] = np.array(df[qval].tolist()).mean()
+
     out = {'mean_equity': df['equity'].mean(),
            'final_equity': df['equity'].iloc[-1],
            'mean_reward': df['reward'].mean(),
            'mean_transaction_cost': np.array(df['transaction_cost'].tolist()).mean(),
            'total_transaction_cost': np.array(df['transaction_cost'].tolist()).sum(),
-           'mean_qvals': np.array(df['qvals'].tolist()).mean(),
-           'nsteps': len(df)}
+           'nsteps': len(df),
+           **qvals}
     return pd.DataFrame({k: [v] for k, v in out.items()})
 
 # def reduce_test_metrics(test_metrics, cols=('returns', 'equity', 'cash', 'margin')):

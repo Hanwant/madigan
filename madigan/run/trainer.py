@@ -91,7 +91,8 @@ class Trainer:
                   append: bool = True):
         if len(train_metrics):
             train_metrics = list_2_dict(train_metrics)
-            train_metrics = reduce_train_metrics(train_metrics, ['Gt', 'Qt', 'rewards'])
+            train_metrics = reduce_train_metrics(train_metrics, ['Gt', 'Qt', 'rewards',
+                                                                 'entropy'])
             train_df = pd.DataFrame(train_metrics)
             # save_to_hdf(self.logdir/'train.hdf5', 'train', train_df,
             #             append_if_exists=append)

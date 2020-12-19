@@ -15,7 +15,9 @@ def make_train_plots(agent_type, title=None, **kw):
                       "IQN", "IQNCURL", "IQNReverser", "IQNReverserCURL" ):
         return TrainPlotsDQN(title=title, **kw)
     if agent_type in ("DDPG", "DDPGDiscretized"):
-        return TrainPlotsActorCritic(title=title, **kw)
+        return TrainDDPG(title=title, **kw)
+    if agent_type in ("SACDiscrete", "SACD"):
+        return TrainPlotsSACD(title=title, **kw)
     raise NotImplementedError(
         f"Train plot widget for agent_type: {agent_type}"+\
         " has not been implemented")
@@ -25,7 +27,9 @@ def make_test_episode_plots(agent_type, title=None, **kw):
                       "IQN", "IQNCURL", "IQNReverser", "IQNReverserCURL" ):
         return TestEpisodePlotsDQN(title=title, **kw)
     if agent_type in ("DDPG", "DDPGDiscretized"):
-        return TestEpisodePlotsActorCritic(title=title, **kw)
+        return TestEpisodeDDPG(title=title, **kw)
+    if agent_type in ("SACDiscrete", "SACD"):
+        return TestEpisodePlotsSACD(title=title, **kw)
     raise NotImplementedError(
         f"Test episode plot widget for agent_type: {agent_type}"+\
         " has not been implemented")
@@ -34,12 +38,13 @@ def make_test_history_plots(agent_type, title=None, **kw):
                       "IQN", "IQNCURL", "IQNReverser", "IQNReverserCURL" ):
         return TestHistoryPlotsDQN(title=title, **kw)
     if agent_type in ("DDPG", "DDPGDiscretized"):
-        return TestHistoryPlotsActorCritic(title=title, **kw)
+        return TestHistoryDDPG(title=title, **kw)
+    if agent_type in ("SACDiscrete", "SACD"):
+        return TestHistoryPlotsSACD(title=title, **kw)
     raise NotImplementedError(
         f"Test History plot widget for agent_type: {agent_type}"+\
         " has not been implemented")
 
-####################################################################################
 ############# Training Plots  ######################################################
 ####################################################################################
 
@@ -128,7 +133,7 @@ class TrainPlotsDQN(TrainPlots):
         self.lines['Gt'].setData(y=data['Gt'], pen=self.colours['Gt'])
         self.lines['Qt'].setData(y=data['Qt'], pen=self.colours['Qt'])
 
-class TrainPlotsActorCritic(TrainPlots):
+class TrainDDPG(TrainPlots):
     def __init__(self, *args, **kw):
         super().__init__(*args, **kw)
         self.colours.update({'Gt': (0, 255, 255), 'Qt': (255, 86, 0)})
@@ -149,11 +154,9 @@ class TrainPlotsActorCritic(TrainPlots):
                                                            name='loss_actor')
         self.plots['loss'].setLabels()
 
-        print("CALLED")
         self.link_x_axes()
 
     def set_data(self, data):
-        print("AC ")
         self.data = data
         if len(data) == 0:
             print("train data is empty")
@@ -174,6 +177,78 @@ class TrainPlotsActorCritic(TrainPlots):
         self.lines['Gt'].setData(y=data['Gt'], pen=self.colours['Gt'])
         self.lines['Qt'].setData(y=data['Qt'], pen=self.colours['Qt'])
 
+
+class TrainPlotsSACD(TrainPlots):
+    def __init__(self, *args, **kw):
+        super().__init__(*args, **kw)
+        self.colours.update({'Gt': (0, 255, 255), 'Qt1': (255, 86, 0),
+                             'Qt2': (86, 255, 0), 'entropy': (255, 0, 0),
+                             'entropy_temp': (0, 255, 0)})
+        self.colours.update({'loss_critic1': (255, 0, 0),
+                             'loss_critic2': (0, 0, 255),
+                             'loss_actor': (0, 255, 0),
+                             'loss_entropy': (255, 255, 0)})
+        self.plots['values'] = self.graphs.addPlot(title='Values',
+                                                   bottom='step', left='Value')
+        self.plots['entropy'] = self.graphs.addPlot(title='Entropy',
+                                                    bottom='step')
+        self.lines['entropy'] = self.plots['entropy'].plot(
+            y=[], name='entropy')
+        self.lines['entropy_temp'] = self.plots['entropy'].plot(
+            y=[], name='entropy_temp')
+        self.plots['entropy'].setLabels()
+
+        self.plots['values'].showGrid(1, 1)
+        self.plots['values'].addLegend()
+        self.lines['Gt'] = self.plots['values'].plot(y=[], name='Gt')
+        self.lines['Qt1'] = self.plots['values'].plot(y=[], name='Qt1')
+        self.lines['Qt2'] = self.plots['values'].plot(y=[], name='Qt2')
+        self.plots['values'].setLabels()
+
+        del self.lines['loss']
+        self.lines['loss_critic1'] = self.plots['loss'].plot(
+            y=[], name='loss_critic1')
+        self.lines['loss_critic2'] = self.plots['loss'].plot(
+            y=[], name='loss_critic2')
+        self.lines['loss_actor'] = self.plots['loss'].plot(y=[],
+                                                           name='loss_actor')
+        self.lines['loss_entropy'] = self.plots['loss'].plot(
+            y=[], name='loss_entropy')
+        self.plots['loss'].setLabels()
+
+        self.link_x_axes()
+
+    def set_data(self, data):
+        print("AC ")
+        self.data = data
+        if len(data) == 0:
+            print("train data is empty")
+            data = {k: [] for k in self.lines.keys()}
+
+        self.lines['loss_critic1'].setData(y=data['loss_critic1'],
+                                           pen=self.colours['loss_critic1'])
+        self.lines['loss_critic2'].setData(y=data['loss_critic2'],
+                                           pen=self.colours['loss_critic2'])
+        self.lines['loss_actor'].setData(y=data['loss_actor'],
+                                         pen=self.colours['loss_actor'])
+        self.lines['loss_entropy'].setData(y=data['loss_entropy'],
+                                           pen=self.colours['loss_entropy'])
+        rewards = data['running_reward']
+        rewards_mean = pd.Series(data['running_reward']).ewm(20000).mean()
+        rewards_mean = np.nan_to_num(rewards_mean.values)
+        self.lines['running_reward'].setData(y=rewards,
+                                             pen=self.colours['reward'])
+        self.lines['running_reward_mean'].setData(
+            y=rewards_mean, pen=pg.mkPen(
+                {'color': self.colours['reward_mean'], 'width': 2}))
+        self.lines['Gt'].setData(y=data['Gt'], pen=self.colours['Gt'])
+        self.lines['Qt1'].setData(y=data['Qt1'], pen=self.colours['Qt1'])
+        self.lines['Qt2'].setData(y=data['Qt2'], pen=self.colours['Qt2'])
+
+        self.lines['entropy'].setData(y=data['entropy'],
+                                      pen=self.colours['entropy'])
+        self.lines['entropy_temp'].setData(
+            y=data['entropy_temp'], pen=self.colours['entropy_temp'])
 
 
 ####################################################################################
@@ -278,12 +353,13 @@ class TestEpisodePlots(QGridLayout):
 
     def log_adjust(self):
         for metric, plot in self.plots.items():
-            max_ele = np.nanmax(self.data[metric])
-            min_ele = np.nanmin(self.data[metric])
-            if max_ele - min_ele > 1e10:
-                plot.setLogMode(False, True)
-            else:
-                plot.setLogMode(False, False)
+            if metric in self.data.keys():
+                max_ele = np.nanmax(self.data[metric])
+                min_ele = np.nanmin(self.data[metric])
+                if max_ele - min_ele > 1e10:
+                    plot.setLogMode(False, True)
+                else:
+                    plot.setLogMode(False, False)
 
 
     def link_x_axes(self):
@@ -449,7 +525,7 @@ class TestEpisodePlotsDQN(TestEpisodePlots):
                            color=self.heatmap_colors)
         self.lines['qvals'].setLookupTable(cmap.getLookupTable())
 
-class TestEpisodePlotsActorCritic(TestEpisodePlots):
+class TestEpisodeDDPG(TestEpisodePlots):
     def __init__(self, *args, **kw):
         super().__init__(*args, **kw)
         self.colours.update({'qvals': (255, 86, 0)})
@@ -572,10 +648,106 @@ class TestEpisodePlotsActorCritic(TestEpisodePlots):
         # self.lines['action'].setLookupTable(cmap.getLookupTable())
 
 
+class TestEpisodePlotsSACD(TestEpisodePlots):
+    def __init__(self, *args, **kw):
+        super().__init__(*args, **kw)
+        self.colours.update({'qvals1': (255, 86, 0),
+                             'qvals2': (86, 255, 0)})
+        self.plots['qvals'] = self.graphs.addPlot(row=1, col=6,
+                                                  colspan=2)
+        self.lines['qvals1'] = pg.ImageItem(np.empty(shape=(1, 1)),
+                                            axes={'x': 0, 'y': 1})
+        self.lines['qvals2'] = pg.ImageItem(np.empty(shape=(1, 1)),
+                                            axes={'x': 0, 'y': 1})
+        self.plots['qvals'].addItem(self.lines['qvals1'])
+        self.plots['qvals'].addItem(self.lines['qvals2'])
+        self.plots['qvals'].setTitle('qvals')
+        self.plots['qvals'].showAxis('left', False)
+        hist1 = pg.HistogramLUTItem()
+        hist1.setImageItem(self.lines['qvals1'])
+        self.graphs.addItem(hist1, row=1, col=8, colspan=1)
+        hist2 = pg.HistogramLUTItem()
+        hist2.setImageItem(self.lines['qvals2'])
+        self.graphs.addItem(hist2, row=1, col=9, colspan=1)
+        # self.lines['qvals'].showGrid(1, 1)
+        self.lines['qvals1'].setImage(np.empty(shape=(1, 1)),
+                                      axes={'x': 0, 'y': 1})
+        self.lines['qvals2'].setImage(np.empty(shape=(1, 1)),
+                                      axes={'x': 0, 'y': 1})
+        self.plots['action'] = self.graphs.addPlot(
+            title="actor greedy actions", row=2, col=0, colspan=2)
+        self.lines['action'] = self.plots['action'].plot(y=[])
+        self.plots['action'].showGrid(1, 1)
+        self.plots['action_probs'] = self.graphs.addPlot(
+            title="actor prob distribution", row=2, col=2, colspan=2)
+        self.lines['action_probs'] = pg.ImageItem(np.empty(shape=(1, 1, 1)))
+        self.plots['action_probs'].addItem(self.lines['action_probs'], colspan=2)
+        self.plots['action_probs'].showGrid(1, 1)
+        hist = pg.HistogramLUTItem()
+        hist.setImageItem(self.lines['action_probs'])
+        self.graphs.addItem(hist, row=2, col=4, colspan=1)
+        self.transaction_table = pg.TableWidget()
+        self.transaction_table.setVerticalHeaderLabels(['Model Outputs'])
+        # self.graphs.addItem(self.actions_table, row=2, col=3, colspan=1)
+        self.addWidget(self.transaction_table, 3, 9, 1, 1)
+        self.link_x_axes()
+        self.current_pos_line.sigPositionChanged.connect(
+            self.update_transaction_table)
 
-####################################################################################
-############# Test History Plots  ##################################################
-####################################################################################
+    def update_transaction_table(self):
+        current_timepoint = int(self.current_pos_line.value())
+        try:
+            actions = self.data['action'][current_timepoint]
+            transactions = self.data['transaction'][current_timepoint]
+            transactions = np.concatenate([[0], transactions], axis=0)
+            data = np.stack([actions, transactions], axis=1)
+            # data = np.array([actions, transactions],
+            #                 dtype=[('model_output', float),
+            #                        ('transactions', float)])
+            self.transaction_table.setData(data)
+            self.transaction_table.setHorizontalHeaderLabels(['Model Outputs',
+                                                              'Transactions'])
+            self.transaction_table.resizeColumnsToContents()
+        except IndexError:
+            import traceback
+            traceback.print_exc()
+
+    def process_data(self, data):
+        super().process_data(data)
+        for qval_key in ('qvals1', 'qvals2'):
+            if isinstance(data[qval_key], (pd.DataFrame, pd.Series)):
+                self.data[qval_key] = np.array(data[qval_key].tolist())
+            else:
+                self.data[qval_key] = np.array(data[qval_key])
+        assert len(self.data['qvals1'].shape) == 2
+        if isinstance(data['action_probs'], (pd.DataFrame, pd.Series)):
+            self.data['action_probs'] = np.array(data['action_probs'].tolist())
+        else:
+            self.data['action_probs'] = np.array(data['action_probs'])
+        assert len(self.data['action_probs'].shape) == 3
+        # self.data['action'] = self.data['action'].cpu().numpy()
+
+    def _set_data(self, data):
+        super()._set_data(data)
+        if len(data) == 0:
+            return
+        self.lines['qvals1'].setImage(self.data['qvals1'], axes={'x': 0, 'y': 1})
+        self.lines['qvals2'].setImage(self.data['qvals2'], axes={'x': 0, 'y': 1})
+        # cmap = pg.ColorMap(pos=np.linspace(np.nanmin(qvals), np.nanmax(qvals), 2),
+        #                    color=self.heatmap_colors)
+        # self.lines['qvals'].setLookupTable(cmap.getLookupTable())
+        self.lines['action'].setData(self.data['action'])
+        self.lines['action_probs'].setImage(self.data['action_probs'],
+                                            axes={'x': 0, 'y': 1})
+        # cmap = pg.ColorMap(pos=np.linspace(np.nanmin(self.data['action']),
+        #                                    np.nanmax(self.data['action']), 2),
+        #                    color=self.heatmap_colors)
+        # self.lines['action'].setLookupTable(cmap.getLookupTable())
+
+
+###############################################################################
+############# Test History Plots  #############################################
+###############################################################################
 
 class TestHistoryPlots(QGridLayout):
     def __init__(self, title=None):
@@ -661,4 +833,26 @@ class TestHistoryPlotsDQN(TestHistoryPlots):
                                          pen=self.colours['mean_qvals'])
 
 
-TestHistoryPlotsActorCritic = TestHistoryPlotsDQN
+TestHistoryDDPG = TestHistoryPlotsDQN
+
+class TestHistoryPlotsSACD(TestHistoryPlots):
+    def __init__(self, *args, **kw):
+        super().__init__(*args, **kw)
+        self.colours.update({'mean_qvals1': (255, 86, 0),
+                             'mean_qvals2': (86, 255, 0)})
+        self.plots['qvals'] = self.graphs.addPlot(title='Mean Qvals over Episodes',
+                                                  bottom='training_steps',
+                                                  left='Value')
+        self.lines['mean_qvals1'] = self.plots['qvals'].plot(y=[])
+        self.lines['mean_qvals2'] = self.plots['qvals'].plot(y=[])
+        self.plots['qvals'].showGrid(1, 1)
+        self.plots['qvals'].setLabels()
+
+    def set_data(self, data):
+        super().set_data(data)
+        if data is None or len(data) == 0:
+            data = {k: [] for k in self.lines.keys()}
+        self.lines['mean_qvals1'].setData(y=data['mean_qvals1'],
+                                          pen=self.colours['mean_qvals1'])
+        self.lines['mean_qvals2'].setData(y=data['mean_qvals2'],
+                                          pen=self.colours['mean_qvals2'])

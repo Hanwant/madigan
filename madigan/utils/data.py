@@ -3,9 +3,12 @@ import numpy as np
 
 @dataclass
 class State:
+    """
+    Constitutes the 'state' received from trading env
+    """
     price: np.ndarray
     portfolio: np.ndarray
-    timestamp: int
+    timestamp: np.ndarray
 
 @dataclass
 class Action:
@@ -15,6 +18,9 @@ class Action:
 
 @dataclass
 class SARSD:
+    """
+    For use in DQN style algorithms
+    """
     state: State
     action: np.ndarray
     reward: float

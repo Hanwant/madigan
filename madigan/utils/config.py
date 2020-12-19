@@ -165,6 +165,9 @@ def make_config(
         unit_size_proportion_avM=0.1,
         transaction_thresh=0.02,
         proximal_portfolio_penalty=0.5,
+        learn_entropy_temp: bool = False,
+        entropy_temp: float = .2,
+        target_entropy_ratio=0.98,
 
         # MODEL ###############################################################
         model_class="ConvNet",  # String of model class
@@ -250,6 +253,9 @@ def make_config(
         'transaction_thresh': transaction_thresh,
         'unit_size_proportion_avM': unit_size_proportion_avM,
         'proximal_portfolio_penalty': proximal_portfolio_penalty,
+        'learn_entropy_temp': learn_entropy_temp,
+        'entropy_temp': entropy_temp,
+        'target_entropy_ratio': target_entropy_ratio
     }
     config = dict(
         basepath=basepath,
