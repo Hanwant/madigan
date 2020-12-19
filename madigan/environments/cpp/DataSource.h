@@ -17,6 +17,8 @@
 #include "Assets.h"
 #include "DataTypes.h"
 #include "Config.h"
+#include "randomBoolGenerator.h"
+#include "WaveTableOsc.h"
 // #include "Portfolio.h"
 
 #define PI2 (3.141592653589793238463*2)
@@ -26,6 +28,7 @@ namespace madigan{
 
   using std::vector;
   using std::size_t;
+  using randomBoolGenerator = XorShift128PlusBitShifterPseudoRandomBooleanGenerator;
 
   template<class T>
   class DataSource{
@@ -216,6 +219,64 @@ namespace madigan{
     PriceVector currentData_;
   };
 
+  class SineDynamic: public DataSourceTick{
+  public:
+    SineDynamic(); // use default values for parameters
+    SineDynamic(std::vector<std::array<double, 3>> freqRange,
+                std::vector<std::array<double, 3>> muRange,
+                std::vector<std::array<double, 3>> ampRange,
+                std::vector<double> phase,
+                double dX): SineDynamic(freqRange, muRange, ampRange, phase, dX, 0.){}
+    SineDynamic(std::vector<std::array<double, 3>> freqRange,
+                std::vector<std::array<double, 3>> muRange,
+                std::vector<std::array<double, 3>> ampRange,
+                std::vector<double> phase,
+              double dX, double noise);
+    SineDynamic(Config config);
+    SineDynamic(pybind11::dict config);
+    int nAssets() const{ return nAssets_;}
+    ~SineDynamic(){}
+    const PriceVector& getData() ;
+    const PriceVector& currentData() const{ return currentData_;}
+    const PriceVector& currentPrices() const{ return currentData_;}
+    double getProcess(int i);
+    void reset();
+    std::size_t currentTime() const { return timestamp_; }
+  protected:
+    void initParams(std::vector<std::array<double, 3>> freq,
+                    std::vector<std::array<double, 3>> mu,
+                    std::vector<std::array<double, 3>> amp,
+                    std::vector<double> phase,
+                    double dX, double noise);
+    void updateParams();
+
+  protected:
+    double dX = 0;
+    int sampleRate;
+    double noise{0.};
+    int nComponents;
+    int stepsSinceUpdate=0;
+    vector<WaveTableOsc<double>> oscillators;
+    // double, double, double == low, high, dt
+    vector<std::array<double, 3>> freqRange;
+    vector<std::array<double, 3>> muRange;
+    vector<std::array<double, 3>> ampRange;
+    vector<double> freq;
+    vector<double> mu;
+    vector<double> amp;
+    vector<double> initPhase;
+    vector<double> x;
+    std::size_t timestamp_;
+    std::default_random_engine generator;
+    std::normal_distribution<double> noiseDistribution;
+    std::uniform_real_distribution<double> updateParameterDist;
+    vector<std::uniform_real_distribution<double>> freqDist;
+    vector<std::uniform_real_distribution<double>> muDist;
+    vector<std::uniform_real_distribution<double>> ampDist;
+    randomBoolGenerator boolDist;
+    PriceVector currentData_;
+  };
+
   class SawTooth: public Synth{
   public:
     using Synth::Synth;
@@ -268,8 +329,9 @@ namespace madigan{
     int nAssets_{0};
   public:
     OUDynamic();
-    OUDynamic(std::vector<double> mean, std::vector<double> theta,
-       std::vector<double> phi, std::vector<double> noise_var);
+    OUDynamic(std::vector<std::array<double, 3>> meanRange,
+              std::vector<std::array<double, 3>> thetaRange,
+              std::vector<std::array<double, 3>> phiRange);
     OUDynamic(Config config);
     OUDynamic(pybind11::dict config);
     ~OUDynamic(){}
@@ -281,18 +343,22 @@ namespace madigan{
     std::size_t currentTime() const { return timestamp_; }
 
   protected:
-    virtual void initParams(std::vector<double> mean, std::vector<double> theta,
-                            std::vector<double> phi, std::vector<double> noise_var);
+    virtual void initParams(std::vector<std::array<double, 3>> meanRange,
+                            std::vector<std::array<double, 3>> thetaRange,
+                            std::vector<std::array<double, 3>> phiRange);
 
   protected:
     const double dT{1.};
     vector<double> mean;
     vector<double> theta;
     vector<double> phi;
-    vector<double> noise_var;
+    vector<std::array<double, 3>> meanRange;
+    vector<std::array<double, 3>> thetaRange;
+    vector<std::array<double, 3>> phiRange;
     std::size_t timestamp_;
     std::default_random_engine generator;
     std::vector<std::normal_distribution<double>> noiseDistribution;
+    randomBoolGenerator boolDist;
     PriceVector currentData_;
   };
 
@@ -396,7 +462,6 @@ namespace madigan{
     std::vector<int> currentTrendLen;
 
   };
-
 
 } // namespace madigan
 

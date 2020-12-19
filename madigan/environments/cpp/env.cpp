@@ -93,6 +93,7 @@ PYBIND11_MODULE(env, m){
   py::class_<SawTooth, Synth>_SawTooth(m, "SawTooth");
   py::class_<Triangle, Synth>_Triangle(m, "Triangle");
   py::class_<SineAdder, DataSourceTick>_SineAdder(m, "SineAdder");
+  py::class_<SineDynamic, DataSourceTick>_SineDynamic(m, "SineDynamic");
   py::class_<SimpleTrend, DataSourceTick>_SimpleTrend(m, "SimpleTrend");
   py::class_<Composite, DataSourceTick>_Composite(m, "Composite");
   py::class_<HDFSource, DataSourceTick, PyHDFSource>_HDFSource(m, "HDFSource");
@@ -249,6 +250,30 @@ PYBIND11_MODULE(env, m){
     .def("currentData", (PriceVector& (SineAdder::*) ()) &SineAdder::currentData,
          "Get current data points",
          py::return_value_policy::reference);
+  _SineDynamic.def(py::init<>())
+    .def(py::init<py::dict>(), py::arg("config_dict"))
+    .def(py::init<
+         vector<std::array<double, 3>>, vector<std::array<double, 3>>,
+         vector<std::array<double, 3>>, vector<double>,
+         double, double> (),
+         py::arg("freqRange"), py::arg("muRange"),
+         py::arg("ampRange"), py::arg("phase"),
+         py::arg("dx"), py::arg("noise"))
+    .def_property_readonly("currentTime", &SineDynamic::currentTime,
+                           "get the current timestamp",
+                           py::return_value_policy::move)
+    .def("getData", (PriceVector& (SineDynamic::*) ()) &SineDynamic::getData,
+         "Get Next data points",
+         py::return_value_policy::reference)
+    .def("currentPrices", (PriceVector& (SineDynamic::*) ()) &SineDynamic::currentPrices,
+         "Get current prices",
+         py::return_value_policy::reference)
+    .def("getProcess", &SineDynamic::getProcess,
+         "get wavetable data directly", py::arg("i"))
+    .def("currentData", (PriceVector& (SineDynamic::*) ()) &SineDynamic::currentData,
+         "Get current data points",
+         py::return_value_policy::reference);
+
   _SimpleTrend.def(py::init<>())
     .def(py::init<py::dict>(), py::arg("config_dict"))
     .def(py::init<

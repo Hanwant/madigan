@@ -20,6 +20,9 @@ namespace madigan{
     else if (dataSourceType == "SineAdder"){
       return make_unique<SineAdder>();
     }
+    else if (dataSourceType == "SineDynamic"){
+      return make_unique<SineDynamic>();
+    }
     else if (dataSourceType == "OU"){
       return make_unique<OU>();
     }
@@ -52,6 +55,9 @@ namespace madigan{
     }
     else if (dataSourceType == "SineAdder"){
       return make_unique<SineAdder>(config);
+    }
+    else if (dataSourceType == "SineDynamic"){
+      return make_unique<SineDynamic>(config);
     }
     else if (dataSourceType == "OU"){
       return make_unique<OU>(config);
@@ -98,6 +104,9 @@ namespace madigan{
     return out;
   }
 
+
+  // HDF SOURCE  //////////////////////////////////////////////////////////////////////////
+
   HDFSource::HDFSource(string filepath, string mainKey, string priceKey,
                        string timestampKey): filepath(filepath),
                                              mainKey(mainKey),
@@ -137,6 +146,7 @@ namespace madigan{
     return currentPrices_;
   }
 
+  // COMPOSITE SOURCE  //////////////////////////////////////////////////////////////////////////
   Composite::Composite(Config config){
     bool allKeysPresent{true};
     if (config.find("data_source_config") == config.end()){
@@ -171,6 +181,7 @@ namespace madigan{
     return currentData_;
   }
 
+  // SYNTH SOURCE  //////////////////////////////////////////////////////////////////////////
 
   void Synth::initParams(std::vector<double> _freq, std::vector<double> _mu,
                          std::vector<double> _amp, std::vector<double> _phase,
@@ -295,7 +306,8 @@ namespace madigan{
     return currentData_;
   }
 
-  // SINE ADDER
+
+  // SINE ADDER  ///////////////////////////////////////////////////////////////////////////////////
   SineAdder::SineAdder(){
     double _dX{0.01};
     vector<double> freq{1., 0.3, 2., 0.5};
@@ -389,6 +401,186 @@ namespace madigan{
     return currentData_;
   }
 
+  ////////////////////////////////////////////////////////////////////////////////////////////////
+  // SINE DYNAMIC  ///////////////////////////////////////////////////////////////////////////////
+  ////////////////////////////////////////////////////////////////////////////////////////////////
+  SineDynamic::SineDynamic(){
+    vector<std::array<double, 3>> freqRange{{.1, 1., .01}, {0.3, 3.0, .01},
+                                                    {5., 15., .1}, {10., 50., .1}};
+    vector<std::array<double, 3>> muRange{{1., 5., .02}, {.3, 3., .05},
+                                                  {.2, 5., .02}, {.5, 5., .02}};
+    vector<std::array<double, 3>> ampRange{{1., 5., .01}, {.3, 3., .02},
+                                                   {.2, 2., .04}, {.5, 5., .05}};
+    vector<double> phase{0., 1., 2., 1.};
+    double _dX{0.01};
+    initParams(freqRange, muRange, ampRange, phase, dX, 0.);
+  }
+
+  SineDynamic::SineDynamic(vector<std::array<double, 3>> _freqRange,
+                           vector<std::array<double, 3>> _muRange,
+                           vector<std::array<double, 3>> _ampRange,
+                           vector<double> _phase,
+                           double _dX, double noise){
+    initParams(_freqRange, _muRange, _ampRange, _phase, _dX, noise);
+  }
+
+  SineDynamic::SineDynamic(Config config){
+    bool allKeysPresent{true};
+    if (config.find("data_source_config") == config.end()){
+      throw ConfigError("config passed but doesn't contain generator params");
+      allKeysPresent = false;
+    }
+    Config params = std::any_cast<Config>(config["data_source_config"]);
+    for (auto key: {"freqRange", "muRange", "ampRange", "phase", "dX"}){
+      if (params.find(key) == params.end()){
+        allKeysPresent=false;
+        throw ConfigError("generator parameters don't have all required constructor arguments");
+      }
+    }
+    if (allKeysPresent){
+      vector<std::array<double, 3>> freqRange =
+        std::any_cast<vector<std::array<double, 3>>>(params["freqRange"]);
+      vector<std::array<double, 3>> muRange =
+        std::any_cast<vector<std::array<double, 3>>>(params["muRange"]);
+      vector<std::array<double, 3>> ampRange =
+        std::any_cast<vector<std::array<double, 3>>>(params["ampRange"]);
+      vector<double> phase = std::any_cast<vector<double>>(params["phase"]);
+      double dX = std::any_cast<double>(params["dX"]);
+      if (params.find("noise") != params.end()){
+        noise = std::any_cast<double>(params["noise"]);
+        initParams(freqRange, muRange, ampRange, phase, dX, noise);
+      }
+      else {
+        initParams(freqRange, muRange, ampRange, phase, dX, 0.);
+      }
+
+    }
+    else{
+      vector<std::array<double, 3>> freqRange{{.1, 1., .01}, {0.3, 3.0, .01},
+                                                      {5., 15., .1}, {10., 50., .1}};
+      vector<std::array<double, 3>> muRange{{1., 5., .02}, {.3, 3., .05},
+                                                    {.2, 5., .02}, {.5, 5., .02}};
+      vector<std::array<double, 3>> ampRange{{1., 5., .01}, {.3, 3., .02},
+                                                     {.2, 2., .04}, {.5, 5., .05}};
+      vector<double> phase{0., 1., 2., 1.};
+      double _dX{0.01};
+      initParams(freqRange, muRange, ampRange, phase, _dX, 0.);
+    }
+  }
+
+  SineDynamic::SineDynamic(pybind11::dict py_config): SineDynamic::SineDynamic(makeConfigFromPyDict(py_config)){
+    // Config config = makeConfigFromPyDict(py_config);
+
+  }
+  void SineDynamic::initParams(vector<std::array<double, 3>> _freqRange,
+                               vector<std::array<double, 3>> _muRange,
+                               vector<std::array<double, 3>> _ampRange,
+                               vector<double> _phase,
+                               double _dX, double _noise)
+
+  {
+    if ((_freqRange.size() == _muRange.size()) && (_muRange.size() == _ampRange.size()) &&
+        (_ampRange.size() == _phase.size())){
+      nComponents = _freqRange.size();
+      freqRange=_freqRange;
+      muRange=_muRange;
+      ampRange=_ampRange;
+      initPhase=_phase;
+      x=_phase;
+      dX=_dX;
+      noise=_noise;
+      noiseDistribution = std::normal_distribution<double>(0., _noise);
+      updateParameterDist = std::uniform_real_distribution<double>(0., 1.);
+      assets = vector<Asset>(1, Asset("multi_sine"));
+      nAssets_ = this->assets.size();
+      currentData_.resize(1);
+      freq = vector<double>(nComponents, 0);
+      mu= vector<double>(nComponents, 0);
+      amp= vector<double>(nComponents, 0);
+      generator.seed(std::chrono::system_clock::now().time_since_epoch().count());
+      sampleRate = (int)(1./dX);
+      oscillators.resize(nComponents); // so resizing doesn't invalidate pointers
+      for (int i=0; i<nComponents; i++){
+        // Init Starting values by uniformly sampling from low-high range
+        freqDist.push_back(std::uniform_real_distribution<double>(freqRange[i][0], freqRange[i][1]));
+        muDist.push_back(std::uniform_real_distribution<double>(muRange[i][0], muRange[i][1]));
+        ampDist.push_back(std::uniform_real_distribution<double>(ampRange[i][0], ampRange[i][1]));
+        freq[i] = freqDist[i](generator);
+        mu[i] = muDist[i](generator);
+        amp[i] = ampDist[i](generator);
+        int maxNumTables = log2(ceil(freqRange[i][1] / freqRange[i][0])+1);
+        oscillators.emplace_back(WaveTableOsc<double>(maxNumTables));
+        setSineOsc(oscillators[i], sampleRate, 2, freqRange[i][0]);
+      }
+
+      // for (int i=0; i<nComponents; i++){
+      //   setSineOsc(oscillators[i], sampleRate, 2, freqRange[i][0]);
+      // }
+    }
+    else{
+      throw std::length_error("parameters passed to DataSource<PriceVector> of type SineDynamic"
+                              " need to be vectors of same length");
+    }
+  }
+
+  void SineDynamic::reset(){
+    for (int i=0; i<nComponents; i++){
+      freq[i] = freqDist[i](generator);
+      mu[i] = muDist[i](generator);
+      amp[i] = ampDist[i](generator);
+    }
+  }
+
+  void SineDynamic::updateParams(){
+    for (int i=0; i<nComponents; i++){
+      mu[i] = max(muRange[i][0],
+                  min(muRange[i][1],
+                      mu[i]+(boolDist.randBool()? muRange[i][2]: -muRange[i][2])));
+      amp[i] = max(ampRange[i][0],
+                   min(ampRange[i][1],
+                       amp[i]+(boolDist.randBool()? ampRange[i][2]: -ampRange[i][2])));
+      freq[i] = max(freqRange[i][0],
+                    min(freqRange[i][1],
+                        freq[i]+(boolDist.randBool()? freqRange[i][2]: -freqRange[i][2])));
+      // mu[i] += (boolDist.randBool()? muRange[i][2]: -muRange[i][2]);
+      // amp[i] += (boolDist.randBool()? ampRange[i][2]: -ampRange[i][2]);
+
+      oscillators[i].setFreq(freq[i]/sampleRate);
+      // if (updateParameterDist(generator) < 0.001 ){
+      //   // mu[i] = max(muRange[i][0],
+      //   //             min(muRange[i][1],
+      //   //                 mu[i]+(boolDist.randBool()? muRange[i][2]: -muRange[i][2])));
+      //   // amp[i] = max(ampRange[i][0],
+      //   //              min(ampRange[i][1],
+      //   //                  amp[i]+(boolDist.randBool()? ampRange[i][2]: -ampRange[i][2])));
+      //   // freq[i] = freqDist[i](generator);
+      //   mu[i] = muDist[i](generator);
+      //   amp[i] = ampDist[i](generator);
+      //   stepsSinceUpdate = 0;
+      // } else stepsSinceUpdate++;
+    }
+  }
+
+  const PriceVector& SineDynamic::getData() {
+    double sum{0.};
+    updateParams();
+    for (int i=0; i < nComponents; i++){
+      // sum += noiseDistribution(generator) + mu[i] +
+      //   amp[i] * std::sin(PI2*x[i]*freq[i]);
+      sum += noiseDistribution(generator) + mu[i] +
+        amp[i] * oscillators[i].process();
+      x[i] += dX;
+    }
+    currentData_[0] = sum;
+    timestamp_ += 1;
+    return currentData_;
+  }
+
+  double SineDynamic::getProcess(int i){
+    return oscillators[i].process();
+  }
+
+  // OU ///////////////////////////////////////////////////////////////////////////////
   void OU::initParams(std::vector<double> mean, std::vector<double> theta,
                       std::vector<double> phi, std::vector<double> noise_var ) {
     if ((mean.size() == theta.size()) && (theta.size() == phi.size())
@@ -463,6 +655,7 @@ namespace madigan{
     return currentData_;
   }
 
+  // SIMPLE TREND //////////////////////////////////////////////////////////////////////
   void SimpleTrend::initParams(std::vector<double> trendProb, std::vector<int> minPeriod,
                                std::vector<int> maxPeriod, std::vector<double> noise,
                                std::vector<double> start, std::vector<double> dYMin,
@@ -568,6 +761,7 @@ namespace madigan{
   }
 
 
+  // TREND OU //////////////////////////////////////////////////////////////////////
 
   void TrendOU::initParams(std::vector<double> trendProb, std::vector<int> minPeriod,
                            std::vector<int> maxPeriod, std::vector<double> dYMin,

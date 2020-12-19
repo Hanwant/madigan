@@ -23,11 +23,12 @@ namespace madigan{
   // Synth has same parameters for multiple dataSources (I.e sine wave, sawtooth, sine composite)
   // so dataSourceType is also passed
   Config makeConfigFromPyDict(pybind11::dict dict);
-  Config makeSynthConfigFromPyDict(pybind11::dict data_source_dict, string dataSourceType);
-  Config makeOUConfigFromPyDict(pybind11::dict data_source_dict);
-  Config makeSimpleTrendConfigFromPyDict(pybind11::dict data_source_dict);
-  Config makeTrendOUConfigFromPyDict(pybind11::dict data_souce_dict);
-  Config makeHDFSourceConfigFromPyDict(pybind11::dict data_souce_dict);
+  Config makeSynthConfigFromPyDict(pybind11::dict datasource_pydict, string dataSourceType);
+  Config makeSineDynamicConfigFromPyDict(pybind11::dict datasource_pydict);
+  Config makeOUConfigFromPyDict(pybind11::dict datasource_pydict);
+  Config makeSimpleTrendConfigFromPyDict(pybind11::dict datasource_pydict);
+  Config makeTrendOUConfigFromPyDict(pybind11::dict datasource_pydict);
+  Config makeHDFSourceConfigFromPyDict(pybind11::dict datasource_pydict);
 
 
 } // namespace madigan
