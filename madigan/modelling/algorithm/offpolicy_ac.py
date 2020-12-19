@@ -9,7 +9,8 @@ from .base import Agent
 from ...environments import get_env_info
 from ...utils.replay_buffer import ReplayBuffer
 from ...utils.data import SARSD, State
-from ...utils import list_2_dict, DiscreteRangeSpace
+from ...utils.metrics import list_2_dict
+from ...utils import DiscreteRangeSpace
 
 
 class OffPolicyActorCritic(Agent):
@@ -34,7 +35,7 @@ class OffPolicyActorCritic(Agent):
         self.replay_min_size = replay_min_size
         self.batch_size = batch_size
         self.test_steps = test_steps
-        self.n_assets = self.action_space.shape[0]  #  includes cash
+        self.n_assets = self.action_space.n_assets  # includes cash
         self.action_atoms = self.action_space.action_atoms
         self.log_freq = 10000
 

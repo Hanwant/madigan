@@ -33,7 +33,7 @@ def reduce_train_metrics(metrics: Union[dict, pd.DataFrame],
     Takes dict (I.e from list_2_dict) or pandas df
     returns dict/df depending on input type
     """
-    if metrics is not None and len(metrics):
+    if metrics is not None and len(metrics) > 0:
         _metrics = type(metrics)()  # Create an empty dict or pd df
         for col in metrics.keys():
             if col in columns:

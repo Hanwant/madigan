@@ -44,10 +44,10 @@ def make_normalizer(norm_type):
     if norm_type == 'lookback_log':
         return lambda x: np.log(x / x[-1])
     if norm_type == 'standard_normal':
-        # return lambda x: (x-x.mean()) / x.std()
         return standard_norm
     if norm_type == 'expanding':
         return lambda x: x / _expanding_mean(x)
+
 
 def standard_norm(x):
     """
@@ -56,9 +56,8 @@ def standard_norm(x):
     """
     mean = x.mean()
     res = np.nan_to_num((x-mean) / x.std(), 0.)
-    if np.sum(np.isnan(res)) > 0:
-        import ipdb; ipdb.set_trace()
     return res
+
 
 class PreProcessor(ABC):
     def __init__(self):

@@ -11,7 +11,8 @@ import torch.nn as nn
 from .offpolicy_ac import OffPolicyActorCritic
 from .utils import abs_port_norm
 from ..utils import get_model_class
-from ...utils import ActionSpace, DiscreteRangeSpace, list_2_dict
+from ...utils.metrics import list_2_dict
+from ...utils import DiscreteRangeSpace, ActionSpace
 from ...utils.config import Config
 from ...utils.data import State
 from ...utils.preprocessor import make_preprocessor
@@ -91,11 +92,10 @@ class SACDiscrete(OffPolicyActorCritic):
 
             self.log_temp = torch.zeros(1, requires_grad=True,
                                         device=self.device)
-            self.temp = self._temp
             self.opt_entropy_temp = torch.optim.Adam([self.log_temp],
                                                      lr=lr_actor)
         else:
-            self.temp = entropy_temp
+            self._temp = entropy_temp
 
         if not self.savepath.is_dir():
             self.savepath.mkdir(parents=True)
@@ -105,11 +105,13 @@ class SACDiscrete(OffPolicyActorCritic):
             self.critic_t.load_state_dict(self.critic_b.state_dict())
 
     @property
-    def _temp(self):
+    def temp(self):
         """
         If self.learn_entropy_temp, then this is used for self.temp
         """
-        return self.log_temp.exp()
+        if self.learn_entropy_temp:
+            return self.log_temp.exp()
+        return self._temp
 
     @classmethod
     def from_config(cls, config):

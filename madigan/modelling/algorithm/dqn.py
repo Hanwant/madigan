@@ -55,7 +55,7 @@ class DQN(OffPolicyQ):
         self.tau_soft_update = min(tau_soft_update, 1-tau_soft_update)
 
         self.model_class = get_model_class(type(self).__name__, model_class)
-        output_shape = (action_space.n, action_space.action_atoms)
+        output_shape = (action_space.n_assets, action_space.action_atoms)
         model_config['noisy_net'] = noisy_net
         model_config['noisy_net_sigma'] = noisy_net_sigma
         self.model_b = self.model_class(input_shape, output_shape,

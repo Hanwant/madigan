@@ -57,6 +57,10 @@ def time_profile(repeats: int, out_results=False, **kwargs):
 ################################      AGENT       #############################
 ###############################################################################
 class ActionSpace(ABC):
+    """
+    Abstract Base Class that action spaces inherit from
+    Defines interface for all ActionSpaces
+    """
     @abstractmethod
     def sample(self):
         """
@@ -70,11 +74,12 @@ class ActionSpace(ABC):
         Shape of output actions
         """
 
+
 class DiscreteRangeSpace(ActionSpace):
     """
     Samples from a given integer range
     """
-    def __init__(self, ranges: Union[tuple, int], n: int = 1):
+    def __init__(self, ranges: Union[tuple, int], n_assets: int = 1):
         """
         ranges: tuple [low, high) -> inclusive of low, exclusive of high
         n: int -> I.e number of assets, 1st dim of sample
@@ -83,19 +88,19 @@ class DiscreteRangeSpace(ActionSpace):
             ranges = (0, ranges)
         assert len(ranges) == 2
         self.ranges = ranges
-        self.n = n
+        self.n_assets = n_assets
         self.low = ranges[0]
         self.high = ranges[1]
         self.action_atoms = self.high - self.low
         self.action_multiplier = 1
 
     def sample(self):
-        action = np.random.randint(self.low, self.high, self.n)
+        action = np.random.randint(self.low, self.high, self.n_assets)
         return action * self.action_multiplier
 
     @property
     def shape(self):
-        return (self.n, )
+        return (self.n_assets, )
 
     def __eq__(self, other):
         if not isinstance(other, DiscreteRangeSpace):
@@ -103,25 +108,29 @@ class DiscreteRangeSpace(ActionSpace):
         return self.shape == other.shape and (self.low == other.low) \
             and self.high == other.high
 
+
 class DiscreteActionSpace(ActionSpace):
     """
     Samples from a given list of discrete actions - assumed to be numeric
     """
-    def __init__(self, actions: Union[tuple, list], probs: Union[tuple, list]=None, n: int=1):
+    def __init__(self, actions: Union[tuple, list],
+                 probs: Union[tuple, list] = None,
+                 n_assets: int = 1):
         # assert len(ranges) == 2
         self.actions = actions
         self.probs = probs
-        self.n = n
+        self.n_assets = n_assets
         self.action_multiplier = 1
 
-    def sample(self, n=None):
-        n = n or self.n
-        action = np.random.choice(self.actions, size=self.n, p=self.probs)
+    def sample(self, n_assets=None):
+        n = n_assets or self.n_assets
+        action = np.random.choice(self.actions, size=self.n_assets,
+                                  p=self.probs)
         return action * self.action_multiplier
 
     @property
     def shape(self):
-        return (self.n, )
+        return (self.n_assets, )
 
     def __eq__(self, other):
         if not isinstance(other, DiscreteActionSpace):
@@ -136,21 +145,20 @@ class ContinuousActionSpace(ActionSpace):
     """
     def __init__(self, low: float, high: float, num_assets, num_actions,
                  transform=lambda x: x):
-        self.output_shape = (num_assets, num_actions)
+        self.n_assets = num_assets
+        self.n_actions = num_actions
         self.low = low
         self.high = high
-        self.dist = partial(np.random.uniform, low, high,
-                            size=self.output_shape)
         self.transform = transform
 
     def sample(self, shape=None):
-        if shape is not None:
-            return np.random.uniform(self.low, self.high, shape)
-        return self.transform(self.dist())
+        shape = shape if shape is not None else self.shape
+        uniform_sample = np.random.uniform(self.low, self.high, shape)
+        return self.transform(uniform_sample)
 
     @property
     def shape(self):
-        return self.output_shape
+        return (self.n_assets, self.n_actions)
 
     def __eq__(self, other):
         if not isinstance(other, ContinuousActionSpace):

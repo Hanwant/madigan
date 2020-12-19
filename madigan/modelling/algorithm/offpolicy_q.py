@@ -10,7 +10,8 @@ from .base import Agent
 from ...environments import get_env_info
 from ...utils.replay_buffer import ReplayBuffer
 from ...utils.data import SARSD, State
-from ...utils import list_2_dict, DiscreteRangeSpace
+from ...utils.metrics import list_2_dict
+from ...utils import DiscreteRangeSpace
 
 
 class OffPolicyQ(Agent):
@@ -38,7 +39,7 @@ class OffPolicyQ(Agent):
         self.test_steps = test_steps
         self.unit_size = unit_size
         self.action_atoms = self.action_space.action_atoms
-        self.n_assets = self.action_space.n
+        self.n_assets = self.action_space.n_assets
         self.centered_actions = np.arange(
             self.action_atoms) - self.action_atoms // 2
         self.log_freq = 5000
