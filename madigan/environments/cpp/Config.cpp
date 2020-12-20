@@ -85,17 +85,18 @@ namespace madigan {
           config["data_source_config"] = data_source_config;
         }
       }
-      else if ( dataSourceType == "TrendOU"){
+      else if ( dataSourceType == "TrendOU" ||
+                dataSourceType == "TrendyOU"){
         auto datasource_pydictFound=std::find_if(dict.begin(), dict.end(),
                                          [](const std::pair<pybind11::handle, pybind11::handle>& pair){
                                            return string(pybind11::str(pair.first)) == "data_source_config";
                                          });
         if (datasource_pydictFound != dict.end()){
           pybind11::dict datasource_pydict = dict[pybind11::str("data_source_config")];
-          config = makeTrendOUConfigFromPyDict(datasource_pydict);
+          config = makeTrendOUConfigFromPyDict(datasource_pydict, dataSourceType);
         }
         else{
-          throw ConfigError("config for DataSource type SimpleTrend needs data_source_config");
+          throw ConfigError("config for DataSource type TrendOU/TrendyOU needs data_source_config");
         }
       }
       else if ( dataSourceType == "HDFSource"){
@@ -319,7 +320,8 @@ namespace madigan {
     return config;
   }
 
-   Config makeTrendOUConfigFromPyDict(pybind11::dict datasource_pydict){
+  Config makeTrendOUConfigFromPyDict(pybind11::dict datasource_pydict,
+                                     string dataSourceType){ // type can be TrendOU or TrendyOU
     for (auto key: {"trend_prob", "min_period", "max_period", "dYMin",
                     "dYMax", "start", "theta", "phi", "noise_trend", "ema_alpha"}){
       auto keyFound=std::find_if(datasource_pydict.begin(), datasource_pydict.end(),
@@ -374,7 +376,7 @@ namespace madigan {
       }
     }
     Config config{
-      {"data_source_type", "TrendOU"},
+      {"data_source_type", dataSourceType},
       {"data_source_config", Config{{"trendProb", trendProb},
                                     {"minPeriod", minPeriod},
                                     {"maxPeriod", maxPeriod},

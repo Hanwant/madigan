@@ -2,7 +2,8 @@ import pytest
 import numpy as np
 from numpy import isclose
 from numpy.testing import assert_equal, assert_allclose
-from madigan.utils import time_profile, Config
+from madigan.utils import time_profile
+from madigan.utils.config import Config
 from madigan.environments.synth import Synth as Synth_py
 from madigan.environments.cpp import Asset, Assets, RiskInfo
 from madigan.environments.cpp import Synth, Portfolio, Account, Broker, Env

@@ -32,6 +32,9 @@ namespace madigan{
     else if (dataSourceType == "TrendOU"){
       return make_unique<TrendOU>();
     }
+    else if (dataSourceType == "TrendyOU"){
+      return make_unique<TrendyOU>();
+    }
     else{
       std::stringstream ss;
       ss << "Default Constructor for ";
@@ -67,6 +70,9 @@ namespace madigan{
     }
     else if (dataSourceType == "TrendOU"){
       return make_unique<TrendOU>(config);
+    }
+    else if (dataSourceType == "TrendyOU"){
+      return make_unique<TrendyOU>(config);
     }
     else if (dataSourceType == "Composite"){
       return make_unique<Composite>(config);
@@ -784,6 +790,7 @@ namespace madigan{
       this->emaAlpha=emaAlpha;
       this->ema=start;
       this->ouMean=start;
+      this->start=start;
       currentData_.resize(trendProb.size());
       for (int i=0; i<trendProb.size(); i++){
         ouNoiseDist.push_back(std::normal_distribution<double>(0., phi[i]));
@@ -894,6 +901,163 @@ namespace madigan{
     return currentData_;
   }
 
+  void TrendOU::reset(){
+    for (int i=0; i<trendProb.size(); i++){
+      trending[i] = false;
+      currentData_(i) = start[i];
+      currentTrendLen[i] = 0;
+    }
+  }
+
+  // TRENDY OU //////////////////////////////////////////////////////////////////////
+
+  void TrendyOU::initParams(std::vector<double> trendProb, std::vector<int> minPeriod,
+                           std::vector<int> maxPeriod, std::vector<double> dYMin,
+                           std::vector<double> dYMax, std::vector<double> start,
+                           std::vector<double> theta, std::vector<double> phi,
+                           std::vector<double> noiseTrend, std::vector<double> emaAlpha){
+    if ((trendProb.size() == minPeriod.size()) && (minPeriod.size() == maxPeriod.size())
+        && (maxPeriod.size() == phi.size()) && (phi.size() == noiseTrend.size())
+        && (start.size() == dYMin.size()) && (dYMin.size() == dYMax.size())
+        && (dYMax.size() == theta.size()) && (theta.size() == phi.size())
+        && (noiseTrend.size() == emaAlpha.size())){
+      this->trendProb=trendProb;
+      this->minPeriod=minPeriod;
+      this->maxPeriod=maxPeriod;
+      this->noiseTrend=noiseTrend;
+      this->dYMin=dYMin;
+      this->dYMax=dYMax;
+      this->theta=theta;
+      this->phi=phi;
+      this->emaAlpha=emaAlpha;
+      this->ema=start;
+      this->start=start;
+      // this->ouMean=start;
+      currentData_.resize(trendProb.size());
+      for (int i=0; i<trendProb.size(); i++){
+        ouNoiseDist.push_back(std::normal_distribution<double>(0., phi[i]));
+        trendNoiseDist.push_back(std::normal_distribution<double>(0., noiseTrend[i]));
+        trendLenDist.push_back(std::uniform_int_distribution<int>
+                                 (minPeriod[i], maxPeriod[i]));
+        dYDist.push_back(std::uniform_real_distribution<double>
+                                 (dYMin[i], dYMax[i]));
+        ouMean.push_back(start[i]);
+        ouComponent.push_back(0.);
+        trendComponent.push_back(0.);
+        trending.push_back(false);
+        std::string assetName = "TrendyOU_" + std::to_string(i);
+        this->assets.push_back(Asset(assetName));
+        currentData_ << start[i]; // default starting val
+        currentDirection.push_back(1);
+        currentTrendLen.push_back(0);
+        dY.push_back(0.);
+      }
+      this->nAssets_ = assets.size();
+    }
+    else{
+      throw std::length_error("parameters passed to DataSource<PriceVector> of type TrendyOU"
+                              " need to be vectors of same length");
+    }
+    generator.seed(std::chrono::system_clock::now().time_since_epoch().count());
+  }
+
+  TrendyOU::TrendyOU(std::vector<double> trendProb, std::vector<int> minPeriod,
+                   std::vector<int> maxPeriod, std::vector<double> dYMin,
+                   std::vector<double> dYMax, std::vector<double> start,
+                   std::vector<double> theta, std::vector<double> phi,
+                   std::vector<double> noiseTrend, std::vector<double> emaAlpha) {
+    initParams(trendProb, minPeriod, maxPeriod, dYMin, dYMax, start,
+               theta, phi, noiseTrend, emaAlpha);
+  }
+
+  TrendyOU::TrendyOU(): TrendyOU({0.001, 0.001}, {100, 500},
+                              {200, 1500}, {0.001, 0.01},
+                              {0.003, 0.03}, {10., 15.},
+                              {1., 0.5}, {2., 2.1},
+                              {1., 1.2}, {0.1, 0.2}){}
+
+  TrendyOU::TrendyOU(Config config){
+    bool allKeysPresent{true};
+    if (config.find("data_source_config") == config.end()){
+      throw ConfigError("config passed but doesn't contain generator params");
+      allKeysPresent = false;
+    }
+    Config params = std::any_cast<Config>(config["data_source_config"]);
+    for (auto key: {"trendProb", "minPeriod", "maxPeriod", "dYMin",
+                    "dYMax", "start", "theta", "phi", "noiseTrend", "emaAlpha"}){
+      if (params.find(key) == params.end()){
+        allKeysPresent=false;
+        throw ConfigError((string)"data_Source_config doesn't have all required"
+                          "constructor arguments, missing: " + key );
+      }
+    }
+    vector<double> trendProb = std::any_cast<vector<double>>(params["trendProb"]);
+    vector<int> minPeriod = std::any_cast<vector<int>>(params["minPeriod"]);
+    vector<int> maxPeriod = std::any_cast<vector<int>>(params["maxPeriod"]);
+    vector<double> dYMin = std::any_cast<vector<double>>(params["dYMin"]);
+    vector<double> dYMax = std::any_cast<vector<double>>(params["dYMax"]);
+    vector<double> start = std::any_cast<vector<double>>(params["start"]);
+    vector<double> theta = std::any_cast<vector<double>>(params["theta"]);
+    vector<double> phi = std::any_cast<vector<double>>(params["phi"]);
+    vector<double> noiseTrend = std::any_cast<vector<double>>(params["noiseTrend"]);
+    vector<double> emaAlpha = std::any_cast<vector<double>>(params["emaAlpha"]);
+    initParams(trendProb, minPeriod, maxPeriod, dYMin, dYMax, start,
+               theta, phi, noiseTrend, emaAlpha);
+  }
+
+  TrendyOU::TrendyOU(pybind11::dict py_config):
+    TrendyOU::TrendyOU(makeConfigFromPyDict(py_config)){}
+
+  const PriceVector& TrendyOU::getData(){
+    for (int i=0; i < nAssets_; i++){
+      double& y = currentData_[i];
+      // OU
+      double ouNoise = ouMean[i]*ouNoiseDist[i](generator);
+      double ouRevertingComponent = theta[i] * (ouMean[i]-ouComponent[i]); // centered at 0
+      ouComponent[i] += ouRevertingComponent + ouNoise;
+      // TREND
+      // double trendNoise{0};
+      if(trending[i]){
+        // double& x = currentData_(i);
+        // trendNoise =  trendNoiseDist[i](generator);
+        trendComponent[i] = y * (dY[i] * currentDirection[i]);
+        ouMean[i] = y;
+        if (--currentTrendLen[i] == 0){
+          trending[i] = false;
+          // ouMean[i] = y;
+        }
+        y = std::max(0.01, y);
+        if (y <= .1){
+          currentDirection[i] = 1;
+        }
+      }
+      else{
+        double rand = uniformDist(generator);
+        if (rand < trendProb[i]){
+          trending[i] = true;
+          currentDirection[i] = (uniformDist(generator) < 0.5)? -1: 1;
+          currentTrendLen[i] = trendLenDist[i](generator);
+          dY[i] = dYDist[i](generator);
+        }
+      }
+      y = ouComponent[i] + trendComponent[i];
+      // ema[i] = emaAlpha[i] * ema[i] + (1-emaAlpha[i]) * y;
+    }
+    timestamp_ += 1;
+    return currentData_;
+  }
+
+  void TrendyOU::reset(){
+    ema=start;
+    // this->ouMean=start;
+    for (int i=0; i<trendProb.size(); i++){
+      ouComponent[i] = 0;
+      trending[i] = false;
+      currentData_(i) = start[i];
+      currentTrendLen[i] = 0;
+      ema[i] = start[i];
+    }
+  }
 
 
 

@@ -421,19 +421,19 @@ namespace madigan{
     TrendOU(pybind11::dict config);
     ~TrendOU(){}
 
-    const PriceVector& getData() ;
+    const virtual PriceVector& getData() ;
     const PriceVector& currentData() const{ return currentData_;}
     const PriceVector& currentPrices() const{ return currentData_;}
-    void reset(){}
+    void reset();
     std::size_t currentTime() const { return timestamp_; }
 
-  protected:
-    virtual void initParams(std::vector<double> trendProb, std::vector<int> minPeriod,
-                            std::vector<int> maxPeriod, std::vector<double> dYMin,
-                            std::vector<double> dYMax, std::vector<double> start,
-                            std::vector<double> theta, std::vector<double> phi,
-                            std::vector<double> noise_var, std::vector<double> emaAlpha);
-  protected:
+  private:
+    void initParams(std::vector<double> trendProb, std::vector<int> minPeriod,
+                    std::vector<int> maxPeriod, std::vector<double> dYMin,
+                    std::vector<double> dYMax, std::vector<double> start,
+                    std::vector<double> theta, std::vector<double> phi,
+                    std::vector<double> noise_var, std::vector<double> emaAlpha);
+  private:
     const double dT{1.};
     std::vector<double> trendProb;
     vector<int> minPeriod;
@@ -446,6 +446,64 @@ namespace madigan{
     vector<double> noiseTrend;
     vector<double> emaAlpha;
     vector<double> ema;
+    vector<double> start; // for resetting
+    std::vector<double> ouMean;
+    std::size_t timestamp_{0};
+    std::default_random_engine generator;
+    std::vector<std::normal_distribution<double>> ouNoiseDist;
+    std::vector<std::normal_distribution<double>> trendNoiseDist;
+    std::vector<std::uniform_real_distribution<double>> dYDist;
+    std::vector<std::uniform_int_distribution<int>> trendLenDist;
+    std::uniform_real_distribution<double> uniformDist{0., 1.};
+    PriceVector currentData_;
+
+
+    std::vector<bool> trending;
+    std::vector<int> currentDirection;
+    std::vector<int> currentTrendLen;
+
+  };
+
+  class TrendyOU: public DataSourceTick{
+  public:
+    TrendyOU();
+    TrendyOU(std::vector<double> trendProb, std::vector<int> minPeriod,
+            std::vector<int> maxPeriod, std::vector<double> dYMin,
+            std::vector<double> dYMax, std::vector<double> start,
+            std::vector<double> theta, std::vector<double> phi,
+            std::vector<double> noise_var, std::vector<double> emaAlpha);
+    TrendyOU(Config config);
+    TrendyOU(pybind11::dict config);
+    ~TrendyOU(){}
+
+    const PriceVector& getData() ;
+    const PriceVector& currentData() const{ return currentData_;}
+    const PriceVector& currentPrices() const{ return currentData_;}
+    void reset();
+    std::size_t currentTime() const { return timestamp_; }
+
+  private:
+    void initParams(std::vector<double> trendProb, std::vector<int> minPeriod,
+                    std::vector<int> maxPeriod, std::vector<double> dYMin,
+                    std::vector<double> dYMax, std::vector<double> start,
+                    std::vector<double> theta, std::vector<double> phi,
+                    std::vector<double> noise_var, std::vector<double> emaAlpha);
+  private:
+    const double dT{1.};
+    std::vector<double> trendProb;
+    vector<int> minPeriod;
+    vector<int> maxPeriod;
+    vector<double> dY;
+    vector<double> dYMin;
+    vector<double> dYMax;
+    vector<double> theta;
+    vector<double> phi;
+    vector<double> noiseTrend;
+    vector<double> emaAlpha;
+    vector<double> ema;
+    vector<double> start;
+    vector<double> ouComponent;
+    vector<double> trendComponent;
     std::vector<double> ouMean;
     std::size_t timestamp_{0};
     std::default_random_engine generator;

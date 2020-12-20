@@ -95,6 +95,8 @@ PYBIND11_MODULE(env, m){
   py::class_<SineAdder, DataSourceTick>_SineAdder(m, "SineAdder");
   py::class_<SineDynamic, DataSourceTick>_SineDynamic(m, "SineDynamic");
   py::class_<SimpleTrend, DataSourceTick>_SimpleTrend(m, "SimpleTrend");
+  py::class_<TrendOU, DataSourceTick>_TrendOU(m, "TrendOU");
+  py::class_<TrendyOU, DataSourceTick>_TrendyOU(m, "TrendyOU");
   py::class_<Composite, DataSourceTick>_Composite(m, "Composite");
   py::class_<HDFSource, DataSourceTick, PyHDFSource>_HDFSource(m, "HDFSource");
 
@@ -273,7 +275,6 @@ PYBIND11_MODULE(env, m){
     .def("currentData", (PriceVector& (SineDynamic::*) ()) &SineDynamic::currentData,
          "Get current data points",
          py::return_value_policy::reference);
-
   _SimpleTrend.def(py::init<>())
     .def(py::init<py::dict>(), py::arg("config_dict"))
     .def(py::init<
@@ -295,6 +296,56 @@ PYBIND11_MODULE(env, m){
          "Get current prices",
          py::return_value_policy::reference)
     .def("currentData", (PriceVector& (SimpleTrend::*) ()) &SimpleTrend::currentData,
+         "Get current data points",
+         py::return_value_policy::reference);
+  _TrendOU.def(py::init<>())
+    .def(py::init<py::dict>(), py::arg("config_dict"))
+    .def(py::init<
+         vector<double>, vector<int>,
+         vector<int>, vector<double>,
+         vector<double>, vector<double>,
+         vector<double>, vector<double>,
+         vector<double>, vector<double>> (),
+         py::arg("trend_prob"), py::arg("min_period"),
+         py::arg("max_period"), py::arg("dYMin"),
+         py::arg("dYMax"), py::arg("start"),
+         py::arg("theta"), py::arg("phi"),
+         py::arg("noise_trend"), py::arg("ema_alpha"))
+    .def_property_readonly("currentTime", &TrendOU::currentTime,
+                           "get the current timestamp",
+                           py::return_value_policy::move)
+    .def("getData", (PriceVector& (TrendOU::*) ()) &TrendOU::getData,
+         "Get Next data points",
+         py::return_value_policy::reference)
+    .def("currentPrices", (PriceVector& (TrendOU::*) ()) &TrendOU::currentPrices,
+         "Get current prices",
+         py::return_value_policy::reference)
+    .def("currentData", (PriceVector& (TrendOU::*) ()) &TrendOU::currentData,
+         "Get current data points",
+         py::return_value_policy::reference);
+  _TrendyOU.def(py::init<>())
+    .def(py::init<py::dict>(), py::arg("config_dict"))
+    .def(py::init<
+         vector<double>, vector<int>,
+         vector<int>, vector<double>,
+         vector<double>, vector<double>,
+         vector<double>, vector<double>,
+         vector<double>, vector<double>> (),
+         py::arg("trend_prob"), py::arg("min_period"),
+         py::arg("max_period"), py::arg("dYMin"),
+         py::arg("dYMax"), py::arg("start"),
+         py::arg("theta"), py::arg("phi"),
+         py::arg("noise_trend"), py::arg("ema_alpha"))
+    .def_property_readonly("currentTime", &TrendyOU::currentTime,
+                           "get the current timestamp",
+                           py::return_value_policy::move)
+    .def("getData", (PriceVector& (TrendyOU::*) ()) &TrendyOU::getData,
+         "Get Next data points",
+         py::return_value_policy::reference)
+    .def("currentPrices", (PriceVector& (TrendyOU::*) ()) &TrendyOU::currentPrices,
+         "Get current prices",
+         py::return_value_policy::reference)
+    .def("currentData", (PriceVector& (TrendyOU::*) ()) &TrendyOU::currentData,
          "Get current data points",
          py::return_value_policy::reference);
   _Composite.def(py::init<py::dict>(), py::arg("config_dict"))
@@ -323,7 +374,6 @@ PYBIND11_MODULE(env, m){
     .def("currentData", (PriceVector& (Composite::*) ()) &Composite::currentData,
          "Get current data - make be raw prices or preprocessed or anything else",
          py::return_value_policy::reference);
-
   _HDFSource.def(py::init<string, string, string, string>(),
                  py::arg("filepath"), py::arg("mainKey"),
                  py::arg("priceKeu"), py::arg("timestampKey"))
