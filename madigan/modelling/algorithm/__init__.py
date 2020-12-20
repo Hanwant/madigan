@@ -1,4 +1,4 @@
-from .dqn import DQN, DQNCURL
+from .dqn import DQN, DQNCURL, DQNAE
 from .iqn import IQN, IQNCURL
 from .ddpg import DDPG, DDPGDiscretized
 from .sac import SACDiscrete
@@ -6,7 +6,7 @@ from .sac import SACDiscrete
 
 
 def make_agent(config):
-    if config.agent_type in ("DQN", "DQNCURL", "IQN", "IQNCURL",
+    if config.agent_type in ("DQN", "DQNCURL", "DQNAE", "IQN", "IQNCURL",
                              "DDPG", "DDPGDiscretized",
                              "SACDiscrete"):
         return globals()[config.agent_type].from_config(config)

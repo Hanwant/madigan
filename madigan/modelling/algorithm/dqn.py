@@ -52,7 +52,7 @@ class DQN(OffPolicyQ):
         self.double_dqn = double_dqn
         self.discount = discount
         # safeguard to get 0.001 instead of 0.99
-        self.tau_soft_update = min(tau_soft_update, 1-tau_soft_update)
+        self.tau_soft_update = min(tau_soft_update, 1 - tau_soft_update)
 
         self.model_class = get_model_class(type(self).__name__, model_class)
         output_shape = (action_space.n_assets, action_space.action_atoms)
@@ -77,6 +77,7 @@ class DQN(OffPolicyQ):
             self.lr_sched = torch.optim.lr_scheduler.CyclicLR(
                 self.opt, base_lr=lr, max_lr=1e-2, step_size_up=2000)
         else:
+
             class Sched:
                 """ Dummy so that self.sched.step() can be called"""
                 def step(self):
@@ -97,9 +98,9 @@ class DQN(OffPolicyQ):
         return cls(env, preprocessor, input_shape, action_space,
                    aconf.discount, aconf.nstep_return, aconf.replay_size,
                    aconf.replay_min_size, aconf.noisy_net,
-                   aconf.noisy_net_sigma, aconf.eps,
-                   aconf.eps_decay, aconf.eps_min, aconf.batch_size,
-                   config.test_steps, unit_size, savepath, aconf.double_dqn,
+                   aconf.noisy_net_sigma, aconf.eps, aconf.eps_decay,
+                   aconf.eps_min, aconf.batch_size, config.test_steps,
+                   unit_size, savepath, aconf.double_dqn,
                    aconf.tau_soft_update, config.model_config.model_class,
                    config.model_config, config.optim_config.lr)
 
@@ -329,6 +330,70 @@ class DQN(OffPolicyQ):
             elif np.sign(portfolio[i]) == np.sign(action):
                 transactions[i] = 0.
         return transactions
+
+
+class DQNAE(DQN):
+    """
+    DQN with autoencoding objective as an auxiliary loss.
+    This agent just wraps the DQN class to include the AE objective
+    along with the normal train step.
+    """
+    def __init__(self, env, preprocessor, input_shape: tuple,
+                 action_space: ActionSpace, discount: float, nstep_return: int,
+                 replay_size: int, replay_min_size: int, noisy_net: bool,
+                 noisy_net_sigma: float, eps: float, eps_decay: float,
+                 eps_min: float, batch_size: int, test_steps: int,
+                 unit_size: float, savepath: Union[Path, str],
+                 double_dqn: bool, tau_soft_update: float, model_class: str,
+                 model_config: Union[dict, Config], lr: float, ae_temp: float):
+        super().__init__(env, preprocessor, input_shape, action_space,
+                         discount, nstep_return, replay_size, replay_min_size,
+                         noisy_net, noisy_net_sigma, eps, eps_decay, eps_min,
+                         batch_size, test_steps, unit_size, savepath,
+                         double_dqn, tau_soft_update, model_class,
+                         model_config, lr)
+        self.ae_opt = torch.optim.Adam(self.model_b.parameters(),
+                                       lr=self.opt.param_groups[0]['lr'])
+        self.ae_temp = ae_temp
+
+    def train_step(self, sarsd: SARSD = None):
+        """
+        wraps train_step() of DQN to include the AE objective
+        """
+        sarsd = sarsd or self.buffer.sample(self.batch_size)
+        state = self.prep_state_tensors(sarsd.state, batch=True)
+        # contrastive unsupervised objective
+        loss_ae = self.ae_temp*self.model_b.reconstruction_loss(state)
+        self.ae_opt.zero_grad()
+        loss_ae.backward()
+        self.ae_opt.step()
+        # do normal rl training objective and add 'loss_curl' to output dict
+        return {
+            'loss_ae': loss_ae.detach().item(),
+            **super().train_step(sarsd)
+        }
+
+    @classmethod
+    def from_config(cls, config):
+        env = make_env(config)
+        preprocessor = make_preprocessor(config)
+        input_shape = preprocessor.feature_output_shape
+        atoms = config.discrete_action_atoms + 1
+        action_space = DiscreteRangeSpace((0, atoms), config.n_assets)
+        reward_shaper = make_reward_shaper()
+        aconf = config.agent_config
+        unit_size = aconf.unit_size_proportion_avM
+        savepath = Path(config.basepath) / config.experiment_id / 'models'
+        return cls(env, preprocessor, input_shape, action_space,
+                   aconf.discount, aconf.nstep_return, reward_shaper,
+                   aconf.replay_size, aconf.replay_min_size,
+                   aconf.noisy_net,  aconf.noisy_net_sigma,
+                   aconf.eps, aconf.eps_decay,
+                   aconf.eps_min, aconf.batch_size, config.test_steps,
+                   unit_size, savepath, aconf.double_dqn,
+                   aconf.tau_soft_update, config.model_config.model_class,
+                   config.model_config, config.optim_config.lr,
+                   aconf.ae_temp)
 
 
 class DQNCURL(DQN):

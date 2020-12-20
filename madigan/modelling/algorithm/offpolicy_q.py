@@ -19,11 +19,11 @@ class OffPolicyQ(Agent):
     Base class for all off policy agents with experience replay buffers
     """
     def __init__(self, env, preprocessor, input_shape, action_space, discount,
-                 nstep_return, replay_size, replay_min_size, noisy_net, eps,
-                 eps_decay, eps_min, batch_size, test_steps, unit_size,
-                 savepath):
+                 nstep_return, reward_shaper, replay_size, replay_min_size,
+                 noisy_net, eps, eps_decay, eps_min, batch_size, test_steps,
+                 unit_size, savepath):
         super().__init__(env, preprocessor, input_shape, action_space,
-                         discount, nstep_return, savepath)
+                         discount, nstep_return, reward_shaper, savepath)
         self.noisy_net = noisy_net
         self.eps = eps
         self.eps_decay = max(eps_decay, 1 -

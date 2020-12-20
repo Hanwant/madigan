@@ -6,6 +6,7 @@ import numpy as np
 import torch
 
 from ...utils.data import SARSD, State
+from ...environments.reward_shaping import RewardShaper
 
 
 class Agent(ABC):
@@ -19,6 +20,7 @@ class Agent(ABC):
                  action_space,
                  discount: float,
                  nstep_return: int,
+                 reward_shaper: RewardShaper,
                  savepath=None):
         self._env = env
         self._preprocessor = preprocessor
@@ -26,6 +28,7 @@ class Agent(ABC):
         self._action_space = action_space
         self.discount = discount
         self.nstep_return = nstep_return
+        self.reward_shaper = reward_shaper
         self.savepath = Path(savepath)
         self.training_steps = 0
         self.env_steps = 0
@@ -164,14 +167,14 @@ def test_episode(agent: Agent,
                  test_steps: int,
                  reset: bool = True) -> dict:
     """
-    Wrapper function for testing Agents out of sample
+    Wrapper function for testing Agents OUT OF SAMPLE
     Allows decoupling of agent from it's internal env which was used to train
     so as to easily allow testing the agent with different env and preprocessor
     I.e a test/val dataset
     @params:
         agent: OffPolicyQ
-        env : Env
-        preprocessor:
+        env : Env = new environment to test in
+        preprocessor: Preprocessor = new preprocessor to test with
         test_steps: int = number of env interaction steps to perform
         reset: bool = whether or not to call env.reset() before starting
     """
