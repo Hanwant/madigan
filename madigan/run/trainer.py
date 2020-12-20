@@ -15,7 +15,9 @@ import matplotlib.pyplot as plt
 
 import zmq
 
-from ..utils import SARSD, State, ReplayBuffer, save_to_hdf, load_from_hdf
+from ..utils.data import SARSD, State
+from ..utils.replay_buffer import ReplayBuffer
+from ..utils.logging import save_to_hdf, load_from_hdf
 from ..utils.metrics import list_2_dict, reduce_train_metrics, test_summary
 from ..utils.config import save_config, Config
 from ..utils.plotting import make_grid
@@ -23,7 +25,7 @@ from ..utils.preprocessor import make_preprocessor
 from ..modelling import make_agent
 from ..environments import make_env, get_env_info
 from ..environments.cpp import RiskInfo
-from .test import test
+# from .test import test
 
 
 class Trainer:

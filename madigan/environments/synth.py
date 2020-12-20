@@ -18,6 +18,10 @@ def default_params():
 
 
 class Synth(EnvPy):
+    """
+    DEPRECATED
+    Uses numba for core computation (multi_sine_gen)
+    """
     def __init__(self, generator_params=None, min_tf=1, **config):
         if generator_params is None:
             generator_params = default_params()
@@ -96,56 +100,4 @@ def test_env(exp_config, agent, eps=1.):
         margin.append(env.available_margin)
     return {'eq': eq, 'returns': returns, 'prices': np.array(prices), 'positions': positions,
             'assets': env.assets, 'cash': cash, 'margin': margin}
-
-if __name__ == "__main__":
-    import matplotlib.pyplot as plt
-    from pathlib import Path
-    # from madigan.dash.dash_synth import run_dash
-    from madigan.dash.dash_synth1 import run_dash
-
-    freq=[1., 2., 3., 4.]
-    mu=[2., 3, 4., 5.] # (mu == offset) Keeps negative prices from ocurring
-    amp=[1., 2., 3., 4.]
-    phase=[0., 1., 2., 0.]
-    gen_state_space = np.stack([freq, mu, amp, phase], axis=1) # (n_assets, nparameters)
-
-    generator_params = {'type': 'multisine',
-                          'state_space': gen_state_space.tolist()}
-    # Params
-    n_assets = generator_params['state_space'].shape[0]
-    nfeats = (2 * n_assets)
-    min_tf = 1
-    in_shape = (min_tf, nfeats)
-    discrete_actions = True
-    discrete_action_atoms = 11
-    nsteps = 100
-
-    model_config = {
-        'model_class': 'conv',
-        'd_model': 256,
-        'n_layers': 4,
-        'in_shape': in_shape,
-        'out_shape': (4, 11),
-    }
-    agent_config = {
-        'type': 'DQN',
-        'savepath': '/home/hemu/madigan/farm/',
-        'model_params': model_config
-    }
-    exp_config = dict(
-        name='test',
-        generator_params=generator_params,
-        discrete_actions=discrete_actions,
-        discrete_action_atoms=discrete_action_atoms,
-        nsteps=nsteps,
-        lot_unit_value=1_000,
-        min_tf = min_tf,
-        agent_config=agent_config,
-    )
-
-    param_path = Path('/home/hemu/madigan/madigan/environments')/'test.json'
-    save_config(exp_config, param_path)
-    data = test_env(exp_config, agent=None, eps=1.)
-    # plot_metrics(data)
-    run_dash(data)
 

@@ -14,7 +14,7 @@ from .dash_ui import Ui_MainWindow
 from .trainer_thread import TrainerWorker
 from .utils import make_dark_palette, delete_layout
 from .plots import make_train_plots, make_test_episode_plots, make_test_history_plots
-from ..run.test import test
+# from ..run.test import test
 from ..run.trainer import Trainer
 from ..utils.config import make_config, Config, load_config, save_config
 

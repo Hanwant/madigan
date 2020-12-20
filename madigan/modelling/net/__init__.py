@@ -1,8 +1,7 @@
-from .conv_net import ConvNet
+from .conv_net import ConvNet, ConvNetAE, ConvNetCurl
 from .conv_net_ddpg import ConvCriticQ as ConvCriticQ_DDPG
 from .conv_net_ddpg import ConvPolicyDeterministic as ConvPolicy_DDPG
 from .conv_net_sac import ConvPolicySACD, TwinQNetwork
-from .conv_net import ConvNetCurl
 from .series_net import SeriesNetQ
 from .conv_net_iqn import ConvNetIQN
 
@@ -26,6 +25,9 @@ def get_model_class(agent_type, model_type):
         if model_type in ("SeriesNet", "SeriesNetQ"):
             return SeriesNetQ
         raise model_na
+    if agent_type in ("DQNAE", ):
+        if model_type in ("ConvNet", "ConvNetQ", "ConvNetAE"):
+            return ConvNetAE
     if agent_type in ("DQNCURL", "DQNReverserCURL"):
         if model_type in ("ConvNet", "ConvNetQ", "ConvNetCURL",
                           "ConvNetCurl"):

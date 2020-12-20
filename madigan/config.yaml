@@ -1,5 +1,6 @@
 agent_config:
   action_atoms: 3
+  ae_temp: 0.5
   batch_size: 34
   discount: 0.999
   discrete_action_atoms: 3
@@ -28,39 +29,48 @@ agent_config:
   tau_soft_update: 0.0001
   train_freq: 4
   type: DQN
-  unit_size_proportion_avM: 0.05
+  unit_size_proportion_avM: 0.01
   proximal_portfolio_penalty: .5
+  target_entropy_ratio: 0.98
+  learn_entropy_temp: false
+  entropy_temp: 0.2
   transaction_thresh: 0.02
-agent_type: DQNReverser
+agent_type: DQN
 assets:
 - sine1
 basepath: /media/hemu/Data/madigan/experiments/
 data_source_config:
-  dYMax:
-  - 0.001
-  dYMin:
-  - 0.0005
-  ema_alpha:
-  - 0.3
-  max_period:
-  - 750
-  min_period:
-  - 250
-  noise_trend:
+  ampRange:
+  - - 0.2
+    - 1.0
+    - 0.1
+  - - 0.3
+    - 0.9
+    - 1.0
+  dX: 0.01
+  freqRange:
+  - - 0.5
+    - 5.0
+    - 0.1
+  - - 1.0
+    - 20.0
+    - 2.0
+  muRange:
+  - - 5.0
+    - 10.0
+    - 0.2
+  - - 1.0
+    - 20.0
+    - 1.0
+  noise: 1.0
+  phase:
   - 0.0
-  phi:
   - 0.0
-  start:
-  - 5.0
-  theta:
-  - 0.15
-  trend_prob:
-  - 0.1
-data_source_type: TrendOU
+data_source_type: SineDynamic
 discrete_action_atoms: 3
 discrete_actions: true
 env_type: Synth
-experiment_id: DQNReverser_TREND_MEDIUM_NONoise_LONGKERNDilation_trans0.02
+experiment_id: DQN_SineDynamic_AE_REF2_trans_.0_unit.01
 init_cash: 1000000
 log_freq: 10000
 lot_unit_value: 10000
@@ -68,25 +78,26 @@ maintenance_margin: 0.25
 min_tf: 64
 model_config:
   action_atoms: 3
-  actor_model_class: ConvPolicyDeterministic
+  actor_model_class: ConvPolicySACD
   act_fn: gelu
   channels:
   - 32
   - 32
-  critic_model_class: ConvCriticQ
+  compression_factor: 4
+  critic_model_class: TwinQNetwork
   curl_momentum_update: 0.001
   curl_lr: .001
   d_model: 1024
   dilations:
-  - 3
-  - 3
+  - 1
+  - 1
   discrete_action_atoms: 3
   discrete_actions: true
   dueling: true
   iqn: true
   kernels:
-  - 12
-  - 12
+  - 5
+  - 5
   curl_latent_size: 64
   lot_unit_value: 10000
   min_tf: 64
@@ -108,7 +119,7 @@ optim_config:
   - 0.999
   eps: 1.0e-08
   lr: 0.001
-  lr_actor: 0.0001
+  lr_actor: 0.001
   lr_critic: 0.001
   momentum: 0.9
   type: Adam
@@ -130,4 +141,4 @@ test_freq: 10000
 test_steps: 4096
 train_steps: 100000
 transaction_cost_abs: 0.0
-transaction_cost_rel: 0.02
+transaction_cost_rel: 0.0

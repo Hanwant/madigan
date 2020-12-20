@@ -2,7 +2,7 @@ from pathlib import Path
 from random import random
 import numpy as np
 import matplotlib.pyplot as plt
-from ..utils import list_2_dict
+from ..utils.metrics import list_2_dict
 from ..utils.plotting import make_grid
 from ..utils.preprocessor import make_preprocessor
 from ..modelling import make_agent

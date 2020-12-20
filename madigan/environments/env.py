@@ -11,6 +11,8 @@ class Env(EnvC):
 
 class EnvPy:
     """
+    DEPRECATED. Use cpp version above.
+
     Base Class for trading environments.
 
     Implements accounting and conversion of model outputs to trading actions

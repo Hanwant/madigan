@@ -12,7 +12,8 @@ import pyqtgraph as pg
 ####################################################################################
 def make_train_plots(agent_type, title=None, **kw):
     if agent_type in ("DQN", "DQNCURL", "DQNReverser", "DQNReverserCURL",
-                      "IQN", "IQNCURL", "IQNReverser", "IQNReverserCURL" ):
+                      "IQN", "IQNCURL", "IQNReverser", "IQNReverserCURL",
+                      "DQNAE"):
         return TrainPlotsDQN(title=title, **kw)
     if agent_type in ("DDPG", "DDPGDiscretized"):
         return TrainDDPG(title=title, **kw)
@@ -24,7 +25,8 @@ def make_train_plots(agent_type, title=None, **kw):
 
 def make_test_episode_plots(agent_type, title=None, **kw):
     if agent_type in ("DQN", "DQNCURL", "DQNReverser", "DQNReverserCURL",
-                      "IQN", "IQNCURL", "IQNReverser", "IQNReverserCURL" ):
+                      "IQN", "IQNCURL", "IQNReverser", "IQNReverserCURL",
+                      "DQNAE"):
         return TestEpisodePlotsDQN(title=title, **kw)
     if agent_type in ("DDPG", "DDPGDiscretized"):
         return TestEpisodeDDPG(title=title, **kw)
@@ -33,9 +35,11 @@ def make_test_episode_plots(agent_type, title=None, **kw):
     raise NotImplementedError(
         f"Test episode plot widget for agent_type: {agent_type}"+\
         " has not been implemented")
+
 def make_test_history_plots(agent_type, title=None, **kw):
     if agent_type in ("DQN", "DQNCURL", "DQNReverser", "DQNReverserCURL",
-                      "IQN", "IQNCURL", "IQNReverser", "IQNReverserCURL" ):
+                      "IQN", "IQNCURL", "IQNReverser", "IQNReverserCURL",
+                      "DQNAE"):
         return TestHistoryPlotsDQN(title=title, **kw)
     if agent_type in ("DDPG", "DDPGDiscretized"):
         return TestHistoryDDPG(title=title, **kw)

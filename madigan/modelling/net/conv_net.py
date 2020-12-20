@@ -99,6 +99,48 @@ class ConvNet(QNetworkBase):
 
 ConvNetDQN = ConvNet
 
+class ConvNetAE(ConvNet):
+    """
+    Provides an interface allowing for training of an autoencoder objective.
+    Can be used in an unsupervised setting where the AE objective is used
+    as an auxiliary loss.
+
+    Inherits all other functionaility (for normal rl objective) from ConvNet
+    """
+    def __init__(self,
+                 input_shape: tuple,
+                 output_shape: tuple,
+                 compression_factor: int = 4,
+                 **kw):
+        super().__init__(input_shape, output_shape, **kw)
+        self.compression_factor = compression_factor
+        self.encoded_size = self.d_model // compression_factor
+        self.compressor = nn.Linear(self.d_model, self.encoded_size)
+        self.reconstruct_price = nn.Linear(self.encoded_size,
+                                           input_shape[0] * input_shape[1])
+        # portfolio.len = self.n_assets + 1 - +1 for cash
+        self.reconstruct_port = nn.Linear(self.encoded_size, self.n_assets + 1)
+
+    def reconstruct(self, state: State = None, state_emb: torch.Tensor = None):
+        """
+        Compresses an embedding of the state by self.compression_factor
+        and returns a reconstruction from the compression.
+        """
+        assert state is not None or state_emb is not None
+        if state_emb is None:
+            state_emb = self.convnet_state_encoder(state)  # (bs, d_model)
+        latent = self.compressor(state_emb)
+        price_recon = self.reconstruct_price(latent).view(latent.shape[0],
+                                                          *self.input_shape)
+        port_recon = self.reconstruct_port(latent)
+        return price_recon, port_recon
+
+    def reconstruction_loss(self, state: State = None):
+        price_recon, port_recon = self.reconstruct(state)
+        price_loss = nn.functional.mse_loss(price_recon, state.price)
+        port_loss = nn.functional.mse_loss(port_recon, state.portfolio)
+        return price_loss + port_loss
+
 
 class ConvNetCurl(ConvNet):
     """

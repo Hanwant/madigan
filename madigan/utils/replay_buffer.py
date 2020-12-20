@@ -134,8 +134,8 @@ class ReplayBuffer:
             math.pow(self.discount, i) for i in range(nstep_return)
         ]
         self._buffer = [None] * size
-        # For Small lists, pop(0) has similar performance to deque().popleft()
-        # And better performance for iteration when calculation the discounted sum
+        # For small lists, pop(0) has similar performance to deque().popleft()
+        # And better performance for iteration when calculating the discounted sum
         # self._nstep_buffer = deque(maxlen=nstep)
         self._nstep_buffer = []
         self.filled = 0
@@ -213,26 +213,20 @@ class ReplayBuffer:
             return self.batchify(sample(self._buffer, n))
 
     def batchify(self, sample):
-        try:
-            state_price = np.stack([s.state.price for s in sample])
-            state_port = np.stack([s.state.portfolio for s in sample])
-            state_time = np.stack([s.state.timestamp for s in sample])
-            state = State(state_price, state_port, state_time)
-            next_state_price = np.stack([s.next_state.price for s in sample])
-            next_state_port = np.stack(
-                [s.next_state.portfolio for s in sample])
-            next_state_time = np.stack(
-                [s.next_state.timestamp for s in sample])
-            next_state = State(next_state_price, next_state_port,
-                               next_state_time)
-            action = np.stack([s.action for s in sample])
-            reward = np.stack([s.reward for s in sample])
-            done = np.stack([s.done for s in sample])
-        except:
-            import traceback
-            traceback.print_exc()
-            import ipdb
-            ipdb.set_trace()
+        state_price = np.stack([s.state.price for s in sample])
+        state_port = np.stack([s.state.portfolio for s in sample])
+        state_time = np.stack([s.state.timestamp for s in sample])
+        state = State(state_price, state_port, state_time)
+        next_state_price = np.stack([s.next_state.price for s in sample])
+        next_state_port = np.stack(
+            [s.next_state.portfolio for s in sample])
+        next_state_time = np.stack(
+            [s.next_state.timestamp for s in sample])
+        next_state = State(next_state_price, next_state_port,
+                           next_state_time)
+        action = np.stack([s.action for s in sample])
+        reward = np.stack([s.reward for s in sample])
+        done = np.stack([s.done for s in sample])
         return SARSD(state, action, reward, next_state, done)
 
     def get_full(self):
