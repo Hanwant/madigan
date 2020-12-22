@@ -150,9 +150,10 @@ PYBIND11_MODULE(env, m){
       std::stringstream repr;
       repr << "[";
       if(v.size() > 0){
-        for (auto asset: v){
-          repr << asset.name << ", ";
+        for (int i=0; i<v.size()-1; i++){
+          repr << v[i].name << ", ";
         }
+        repr << v.back().name;
       }
       repr << "]\n";
       return repr.str();})
@@ -256,11 +257,9 @@ PYBIND11_MODULE(env, m){
     .def(py::init<py::dict>(), py::arg("config_dict"))
     .def(py::init<
          vector<std::array<double, 3>>, vector<std::array<double, 3>>,
-         vector<std::array<double, 3>>, vector<double>,
-         double, double> (),
+         vector<std::array<double, 3>>, double, double> (),
          py::arg("freqRange"), py::arg("muRange"),
-         py::arg("ampRange"), py::arg("phase"),
-         py::arg("dx"), py::arg("noise"))
+         py::arg("ampRange"), py::arg("dx"), py::arg("noise"))
     .def_property_readonly("currentTime", &SineDynamic::currentTime,
                            "get the current timestamp",
                            py::return_value_policy::move)
@@ -780,13 +779,11 @@ PYBIND11_MODULE(env, m){
          py::arg("units"),
          py::return_value_policy::move);
 
-  _Env.def(py::init<string, Assets, double> (),
+  _Env.def(py::init<string, double> (),
          py::arg("dataSourceType"),
-         py::arg("assets"),
          py::arg("initCash")=double(1'000'000))
-    .def(py::init<string, Assets, double, py::dict> (),
+    .def(py::init<string, double, py::dict> (),
          py::arg("dataSourceType"),
-         py::arg("assets"),
          py::arg("initCash"),
          py::arg("config_dict"))
     .def("reset", &Env::reset,

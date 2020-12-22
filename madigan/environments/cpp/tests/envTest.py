@@ -513,8 +513,8 @@ def test_broker_risk_handling():
 
 def test_env_init():
     assets = Assets(['BTCUSD', 'ETHUSD', 'BTCETH', 'EURUSD'])
-    env1 = Env("Synth", assets, 1_000_000)
-    env2 = Env("Synth", assets, 1_000_000, config)
+    env1 = Env("Synth", 1_000_000)
+    env2 = Env("Synth", 1_000_000, config)
     print(env1.broker.portfolio())
     print(env1.portfolio)
     print(env2.broker.portfolio())
@@ -523,13 +523,13 @@ def test_env_init():
 
 def test_env_interface():
     assets = Assets(['BTCUSD', 'ETHUSD', 'BTCETH', 'EURUSD'])
-    env = Env("Synth", assets, 1_000_000, config)
+    env = Env("Synth", 1_000_000, config)
     srdi = env.step()
     state, reward, done, info = env.step([10000, 20000, -20000, -40000])
 
 def test_env_accounting():
     assets = Assets(['BTCUSD', 'ETHUSD', 'BTCETH', 'EURUSD'])
-    env = Env("Synth", assets, 1_000_000, config)
+    env = Env("Synth", 1_000_000, config)
     # port = Portfolio("PortRef", assets, 1_000_000)
     # port.setDataSource(env.dataSource)
     srdi1 = env.step()
@@ -538,7 +538,7 @@ def test_env_accounting():
 
 def test_env_risk_handling():
     assets = Assets(['BTCUSD', 'ETHUSD', 'BTCETH', 'EURUSD'])
-    env = Env("Synth", assets, 1_000_000, config)
+    env = Env("Synth", 1_000_000, config)
     srdi = env.step(0, -1 +  1_000_000/env.currentPrices[0]) # BUY 10_000
 
 

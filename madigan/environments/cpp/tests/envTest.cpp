@@ -269,7 +269,7 @@ void testEnvInit(){
   Assets assets{"sine1", "sine2", "sine3", "sine4"};
   // std::unique_ptr<DataSource> dataSource1 = std::make_unique<Synth>();
   Broker broker1 = Broker(assets, 1'000'000);
-  Env env = Env("Synth", assets, 1'000'000);
+  Env env = Env("Synth", 1'000'000);
   SRDI<double> envResponse = env.step();
 }
 
@@ -289,14 +289,14 @@ void testEnvConfig(){
                                  {"dX", _dX}}
     }
   };
-  Env env = Env("Synth", assets, 1'000'000, config);
+  Env env = Env("Synth", 1'000'000, config);
 }
 
 void testEnvData(){
   Assets assets{"sine1", "sine2", "sine3", "sine4"};
   // std::unique_ptr<DataSource> dataSource1 = std::make_unique<Synth>();
   Broker broker1 = Broker(assets, 1'000'000);
-  Env env = Env("Synth", assets, 1'000'000);
+  Env env = Env("Synth",  1'000'000);
   SRDI<double> envResponse = env.step();
   std::cout << env.currentPrices() << "\n";
 }
@@ -308,7 +308,6 @@ void testHDFSource(){
   string timestampKey="timestamp";
   HDFSource dataSource(filepath, mainKey, priceKey, timestampKey);
 }
-
 
 int main(){
 

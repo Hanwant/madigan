@@ -2,7 +2,7 @@ agent_config:
   action_atoms: 3
   ae_temp: 0.5
   batch_size: 34
-  discount: 0.999
+  discount: 0.99
   discrete_action_atoms: 3
   double_dqn: true
   dueling: true
@@ -18,7 +18,7 @@ agent_config:
   noisy_net_sigma: 0.5
   nTau1: 32
   nTau2: 8
-  nstep_return: 3
+  nstep_return: 10
   nsteps: 1000000
   replay_min_size: 20000
   replay_size: 100000
@@ -28,8 +28,7 @@ agent_config:
   tau_embed_size: 64
   tau_soft_update: 0.0001
   train_freq: 4
-  type: DQN
-  unit_size_proportion_avM: 0.01
+  unit_size_proportion_avM: 0.001
   proximal_portfolio_penalty: .5
   target_entropy_ratio: 0.98
   learn_entropy_temp: false
@@ -40,37 +39,29 @@ assets:
 - sine1
 basepath: /media/hemu/Data/madigan/experiments/
 data_source_config:
-  ampRange:
-  - - 0.2
-    - 1.0
-    - 0.1
-  - - 0.3
-    - 0.9
-    - 1.0
+  amp:
+  - 1.
+  - 1.
+#  - 2.
   dX: 0.01
-  freqRange:
-  - - 0.5
-    - 5.0
-    - 0.1
-  - - 1.0
-    - 20.0
-    - 2.0
-  muRange:
-  - - 5.0
-    - 10.0
-    - 0.2
-  - - 1.0
-    - 20.0
-    - 1.0
-  noise: 1.0
+  freq:
+  - 3.
+  - 3.
+#  - 1.
+  mu:
+  - 5.
+  - 5.
+#  - 8.
+  noise: .0
   phase:
   - 0.0
-  - 0.0
-data_source_type: SineDynamic
+  - 0.5
+#  - 0.0
+data_source_type: Synth
 discrete_action_atoms: 3
 discrete_actions: true
 env_type: Synth
-experiment_id: DQN_SineDynamic_AE_REF2_trans_.0_unit.01
+experiment_id: DQN_Synth_opposite_phase
 init_cash: 1000000
 log_freq: 10000
 lot_unit_value: 10000
@@ -135,10 +126,13 @@ preprocessor_config:
 preprocessor_type: StackerDiscrete
 required_margin: 1.0
 reward_clip: *id001
+reward_shaper_config:
+  reward_shaper: None
+  window: 1000
 slippage_abs: 0.0
 slippage_rel: 0.0
-test_freq: 10000
+test_freq: 2000
 test_steps: 4096
 train_steps: 100000
 transaction_cost_abs: 0.0
-transaction_cost_rel: 0.0
+transaction_cost_rel: 0.02

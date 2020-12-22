@@ -81,12 +81,12 @@ class DDPG(OffPolicyActorCritic):
     @classmethod
     def from_config(cls, config):
         env = make_env(config)
-        preprocessor = make_preprocessor(config)
+        preprocessor = make_preprocessor(config, env.nAssets)
         input_shape = preprocessor.feature_output_shape
         # add an extra asset for cash holdings
         # used in representation of port weights
         # I.e returned by env.ledgerNormedFull
-        action_space = ContinuousActionSpace(-1., 1., config.n_assets + 1, 1)
+        action_space = ContinuousActionSpace(-1., 1., env.nAssets + 1, 1)
         aconf = config.agent_config
         savepath = Path(config.basepath) / config.experiment_id / 'models'
         return cls(env, preprocessor, input_shape, action_space,

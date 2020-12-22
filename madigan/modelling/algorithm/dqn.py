@@ -13,9 +13,10 @@ from .offpolicy_q import OffPolicyQ
 from .utils import discrete_action_to_transaction, abs_port_norm
 from ..utils import get_model_class
 from ...environments import make_env
+from ...environments.reward_shaping import RewardShaper, make_reward_shaper
 from ..net.conv_net import ConvNet
 from ..net.mlp_net import MLPNet
-from ...utils import default_device, DiscreteActionSpace, DiscreteRangeSpace, ternarize_array
+from ...utils import default_device, DiscreteActionSpace, DiscreteRangeSpace
 from ...utils import ActionSpace
 from ...utils.preprocessor import make_preprocessor
 from ...utils.config import Config
@@ -36,16 +37,17 @@ class DQN(OffPolicyQ):
     """
     def __init__(self, env, preprocessor, input_shape: tuple,
                  action_space: ActionSpace, discount: float, nstep_return: int,
-                 replay_size: int, replay_min_size: int, noisy_net: bool,
+                 reward_shaper: RewardShaper, replay_size: int,
+                 replay_min_size: int, noisy_net: bool,
                  noisy_net_sigma: float, eps: float, eps_decay: float,
                  eps_min: float, batch_size: int, test_steps: int,
                  unit_size: float, savepath: Union[Path, str],
                  double_dqn: bool, tau_soft_update: float, model_class: str,
                  model_config: Union[dict, Config], lr: float):
         super().__init__(env, preprocessor, input_shape, action_space,
-                         discount, nstep_return, replay_size, replay_min_size,
-                         noisy_net, eps, eps_decay, eps_min, batch_size,
-                         test_steps, unit_size, savepath)
+                         discount, nstep_return, reward_shaper, replay_size,
+                         replay_min_size, noisy_net, eps, eps_decay, eps_min,
+                         batch_size, test_steps, unit_size, savepath)
 
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self._action_space = action_space
@@ -71,32 +73,20 @@ class DQN(OffPolicyQ):
         else:
             self.model_t.load_state_dict(self.model_b.state_dict())
 
-        # SCHEDULER NOT YET IN USE
-        USE_SCHED = False
-        if USE_SCHED:
-            self.lr_sched = torch.optim.lr_scheduler.CyclicLR(
-                self.opt, base_lr=lr, max_lr=1e-2, step_size_up=2000)
-        else:
-
-            class Sched:
-                """ Dummy so that self.sched.step() can be called"""
-                def step(self):
-                    pass
-
-            self.lr_sched = Sched()
-
     @classmethod
     def from_config(cls, config):
         env = make_env(config)
-        preprocessor = make_preprocessor(config)
+        preprocessor = make_preprocessor(config, env.nAssets)
         input_shape = preprocessor.feature_output_shape
         atoms = config.discrete_action_atoms + 1
-        action_space = DiscreteRangeSpace((0, atoms), config.n_assets)
+        action_space = DiscreteRangeSpace((0, atoms), env.nAssets)
+        reward_shaper = make_reward_shaper(config)
         aconf = config.agent_config
         unit_size = aconf.unit_size_proportion_avM
         savepath = Path(config.basepath) / config.experiment_id / 'models'
         return cls(env, preprocessor, input_shape, action_space,
-                   aconf.discount, aconf.nstep_return, aconf.replay_size,
+                   aconf.discount, aconf.nstep_return,
+                   reward_shaper, aconf.replay_size,
                    aconf.replay_min_size, aconf.noisy_net,
                    aconf.noisy_net_sigma, aconf.eps, aconf.eps_decay,
                    aconf.eps_min, aconf.batch_size, config.test_steps,
@@ -236,11 +226,11 @@ class DQN(OffPolicyQ):
             behaviour_actions = self.model_b(next_state).max(-1)[1]
             one_hot = F.one_hot(behaviour_actions,
                                 self.action_atoms).to(self.device)
-            greedy_qvals_next = (self.model_t(next_state) * one_hot).sum(
-                -1)  # (bs, n_assets, 1)
+            # (bs, n_assets, 1)
+            greedy_qvals_next = (self.model_t(next_state) * one_hot).sum(-1)
         else:
-            greedy_qvals_next = self.model_t(next_state).max(-1)[
-                0]  # (bs, n_assets, 1)
+            # (bs, n_assets, 1)
+            greedy_qvals_next = self.model_t(next_state).max(-1)[0]
         # reward and done have an extended dimension to accommodate for n_assets
         # As actions for different assets are considered in parallel
         Gt = reward[..., None] + (~done[..., None] *
@@ -380,7 +370,7 @@ class DQNAE(DQN):
         input_shape = preprocessor.feature_output_shape
         atoms = config.discrete_action_atoms + 1
         action_space = DiscreteRangeSpace((0, atoms), config.n_assets)
-        reward_shaper = make_reward_shaper()
+        reward_shaper = make_reward_shaper(config)
         aconf = config.agent_config
         unit_size = aconf.unit_size_proportion_avM
         savepath = Path(config.basepath) / config.experiment_id / 'models'

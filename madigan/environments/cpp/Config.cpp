@@ -39,6 +39,19 @@ namespace madigan {
           throw ConfigError("config for DataSource type SineDynamic needs data_source_config");
         }
       }
+      else if ( dataSourceType == "SineDynamicTrend"){
+        auto datasource_pydictFound=std::find_if(dict.begin(), dict.end(),
+                                                 [](const std::pair<pybind11::handle, pybind11::handle>& pair){
+                                                   return string(pybind11::str(pair.first)) == "data_source_config";
+                                                 });
+        if (datasource_pydictFound != dict.end()){
+          pybind11::dict datasource_pydict = dict[pybind11::str("data_source_config")];
+          config = makeSineDynamicTrendConfigFromPyDict(datasource_pydict);
+        }
+        else{
+          throw ConfigError("config for DataSource type SineDynamicTrend needs data_source_config");
+        }
+      }
       else if ( dataSourceType == "OU"){
         auto datasource_pydictFound=std::find_if(dict.begin(), dict.end(),
                                          [](const std::pair<pybind11::handle, pybind11::handle>& pair){
@@ -175,7 +188,7 @@ namespace madigan {
   }
 
   Config makeSineDynamicConfigFromPyDict(pybind11::dict datasource_pydict){
-    for (auto key: {"freqRange", "muRange", "ampRange", "phase", "dX", "noise"}){
+    for (auto key: {"freqRange", "muRange", "ampRange", "dX", "noise"}){
       auto keyFound=std::find_if(datasource_pydict.begin(), datasource_pydict.end(),
                                  [key](const std::pair<pybind11::handle, pybind11::handle>& pair){
                                    return string(pybind11::str(pair.first)) == key;
@@ -187,7 +200,6 @@ namespace madigan {
     vector<std::array<double, 3>> freqRange;
     vector<std::array<double, 3>> ampRange;
     vector<std::array<double, 3>> muRange;
-    vector<double> phase;
     double dX;
     double noise;
     for(auto& item: datasource_pydict){
@@ -201,9 +213,6 @@ namespace madigan {
       if(key == "ampRange"){
         ampRange = item.second.cast<vector<std::array<double, 3>>>();
       }
-      if(key == "phase"){
-        phase = item.second.cast<vector<double>>();
-      }
       if(key == "dX"){
         dX = item.second.cast<double>();
       }
@@ -216,13 +225,74 @@ namespace madigan {
       {"data_source_config", Config{{"freqRange", freqRange},
                                     {"muRange", muRange},
                                     {"ampRange", ampRange},
-                                    {"phase", phase},
                                     {"dX", dX},
                                     {"noise", noise}}
       }
     };
     return config;
   }
+
+  Config makeSineDynamicTrendConfigFromPyDict(pybind11::dict datasource_pydict){
+    for (auto key: {"freqRange", "muRange", "ampRange", "trendRange",
+                    "trendProb", "trendIncr", "dX", "noise"}){
+      auto keyFound=std::find_if(datasource_pydict.begin(), datasource_pydict.end(),
+                                 [key](const std::pair<pybind11::handle, pybind11::handle>& pair){
+                                   return string(pybind11::str(pair.first)) == key;
+                                 });
+      if (keyFound == datasource_pydict.end()){
+        throw ConfigError(string(key)+" key not found in data_source_config in config");
+      }
+    }
+    vector<std::array<double, 3>> freqRange;
+    vector<std::array<double, 3>> ampRange;
+    vector<std::array<double, 3>> muRange;
+    vector<std::array<int, 2>> trendRange;
+    vector<double> trendIncr;
+    vector<double> trendProb;
+    double dX;
+    double noise;
+    for(auto& item: datasource_pydict){
+      string key = string(pybind11::str(item.first));
+      if(key == "freqRange"){
+        freqRange = item.second.cast<vector<std::array<double, 3>>>();
+      }
+      if(key == "muRange"){
+        muRange = item.second.cast<vector<std::array<double, 3>>>();
+      }
+      if(key == "ampRange"){
+        ampRange = item.second.cast<vector<std::array<double, 3>>>();
+      }
+      if(key == "trendRange"){
+        trendRange = item.second.cast<vector<std::array<int, 2>>>();
+      }
+      if(key == "trendIncr"){
+        trendIncr = item.second.cast<vector<double>>();
+      }
+      if(key == "trendProb"){
+        trendProb = item.second.cast<vector<double>>();
+      }
+      if(key == "dX"){
+        dX = item.second.cast<double>();
+      }
+      if(key == "noise"){
+        noise = item.second.cast<double>();
+      }
+    }
+    Config config{
+      {"data_source_type", "SineDynamicTrend"},
+      {"data_source_config", Config{{"freqRange", freqRange},
+                                    {"muRange", muRange},
+                                    {"ampRange", ampRange},
+                                    {"trendRange", trendRange},
+                                    {"trendIncr", trendIncr},
+                                    {"trendProb", trendProb},
+                                    {"dX", dX},
+                                    {"noise", noise}}
+      }
+    };
+    return config;
+  }
+
 
    Config makeOUConfigFromPyDict(pybind11::dict datasource_pydict){
     for (auto key: {"mean", "theta", "phi", "noise_var"}){

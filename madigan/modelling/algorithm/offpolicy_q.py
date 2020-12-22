@@ -42,7 +42,7 @@ class OffPolicyQ(Agent):
         self.n_assets = self.action_space.n_assets
         self.centered_actions = np.arange(
             self.action_atoms) - self.action_atoms // 2
-        self.log_freq = 5000
+        self.log_freq = 2000
 
     def save_buffer(self):
         with open(self.bufferpath, 'wb') as f:
@@ -70,6 +70,7 @@ class OffPolicyQ(Agent):
         self._preprocessor.reset_state()
         self._preprocessor.stream_state(state)
         self._preprocessor.initialize_history(self._env)
+        self.reward_shaper.reset()
         return self._preprocessor.current_data()
 
     def initialize_buffer(self):
@@ -79,33 +80,38 @@ class OffPolicyQ(Agent):
             steps = self.replay_min_size - len(self.buffer)
             self.step(steps)
 
-    def step(self, n, reset=True):
+    def step(self, n, reset: bool = True, log_freq: int = None):
         """
         Performs n steps of interaction with the environment
         Accumulates experiences inside self.buffer (replay buffer for offpolicy)
         performs train_step when conditions are met (replay_min_size)
+        n: int = number of training steps
+        reset: bool = whether to reset environment before commencing training
+        log_freq: int = frequency with which to yield results to caller.
         """
         self.train_mode()
         trn_metrics = []
         if reset:
             self.reset_state()
         state = self._preprocessor.current_data()
-        log_freq = min(self.log_freq, n)
+        log_freq = min(log_freq if log_freq is not None else self.log_freq, n)
         running_reward = 0.  # for logging
         running_cost = 0.  # for logging
         # i = 0
         max_steps = self.training_steps + n
         while True:
             self.model_b.sample_noise()
+
             action, transaction = self.explore(state)
             _next_state, reward, done, info = self._env.step(transaction)
-
-            running_cost += np.sum(info.brokerResponse.transactionCost)
+            reward = self.reward_shaper.stream(reward)
             self._preprocessor.stream_state(_next_state)
             next_state = self._preprocessor.current_data()
-            if done:
-                reward = -1.
+
+            running_cost += np.sum(info.brokerResponse.transactionCost)
             running_reward += reward
+            if done:
+                reward = -.5
             sarsd = SARSD(state, action, reward, next_state, done)
             self.buffer.add(sarsd)
 

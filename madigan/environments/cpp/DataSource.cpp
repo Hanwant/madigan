@@ -23,6 +23,9 @@ namespace madigan{
     else if (dataSourceType == "SineDynamic"){
       return make_unique<SineDynamic>();
     }
+    else if (dataSourceType == "SineDynamicTrend"){
+      return make_unique<SineDynamicTrend>();
+    }
     else if (dataSourceType == "OU"){
       return make_unique<OU>();
     }
@@ -61,6 +64,9 @@ namespace madigan{
     }
     else if (dataSourceType == "SineDynamic"){
       return make_unique<SineDynamic>(config);
+    }
+    else if (dataSourceType == "SineDynamicTrend"){
+      return make_unique<SineDynamicTrend>(config);
     }
     else if (dataSourceType == "OU"){
       return make_unique<OU>(config);
@@ -119,6 +125,7 @@ namespace madigan{
                                              priceKey(priceKey),
                                              timestampKey(timestampKey)
   {
+    assets_ = Assets({mainKey});
     loadData();
   }
 
@@ -132,6 +139,7 @@ namespace madigan{
       mainKey = std::any_cast<string>(params["main_key"]);
       timestampKey= std::any_cast<string>(params["timestamp_key"]);
       priceKey= std::any_cast<string>(params["price_key"]);
+      assets_ = Assets({mainKey});
       loadData();
     }
   }
@@ -167,13 +175,15 @@ namespace madigan{
       dataSources_.emplace_back(std::move(source));
     }
     for(const auto& source: dataSources_){
-      for (const auto& asset: source->assets){
-        assets.emplace_back(asset);
+      for (const auto& asset: source->assets()){
+        if (std::find(assets_.begin(), assets_.end(), asset) != assets_.end()){
+          assets_.emplace_back(Asset(asset.code + "_1"));
+        }
+        else assets_.emplace_back(asset);
       }
-      nAssets_ += source->nAssets();
     }
-    currentData_.resize(nAssets_);
-    // currentPrices_.resize(nAssets_);
+    currentData_.resize(nAssets());
+    // currentPrices_.resize(nAssets());
   }
 
   const PriceVector& Composite::getData(){
@@ -203,10 +213,9 @@ namespace madigan{
     this->noiseDistribution = std::normal_distribution<double>(0., _noise);
     for (int i=0; i < freq.size(); i++){
       std::string assetName = "sine_" + std::to_string(i);
-      this->assets.push_back(Asset(assetName));
+      this->assets_.push_back(Asset(assetName));
     }
-    this->nAssets_ = assets.size();
-    currentData_.resize(nAssets_);;
+    currentData_.resize(nAssets());;
     generator.seed(std::chrono::system_clock::now().time_since_epoch().count());
   }
 
@@ -222,7 +231,6 @@ namespace madigan{
   Synth::Synth(std::vector<double> _freq, std::vector<double> _mu,
                std::vector<double> _amp, std::vector<double> _phase,
                double _dX, double noise){
-    std::cout <<"INSIDE SYNTH CALLED W NOISE\n";
     if ((_freq.size() == _mu.size()) && (_mu.size() == _amp.size()) &&
         (_amp.size() == _phase.size())){
       initParams(_freq, _mu, _amp, _phase, _dX, noise);
@@ -268,7 +276,7 @@ namespace madigan{
   }
 
   const PriceVector& Synth::getData() {
-    for (int i=0; i < nAssets_; i++){
+    for (int i=0; i < nAssets(); i++){
       currentData_[i] = noiseDistribution(generator) + mu[i] +
         amp[i] * std::sin(PI2*x[i]*freq[i]);
       x[i] += dX;
@@ -278,7 +286,7 @@ namespace madigan{
   }
 
   const pybind11::array_t<double> Synth::getData_np(){
-    for (int i=0; i < nAssets_; i++){
+    for (int i=0; i < nAssets(); i++){
       currentData_[i] = noiseDistribution(generator) + mu[i] +
         amp[i] * std::sin(PI2*x[i]*freq[i]);
       x[i] += dX;
@@ -292,7 +300,7 @@ namespace madigan{
 
   const PriceVector& SawTooth::getData() {
     double intPart;
-    for (int i=0; i < nAssets_; i++){
+    for (int i=0; i < nAssets(); i++){
       currentData_[i] = noiseDistribution(generator) + mu[i] +
         amp[i] * std::modf(x[i]*freq[i], &intPart);
       x[i] += dX;
@@ -303,7 +311,7 @@ namespace madigan{
 
   const PriceVector& Triangle::getData() {
     double intPart;
-    for (int i=0; i < nAssets_; i++){
+    for (int i=0; i < nAssets(); i++){
       currentData_[i] = noiseDistribution(generator) + mu[i] +
         4*amp[i]/PI2 * std::asin(std::sin(PI2*x[i]/freq[i]));
       x[i] += dX;
@@ -389,8 +397,8 @@ namespace madigan{
     this->dX=_dX;
     this->noise=_noise;
     this->noiseDistribution = std::normal_distribution<double>(0., _noise);
-    this->assets = vector<Asset>(1, Asset("multi_sine"));
-    this->nAssets_ = this->assets.size();
+    this->assets_ = vector<Asset>(1, Asset("multi_sine"));
+    // this->nAssets() = this->assets.size();
     currentData_.resize(1);
     generator.seed(std::chrono::system_clock::now().time_since_epoch().count());
   }
@@ -417,17 +425,15 @@ namespace madigan{
                                                   {.2, 5., .02}, {.5, 5., .02}};
     vector<std::array<double, 3>> ampRange{{1., 5., .01}, {.3, 3., .02},
                                                    {.2, 2., .04}, {.5, 5., .05}};
-    vector<double> phase{0., 1., 2., 1.};
     double _dX{0.01};
-    initParams(freqRange, muRange, ampRange, phase, dX, 0.);
+    initParams(freqRange, muRange, ampRange, dX, 1.);
   }
 
   SineDynamic::SineDynamic(vector<std::array<double, 3>> _freqRange,
                            vector<std::array<double, 3>> _muRange,
                            vector<std::array<double, 3>> _ampRange,
-                           vector<double> _phase,
                            double _dX, double noise){
-    initParams(_freqRange, _muRange, _ampRange, _phase, _dX, noise);
+    initParams(_freqRange, _muRange, _ampRange, _dX, noise);
   }
 
   SineDynamic::SineDynamic(Config config){
@@ -437,7 +443,7 @@ namespace madigan{
       allKeysPresent = false;
     }
     Config params = std::any_cast<Config>(config["data_source_config"]);
-    for (auto key: {"freqRange", "muRange", "ampRange", "phase", "dX"}){
+    for (auto key: {"freqRange", "muRange", "ampRange", "dX"}){
       if (params.find(key) == params.end()){
         allKeysPresent=false;
         throw ConfigError("generator parameters don't have all required constructor arguments");
@@ -450,14 +456,13 @@ namespace madigan{
         std::any_cast<vector<std::array<double, 3>>>(params["muRange"]);
       vector<std::array<double, 3>> ampRange =
         std::any_cast<vector<std::array<double, 3>>>(params["ampRange"]);
-      vector<double> phase = std::any_cast<vector<double>>(params["phase"]);
       double dX = std::any_cast<double>(params["dX"]);
       if (params.find("noise") != params.end()){
         noise = std::any_cast<double>(params["noise"]);
-        initParams(freqRange, muRange, ampRange, phase, dX, noise);
-      }
+        initParams(freqRange, muRange, ampRange, dX, noise);
+     }
       else {
-        initParams(freqRange, muRange, ampRange, phase, dX, 0.);
+        initParams(freqRange, muRange, ampRange, dX, 0.);
       }
 
     }
@@ -468,9 +473,8 @@ namespace madigan{
                                                     {.2, 5., .02}, {.5, 5., .02}};
       vector<std::array<double, 3>> ampRange{{1., 5., .01}, {.3, 3., .02},
                                                      {.2, 2., .04}, {.5, 5., .05}};
-      vector<double> phase{0., 1., 2., 1.};
       double _dX{0.01};
-      initParams(freqRange, muRange, ampRange, phase, _dX, 0.);
+      initParams(freqRange, muRange, ampRange, _dX, 0.);
     }
   }
 
@@ -481,24 +485,19 @@ namespace madigan{
   void SineDynamic::initParams(vector<std::array<double, 3>> _freqRange,
                                vector<std::array<double, 3>> _muRange,
                                vector<std::array<double, 3>> _ampRange,
-                               vector<double> _phase,
                                double _dX, double _noise)
 
   {
-    if ((_freqRange.size() == _muRange.size()) && (_muRange.size() == _ampRange.size()) &&
-        (_ampRange.size() == _phase.size())){
+    if ((_freqRange.size() == _muRange.size()) && (_muRange.size() == _ampRange.size())){
       nComponents = _freqRange.size();
       freqRange=_freqRange;
       muRange=_muRange;
       ampRange=_ampRange;
-      initPhase=_phase;
-      x=_phase;
       dX=_dX;
       noise=_noise;
       noiseDistribution = std::normal_distribution<double>(0., _noise);
       updateParameterDist = std::uniform_real_distribution<double>(0., 1.);
-      assets = vector<Asset>(1, Asset("multi_sine"));
-      nAssets_ = this->assets.size();
+      assets_ = vector<Asset>(1, Asset("sine_dynamic"));
       currentData_.resize(1);
       freq = vector<double>(nComponents, 0);
       mu= vector<double>(nComponents, 0);
@@ -506,6 +505,8 @@ namespace madigan{
       generator.seed(std::chrono::system_clock::now().time_since_epoch().count());
       sampleRate = (int)(1./dX);
       oscillators.resize(nComponents); // so resizing doesn't invalidate pointers
+      assets_ = Assets({"sine_dynamic"});
+      // x.emplace_back(0.);
       for (int i=0; i<nComponents; i++){
         // Init Starting values by uniformly sampling from low-high range
         freqDist.push_back(std::uniform_real_distribution<double>(freqRange[i][0], freqRange[i][1]));
@@ -518,10 +519,6 @@ namespace madigan{
         oscillators.emplace_back(WaveTableOsc<double>(maxNumTables));
         setSineOsc(oscillators[i], sampleRate, 2, freqRange[i][0]);
       }
-
-      // for (int i=0; i<nComponents; i++){
-      //   setSineOsc(oscillators[i], sampleRate, 2, freqRange[i][0]);
-      // }
     }
     else{
       throw std::length_error("parameters passed to DataSource<PriceVector> of type SineDynamic"
@@ -548,9 +545,6 @@ namespace madigan{
       freq[i] = max(freqRange[i][0],
                     min(freqRange[i][1],
                         freq[i]+(boolDist.randBool()? freqRange[i][2]: -freqRange[i][2])));
-      // mu[i] += (boolDist.randBool()? muRange[i][2]: -muRange[i][2]);
-      // amp[i] += (boolDist.randBool()? ampRange[i][2]: -ampRange[i][2]);
-
       oscillators[i].setFreq(freq[i]/sampleRate);
       // if (updateParameterDist(generator) < 0.001 ){
       //   // mu[i] = max(muRange[i][0],
@@ -573,11 +567,10 @@ namespace madigan{
     for (int i=0; i < nComponents; i++){
       // sum += noiseDistribution(generator) + mu[i] +
       //   amp[i] * std::sin(PI2*x[i]*freq[i]);
-      sum += noiseDistribution(generator) + mu[i] +
-        amp[i] * oscillators[i].process();
-      x[i] += dX;
+      sum +=  mu[i] + amp[i] * oscillators[i].process();
+      // x[i] += dX;
     }
-    currentData_[0] = sum;
+    currentData_[0] = sum + noiseDistribution(generator);
     timestamp_ += 1;
     return currentData_;
   }
@@ -585,6 +578,205 @@ namespace madigan{
   double SineDynamic::getProcess(int i){
     return oscillators[i].process();
   }
+
+  ////////////////////////////////////////////////////////////////////////////////////////////////
+  // SINE DYNAMIC TREND   ////////////////////////////////////////////////////////////////////////
+  ////////////////////////////////////////////////////////////////////////////////////////////////
+  SineDynamicTrend::SineDynamicTrend(){
+    vector<std::array<double, 3>> freqRange{{.1, 1., .01}, {0.3, 3.0, .01},
+                                            {5., 15., .1}, {10., 50., .1}};
+    vector<std::array<double, 3>> muRange{{1., 5., .02}, {.3, 3., .05},
+                                          {.2, 5., .02}, {.5, 5., .02}};
+    vector<std::array<double, 3>> ampRange{{1., 5., .01}, {.3, 3., .02},
+                                           {.2, 2., .04}, {.5, 5., .05}};
+    vector<std::array<int, 2>> trendRange{{100, 500}, {100, 300}};
+    vector<double> trendIncr{0.1, 0.2};
+    vector<double> trendProb{.001, .01};
+    double _dX{0.01};
+    initParams(freqRange, muRange, ampRange, trendRange, trendIncr, trendProb, dX, 1.);
+  }
+
+  SineDynamicTrend::SineDynamicTrend(vector<std::array<double, 3>> _freqRange,
+                                     vector<std::array<double, 3>> _muRange,
+                                     vector<std::array<double, 3>> _ampRange,
+                                     vector<std::array<int, 2>> _trendRange,
+                                     vector<double> _trendIncr,
+                                     vector<double> _trendProb,
+                                     double _dX, double noise){
+    initParams(_freqRange, _muRange, _ampRange, _trendRange, _trendIncr,
+               _trendProb, _dX, noise);
+  }
+
+  SineDynamicTrend::SineDynamicTrend(Config config){
+    bool allKeysPresent{true};
+    if (config.find("data_source_config") == config.end()){
+      throw ConfigError("config passed but doesn't contain generator params");
+      allKeysPresent = false;
+    }
+    Config params = std::any_cast<Config>(config["data_source_config"]);
+    for (auto key: {"freqRange", "muRange", "ampRange", "trendRange", "trendIncr",
+                    "trendProb", "dX", "noise"}){
+      if (params.find(key) == params.end()){
+        allKeysPresent=false;
+        throw ConfigError("generator parameters don't have all required constructor arguments");
+      }
+    }
+    if (allKeysPresent){
+      vector<std::array<double, 3>> freqRange =
+        std::any_cast<vector<std::array<double, 3>>>(params["freqRange"]);
+      vector<std::array<double, 3>> muRange =
+        std::any_cast<vector<std::array<double, 3>>>(params["muRange"]);
+      vector<std::array<double, 3>> ampRange =
+        std::any_cast<vector<std::array<double, 3>>>(params["ampRange"]);
+      vector<std::array<int, 2>> trendRange =
+        std::any_cast<vector<std::array<int, 2>>>(params["trendRange"]);
+      vector<double> trendIncr = std::any_cast<vector<double>>(params["trendIncr"]);
+      vector<double> trendProb = std::any_cast<vector<double>>(params["trendProb"]);
+      double dX = std::any_cast<double>(params["dX"]);
+      noise = std::any_cast<double>(params["noise"]);
+      initParams(freqRange, muRange, ampRange, trendRange, trendIncr, trendProb,
+                 dX, noise);
+
+    }
+    else{
+      vector<std::array<double, 3>> freqRange{{.1, 1., .01}, {0.3, 3.0, .01},
+                                                      {5., 15., .1}, {10., 50., .1}};
+      vector<std::array<double, 3>> muRange{{1., 5., .02}, {.3, 3., .05},
+                                                    {.2, 5., .02}, {.5, 5., .02}};
+      vector<std::array<double, 3>> ampRange{{1., 5., .01}, {.3, 3., .02},
+                                                     {.2, 2., .04}, {.5, 5., .05}};
+      vector<std::array<int, 2>> trendRange{{100, 500}, {100, 300}};
+      vector<double> trendIncr{0.1, 0.2};
+      vector<double> trendProb{.001, .01};
+      double _dX{0.01};
+      initParams(freqRange, muRange, ampRange, trendRange, trendIncr, trendProb, dX, 1.);
+    }
+  }
+
+  SineDynamicTrend::SineDynamicTrend(pybind11::dict py_config): SineDynamicTrend::SineDynamicTrend(makeConfigFromPyDict(py_config)){
+    // Config config = makeConfigFromPyDict(py_config);
+
+  }
+  void SineDynamicTrend::initParams(vector<std::array<double, 3>> _freqRange,
+                                    vector<std::array<double, 3>> _muRange,
+                                    vector<std::array<double, 3>> _ampRange,
+                                    vector<std::array<int, 2>> _trendRange,
+                                    vector<double> _trendIncr,
+                                    vector<double>_trendProb,
+                                    double _dX, double _noise)
+
+  {
+    if (!((_freqRange.size() == _muRange.size()) && (_muRange.size() == _ampRange.size()))){
+      throw std::length_error("the following parameters passed to DataSource<PriceVector>"
+                              "of type SineDynamicTrend need to be vectors of same length:"
+                              "freqRange\n muRange\n ampRange\n");
+    }
+    if (!((_trendRange.size() == _trendIncr.size()) && (_trendIncr.size() == _trendProb.size()))){
+      throw std::length_error("the following parameters passed to DataSource<PriceVector>"
+                              "of type SineDynamicTrend need to be vectors of same length:"
+                              "trendRange\n trendIncr\n trendProb\n");
+    }
+      nComponents = _freqRange.size();
+      freqRange = _freqRange;
+      muRange = _muRange;
+      ampRange = _ampRange;
+      trendRange = _trendRange;
+      trendIncr = _trendIncr;
+      trendProb = _trendProb;
+      dX = _dX;
+      noise = _noise;
+      noiseDistribution = std::normal_distribution<double>(0., _noise);
+      updateParameterDist = std::uniform_real_distribution<double>(0., 1.);
+      assets_ = vector<Asset>(1, Asset("sine_dynamic_trend"));
+      currentData_.resize(1);
+      freq = vector<double>(nComponents, 0);
+      mu = vector<double>(nComponents, 0);
+      amp = vector<double>(nComponents, 0);
+      generator.seed(std::chrono::system_clock::now().time_since_epoch().count());
+      sampleRate = (int)(1./dX);
+      oscillators.resize(nComponents); // so resizing doesn't invalidate pointers
+      // x.emplace_back(0.);
+      for (int i=0; i<nComponents; i++){
+        // Init Starting values by uniformly sampling from low-high range
+        freqDist.push_back(std::uniform_real_distribution<double>(freqRange[i][0], freqRange[i][1]));
+        muDist.push_back(std::uniform_real_distribution<double>(muRange[i][0], muRange[i][1]));
+        ampDist.push_back(std::uniform_real_distribution<double>(ampRange[i][0], ampRange[i][1]));
+        freq[i] = freqDist[i](generator);
+        mu[i] = muDist[i](generator);
+        amp[i] = ampDist[i](generator);
+        int maxNumTables = log2(ceil(freqRange[i][1] / freqRange[i][0])+1);
+        oscillators.emplace_back(WaveTableOsc<double>(maxNumTables));
+        setSineOsc(oscillators[i], sampleRate, 2, freqRange[i][0]);
+      }
+      trendProbDist = std::uniform_real_distribution<double>(0., 1.);
+      trendComponent = 1.;
+      for (int i=0; i<trendProb.size(); i++){
+        trending.push_back(false);
+        trendLenDist.push_back(std::uniform_int_distribution<int>(trendRange[i][0], trendRange[i][1]));
+        currentDirection.push_back(1);
+        currentTrendLen.push_back(0);
+      }
+  }
+
+  void SineDynamicTrend::reset(){
+    for (int i=0; i<nComponents; i++){
+      freq[i] = freqDist[i](generator);
+      mu[i] = muDist[i](generator);
+      amp[i] = ampDist[i](generator);
+    }
+  }
+
+  void SineDynamicTrend::updateParams(){
+    for (int i=0; i<nComponents; i++){
+      mu[i] = max(muRange[i][0],
+                  min(muRange[i][1],
+                      mu[i]+(boolDist.randBool()? muRange[i][2]: -muRange[i][2])));
+      amp[i] = max(ampRange[i][0],
+                   min(ampRange[i][1],
+                       amp[i]+(boolDist.randBool()? ampRange[i][2]: -ampRange[i][2])));
+      freq[i] = max(freqRange[i][0],
+                    min(freqRange[i][1],
+                        freq[i]+(boolDist.randBool()? freqRange[i][2]: -freqRange[i][2])));
+      oscillators[i].setFreq(freq[i]/sampleRate);
+    }
+  }
+
+  const PriceVector& SineDynamicTrend::getData() {
+    double sum{0.};
+    updateParams();
+    double& currentVal = currentData_[0];
+    for (int i=0; i < nComponents; i++){
+      sum +=  trendComponent * (mu[i] + amp[i] * oscillators[i].process());
+    }
+    for (int i=0; i < trendProb.size(); i++){
+      if (trending[i]){
+        trendComponent += trendComponent * trendIncr[i] * currentDirection[i];
+        if (--currentTrendLen[i] == 0){
+          trending[i] = false;
+        }
+      }
+      else{
+        double rand = trendProbDist(generator);
+        if (rand < trendProb[i]){
+          trending[i] = true;
+          currentDirection[i] = (boolDist.randBool())? -1: 1;
+          currentTrendLen[i] = trendLenDist[i](generator);
+        }
+      }
+      if (trendComponent <= .1){
+        currentDirection[i] = 1;
+      }
+      trendComponent = std::max(0.01, trendComponent);
+    }
+    currentData_[0] = sum +  trendComponent + trendComponent*noiseDistribution(generator);
+    timestamp_ += 1;
+    return currentData_;
+  }
+
+  double SineDynamicTrend::getProcess(int i){
+    return oscillators[i].process();
+  }
+
 
   // OU ///////////////////////////////////////////////////////////////////////////////
   void OU::initParams(std::vector<double> mean, std::vector<double> theta,
@@ -600,10 +792,9 @@ namespace madigan{
       }
       for (int i=0; i < mean.size(); i++){
         std::string assetName = "OU_" + std::to_string(i);
-        this->assets.push_back(Asset(assetName));
+        this->assets_.push_back(Asset(assetName));
       }
-      this->nAssets_ = assets.size();
-      currentData_.resize(assets.size());
+      currentData_.resize(assets_.size());
       for (const auto& val: mean){
         currentData_ << val;
       }
@@ -653,7 +844,7 @@ namespace madigan{
   OU::OU(pybind11::dict py_config): OU::OU(makeConfigFromPyDict(py_config)){}
 
   const PriceVector& OU::getData() {
-    for (int i=0; i < nAssets_; i++){
+    for (int i=0; i < nAssets(); i++){
       double& x = currentData_(i);
       x += (theta[i]*(mean[i]-x)) + mean[i]*phi[i]*noiseDistribution[i](generator);
     }
@@ -684,13 +875,12 @@ namespace madigan{
                                  (dYMin[i], dYMax[i]));
         trending.push_back(false);
         std::string assetName = "SimpleTrend_" + std::to_string(i);
-        this->assets.push_back(Asset(assetName));
+        this->assets_.push_back(Asset(assetName));
         currentData_ << start[i]; // default starting val
         currentDirection.push_back(1);
         currentTrendLen.push_back(0);
         dY.push_back(0.);
       }
-      this->nAssets_ = assets.size();
     }
     else{
       throw std::length_error("parameters passed to DataSource<PriceVector> of type SimpleTrend"
@@ -738,12 +928,11 @@ namespace madigan{
     SimpleTrend::SimpleTrend(makeConfigFromPyDict(py_config)){}
 
   const PriceVector& SimpleTrend::getData() {
-    for (int i=0; i < nAssets_; i++){
+    for (int i=0; i < nAssets(); i++){
       double& y = currentData_[i];
       if(trending[i]){
         y += y * dY[i] * currentDirection[i];
-        currentTrendLen[i] -= 1;
-        if (currentTrendLen[i] == 0){
+        if (--currentTrendLen[i] == 0){
           trending[i] = false;
         }
       }
@@ -801,13 +990,12 @@ namespace madigan{
                                  (dYMin[i], dYMax[i]));
         trending.push_back(false);
         std::string assetName = "TrendOU_" + std::to_string(i);
-        this->assets.push_back(Asset(assetName));
+        this->assets_.push_back(Asset(assetName));
         currentData_ << start[i]; // default starting val
         currentDirection.push_back(1);
         currentTrendLen.push_back(0);
         dY.push_back(0.);
       }
-      this->nAssets_ = assets.size();
     }
     else{
       throw std::length_error("parameters passed to DataSource<PriceVector> of type TrendOU"
@@ -864,7 +1052,7 @@ namespace madigan{
     TrendOU::TrendOU(makeConfigFromPyDict(py_config)){}
 
   const PriceVector& TrendOU::getData(){
-    for (int i=0; i < nAssets_; i++){
+    for (int i=0; i < nAssets(); i++){
       double& y = currentData_[i];
       // TREND
       if(trending[i]){
@@ -946,13 +1134,12 @@ namespace madigan{
         trendComponent.push_back(0.);
         trending.push_back(false);
         std::string assetName = "TrendyOU_" + std::to_string(i);
-        this->assets.push_back(Asset(assetName));
+        this->assets_.push_back(Asset(assetName));
         currentData_ << start[i]; // default starting val
         currentDirection.push_back(1);
         currentTrendLen.push_back(0);
         dY.push_back(0.);
       }
-      this->nAssets_ = assets.size();
     }
     else{
       throw std::length_error("parameters passed to DataSource<PriceVector> of type TrendyOU"
@@ -1009,26 +1196,19 @@ namespace madigan{
     TrendyOU::TrendyOU(makeConfigFromPyDict(py_config)){}
 
   const PriceVector& TrendyOU::getData(){
-    for (int i=0; i < nAssets_; i++){
+    for (int i=0; i < nAssets(); i++){
       double& y = currentData_[i];
       // OU
-      double ouNoise = ouMean[i]*ouNoiseDist[i](generator);
-      double ouRevertingComponent = theta[i] * (ouMean[i]-ouComponent[i]); // centered at 0
-      ouComponent[i] += ouRevertingComponent + ouNoise;
       // TREND
       // double trendNoise{0};
       if(trending[i]){
         // double& x = currentData_(i);
         // trendNoise =  trendNoiseDist[i](generator);
-        trendComponent[i] = y * (dY[i] * currentDirection[i]);
+        trendComponent[i] = y * (dY[i] * currentDirection[i]) + trendNoiseDist[i](generator);
         ouMean[i] = y;
         if (--currentTrendLen[i] == 0){
           trending[i] = false;
           // ouMean[i] = y;
-        }
-        y = std::max(0.01, y);
-        if (y <= .1){
-          currentDirection[i] = 1;
         }
       }
       else{
@@ -1040,8 +1220,15 @@ namespace madigan{
           dY[i] = dYDist[i](generator);
         }
       }
-      y = ouComponent[i] + trendComponent[i];
+      double ouNoise = y*ouNoiseDist[i](generator);
+      double ouRevertingComponent = theta[i] * (-ouComponent[i]); // centered at 0
+      ouComponent[i] = ouRevertingComponent + ouNoise;
+      y += ouComponent[i] + trendComponent[i];
       // ema[i] = emaAlpha[i] * ema[i] + (1-emaAlpha[i]) * y;
+      y = std::max(0.01, y);
+      if (y <= .1){
+        currentDirection[i] = 1;
+      }
     }
     timestamp_ += 1;
     return currentData_;
@@ -1049,13 +1236,15 @@ namespace madigan{
 
   void TrendyOU::reset(){
     ema=start;
+    ouMean=start;
     // this->ouMean=start;
     for (int i=0; i<trendProb.size(); i++){
       ouComponent[i] = 0;
       trending[i] = false;
       currentData_(i) = start[i];
       currentTrendLen[i] = 0;
-      ema[i] = start[i];
+      // ema[i] = start[i];
+      // ouMean[i] = start[i];
     }
   }
 

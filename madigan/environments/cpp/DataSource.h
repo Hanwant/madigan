@@ -48,30 +48,30 @@ namespace madigan{
   template<>
   class DataSource<PriceVector>{
   public:
-    Assets assets;
-    int nAssets_;
-  public:
-    int nAssets() const{ return nAssets_;}
+    int nAssets() const{ return assets_.size();}
+    Assets assets() const { return assets_; }
 
     virtual const PriceVector& getData()=0;
     virtual const PriceVector& currentData() const=0;
     virtual const PriceVector& currentPrices() const=0;
     virtual void reset()=0;
     virtual std::size_t currentTime() const =0;
+  protected:
+    Assets assets_;
   };
 
   template<>
   class DataSource<PriceMatrix>{
   public:
-    Assets assets;
-    int nAssets_;
-  public:
-    int nAssets() const{ return nAssets_;}
+    int nAssets() const{ return assets_.size();}
+    Assets assets() const {return assets_; }
     virtual const PriceMatrix& getData()=0;
     virtual const PriceMatrix& currentData() const=0;
     virtual const PriceMatrix& currentPrices() const=0;
     virtual void reset()=0;
     virtual std::size_t currentTime() const =0;
+  protected:
+    Assets assets_;
   };
 
   using DataSourceBidAsk = DataSource<PriceMatrix>;
@@ -90,14 +90,13 @@ namespace madigan{
     string mainKey;
     string timestampKey;
     string priceKey;
-    int nAssets_{1};
+
   public:
     HDFSource(string datapath, string mainKey,
               string pricekey, string timestampKey);
     HDFSource(Config config);
     HDFSource(pybind11::dict config): HDFSource(makeConfigFromPyDict(config)){}
     void loadData();
-    int nAssets() const{ return nAssets_;}
     const PriceVector& getData();
     const PriceVector& currentData() const{return currentPrices_;}
     const PriceVector& currentPrices() const{return currentPrices_;}
@@ -117,9 +116,6 @@ namespace madigan{
   // SYNTHS - The Following DataSourceTick<PriceVector>s are Synthetic Time Series
   // Composite can combine outputs of many different data sources
   class Composite: public DataSourceTick{
-  public:
-    Assets assets;
-    int nAssets_{0};
   public:
     Composite()=delete;
     Composite(Config config);
@@ -144,15 +140,12 @@ namespace madigan{
   // Base for Periodic Wave funcitons I.e sine, triangle, sawtooth
   class Synth: public DataSourceTick{
   public:
-    Assets assets;
-    int nAssets_{0};
-  public:
     Synth(); // use default values for parameters
-    Synth(std::vector<double> freq, std::vector<double> mu,
-          std::vector<double> amp, std::vector<double> phase,
+    Synth(vector<double> freq, vector<double> mu,
+          vector<double> amp, vector<double> phase,
           double dX): Synth(freq, mu, amp, phase, dX, 0.){}
-    Synth(std::vector<double> freq, std::vector<double> mu,
-          std::vector<double> amp, std::vector<double> phase,
+    Synth(vector<double> freq, vector<double> mu,
+          vector<double> amp, vector<double> phase,
           double dX, double noise);
     Synth(Config config);
     Synth(pybind11::dict config);
@@ -165,8 +158,8 @@ namespace madigan{
     std::size_t currentTime() const { return timestamp_; }
 
   protected:
-    virtual void initParams(std::vector<double> freq, std::vector<double> mu,
-                            std::vector<double> amp, std::vector<double> phase,
+    virtual void initParams(vector<double> freq, vector<double> mu,
+                            vector<double> amp, vector<double> phase,
                             double dX, double noise);
 
   protected:
@@ -186,15 +179,14 @@ namespace madigan{
   class SineAdder: public DataSourceTick{
   public:
     SineAdder(); // use default values for parameters
-    SineAdder(std::vector<double> freq, std::vector<double> mu,
-              std::vector<double> amp, std::vector<double> phase,
+    SineAdder(vector<double> freq, vector<double> mu,
+              vector<double> amp, vector<double> phase,
               double dX): SineAdder(freq, mu, amp, phase, dX, 0.){}
-    SineAdder(std::vector<double> freq, std::vector<double> mu,
-              std::vector<double> amp, std::vector<double> phase,
+    SineAdder(vector<double> freq, vector<double> mu,
+              vector<double> amp, vector<double> phase,
               double dX, double noise);
     SineAdder(Config config);
     SineAdder(pybind11::dict config);
-    int nAssets() const{ return nAssets_;}
     ~SineAdder(){}
     const PriceVector& getData() ;
     const PriceVector& currentData() const{ return currentData_;}
@@ -202,8 +194,8 @@ namespace madigan{
     void reset(){}
     std::size_t currentTime() const { return timestamp_; }
   protected:
-    void initParams(std::vector<double> freq, std::vector<double> mu,
-                    std::vector<double> amp, std::vector<double> phase,
+    void initParams(vector<double> freq, vector<double> mu,
+                    vector<double> amp, vector<double> phase,
                     double dX, double noise);
   protected:
     double dX{0.01};
@@ -222,19 +214,16 @@ namespace madigan{
   class SineDynamic: public DataSourceTick{
   public:
     SineDynamic(); // use default values for parameters
-    SineDynamic(std::vector<std::array<double, 3>> freqRange,
-                std::vector<std::array<double, 3>> muRange,
-                std::vector<std::array<double, 3>> ampRange,
-                std::vector<double> phase,
-                double dX): SineDynamic(freqRange, muRange, ampRange, phase, dX, 0.){}
-    SineDynamic(std::vector<std::array<double, 3>> freqRange,
-                std::vector<std::array<double, 3>> muRange,
-                std::vector<std::array<double, 3>> ampRange,
-                std::vector<double> phase,
-              double dX, double noise);
+    SineDynamic(vector<std::array<double, 3>> freqRange,
+                vector<std::array<double, 3>> muRange,
+                vector<std::array<double, 3>> ampRange,
+                double dX): SineDynamic(freqRange, muRange, ampRange, dX, 0.){}
+    SineDynamic(vector<std::array<double, 3>> freqRange,
+                vector<std::array<double, 3>> muRange,
+                vector<std::array<double, 3>> ampRange,
+                double dX, double noise);
     SineDynamic(Config config);
     SineDynamic(pybind11::dict config);
-    int nAssets() const{ return nAssets_;}
     ~SineDynamic(){}
     const PriceVector& getData() ;
     const PriceVector& currentData() const{ return currentData_;}
@@ -243,10 +232,9 @@ namespace madigan{
     void reset();
     std::size_t currentTime() const { return timestamp_; }
   protected:
-    void initParams(std::vector<std::array<double, 3>> freq,
-                    std::vector<std::array<double, 3>> mu,
-                    std::vector<std::array<double, 3>> amp,
-                    std::vector<double> phase,
+    void initParams(vector<std::array<double, 3>> freq,
+                    vector<std::array<double, 3>> mu,
+                    vector<std::array<double, 3>> amp,
                     double dX, double noise);
     void updateParams();
 
@@ -257,14 +245,12 @@ namespace madigan{
     int nComponents;
     int stepsSinceUpdate=0;
     vector<WaveTableOsc<double>> oscillators;
-    // double, double, double == low, high, dt
     vector<std::array<double, 3>> freqRange;
     vector<std::array<double, 3>> muRange;
     vector<std::array<double, 3>> ampRange;
     vector<double> freq;
     vector<double> mu;
     vector<double> amp;
-    vector<double> initPhase;
     vector<double> x;
     std::size_t timestamp_;
     std::default_random_engine generator;
@@ -273,6 +259,75 @@ namespace madigan{
     vector<std::uniform_real_distribution<double>> freqDist;
     vector<std::uniform_real_distribution<double>> muDist;
     vector<std::uniform_real_distribution<double>> ampDist;
+    randomBoolGenerator boolDist;
+    PriceVector currentData_;
+  };
+
+  class SineDynamicTrend: public DataSourceTick{
+  public:
+    SineDynamicTrend(); // use default values for parameters
+    SineDynamicTrend(vector<std::array<double, 3>> freqRange,
+                     vector<std::array<double, 3>> muRange,
+                     vector<std::array<double, 3>> ampRange,
+                     vector<std::array<int, 2>> trendRange,
+                     vector<double> trendIncr, vector<double> trendProb,
+                     double dX): SineDynamicTrend(freqRange, muRange,
+                                                  ampRange, trendRange,
+                                                  trendIncr, trendProb, dX, 0.){}
+    SineDynamicTrend(vector<std::array<double, 3>> freqRange,
+                     vector<std::array<double, 3>> muRange,
+                     vector<std::array<double, 3>> ampRange,
+                     vector<std::array<int, 2>> trendRange,
+                     vector<double> trendIncr, vector<double> trendProb,
+                     double dX, double noise);
+    SineDynamicTrend(Config config);
+    SineDynamicTrend(pybind11::dict config);
+    ~SineDynamicTrend(){}
+    const PriceVector& getData() ;
+    const PriceVector& currentData() const{ return currentData_;}
+    const PriceVector& currentPrices() const{ return currentData_;}
+    double getProcess(int i);
+    void reset();
+    std::size_t currentTime() const { return timestamp_; }
+  protected:
+    void initParams(vector<std::array<double, 3>> freqRange,
+                    vector<std::array<double, 3>> muRange,
+                    vector<std::array<double, 3>> ampRange,
+                    vector<std::array<int, 2>> trendRange,
+                    vector<double> trendIncr, vector<double> trendProb,
+                    double dX, double noise);
+    void updateParams();
+
+  protected:
+    double dX = 0;
+    int sampleRate;
+    double noise{0.};
+    int nComponents;
+    int stepsSinceUpdate=0;
+    vector<WaveTableOsc<double>> oscillators;
+    vector<std::array<double, 3>> freqRange;
+    vector<std::array<double, 3>> muRange;
+    vector<std::array<double, 3>> ampRange;
+    vector<std::array<int, 2>> trendRange;
+    vector<double> trendIncr;
+    vector<double> trendProb;
+    vector<bool> trending;
+    vector<int> currentDirection;
+    vector<int> currentTrendLen;
+    double trendComponent;
+    vector<double> freq;
+    vector<double> mu;
+    vector<double> amp;
+    vector<double> x;
+    std::size_t timestamp_;
+    std::default_random_engine generator;
+    std::normal_distribution<double> noiseDistribution;
+    std::uniform_real_distribution<double> updateParameterDist;
+    vector<std::uniform_real_distribution<double>> freqDist;
+    vector<std::uniform_real_distribution<double>> muDist;
+    vector<std::uniform_real_distribution<double>> ampDist;
+    std::uniform_real_distribution<double> trendProbDist;
+    vector<std::uniform_int_distribution<int>> trendLenDist;
     randomBoolGenerator boolDist;
     PriceVector currentData_;
   };
@@ -291,12 +346,9 @@ namespace madigan{
 
   class OU: public DataSourceTick{
   public:
-    Assets assets;
-    int nAssets_{0};
-  public:
     OU();
-    OU(std::vector<double> mean, std::vector<double> theta,
-       std::vector<double> phi, std::vector<double> noise_var);
+    OU(vector<double> mean, vector<double> theta,
+       vector<double> phi, vector<double> noise_var);
     OU(Config config);
     OU(pybind11::dict config);
     ~OU(){}
@@ -308,8 +360,8 @@ namespace madigan{
     std::size_t currentTime() const { return timestamp_; }
 
   protected:
-    virtual void initParams(std::vector<double> mean, std::vector<double> theta,
-                            std::vector<double> phi, std::vector<double> noise_var);
+    virtual void initParams(vector<double> mean, vector<double> theta,
+                            vector<double> phi, vector<double> noise_var);
 
   protected:
     const double dT{1.};
@@ -319,19 +371,16 @@ namespace madigan{
     vector<double> noise_var;
     std::size_t timestamp_;
     std::default_random_engine generator;
-    std::vector<std::normal_distribution<double>> noiseDistribution;
+    vector<std::normal_distribution<double>> noiseDistribution;
     PriceVector currentData_;
   };
 
   class OUDynamic: public DataSourceTick{
   public:
-    Assets assets;
-    int nAssets_{0};
-  public:
     OUDynamic();
-    OUDynamic(std::vector<std::array<double, 3>> meanRange,
-              std::vector<std::array<double, 3>> thetaRange,
-              std::vector<std::array<double, 3>> phiRange);
+    OUDynamic(vector<std::array<double, 3>> meanRange,
+              vector<std::array<double, 3>> thetaRange,
+              vector<std::array<double, 3>> phiRange);
     OUDynamic(Config config);
     OUDynamic(pybind11::dict config);
     ~OUDynamic(){}
@@ -343,9 +392,9 @@ namespace madigan{
     std::size_t currentTime() const { return timestamp_; }
 
   protected:
-    virtual void initParams(std::vector<std::array<double, 3>> meanRange,
-                            std::vector<std::array<double, 3>> thetaRange,
-                            std::vector<std::array<double, 3>> phiRange);
+    virtual void initParams(vector<std::array<double, 3>> meanRange,
+                            vector<std::array<double, 3>> thetaRange,
+                            vector<std::array<double, 3>> phiRange);
 
   protected:
     const double dT{1.};
@@ -357,7 +406,7 @@ namespace madigan{
     vector<std::array<double, 3>> phiRange;
     std::size_t timestamp_;
     std::default_random_engine generator;
-    std::vector<std::normal_distribution<double>> noiseDistribution;
+    vector<std::normal_distribution<double>> noiseDistribution;
     randomBoolGenerator boolDist;
     PriceVector currentData_;
   };
@@ -365,10 +414,10 @@ namespace madigan{
   class SimpleTrend: public DataSourceTick{
   public:
     SimpleTrend();
-    SimpleTrend(std::vector<double> trendProb, std::vector<int> minPeriod,
-                std::vector<int> maxPeriod, std::vector<double> noise,
-                std::vector<double> dYMin, std::vector<double> dYMax,
-                std::vector<double> start);
+    SimpleTrend(vector<double> trendProb, vector<int> minPeriod,
+                vector<int> maxPeriod, vector<double> noise,
+                vector<double> dYMin, vector<double> dYMax,
+                vector<double> start);
     SimpleTrend(Config config);
     SimpleTrend(pybind11::dict config);
     ~SimpleTrend(){}
@@ -381,14 +430,14 @@ namespace madigan{
     std::size_t currentTime() const { return timestamp_; }
 
   protected:
-    virtual void initParams(std::vector<double> trendProb, std::vector<int> minPeriod,
-                             std::vector<int> maxPeriod, std::vector<double> noise,
-                            std::vector<double> dYMin, std::vector<double> dYMax,
-                            std::vector<double> start);
+    virtual void initParams(vector<double> trendProb, vector<int> minPeriod,
+                            vector<int> maxPeriod, vector<double> noise,
+                            vector<double> dYMin, vector<double> dYMax,
+                            vector<double> start);
 
   protected:
     const double dT{1.};
-    std::vector<double> trendProb;
+    vector<double> trendProb;
     vector<int> minPeriod;
     vector<int> maxPeriod;
     vector<double> noise;
@@ -397,26 +446,26 @@ namespace madigan{
     vector<double> dYMax;
     std::size_t timestamp_;
     std::default_random_engine generator;
-    std::vector<std::normal_distribution<double>> noiseDist;
-    std::vector<std::uniform_real_distribution<double>> dYDist;
-    std::vector<std::uniform_int_distribution<int>> trendLenDist;
+    vector<std::normal_distribution<double>> noiseDist;
+    vector<std::uniform_real_distribution<double>> dYDist;
+    vector<std::uniform_int_distribution<int>> trendLenDist;
     std::uniform_real_distribution<double> uniformDist{0., 1.};
     PriceVector currentData_;
 
-    std::vector<bool> trending;
-    std::vector<int> currentDirection;
-    std::vector<int> currentTrendLen;
+    vector<bool> trending;
+    vector<int> currentDirection;
+    vector<int> currentTrendLen;
 
   };
 
   class TrendOU: public DataSourceTick{
   public:
     TrendOU();
-    TrendOU(std::vector<double> trendProb, std::vector<int> minPeriod,
-            std::vector<int> maxPeriod, std::vector<double> dYMin,
-            std::vector<double> dYMax, std::vector<double> start,
-            std::vector<double> theta, std::vector<double> phi,
-            std::vector<double> noise_var, std::vector<double> emaAlpha);
+    TrendOU(vector<double> trendProb, vector<int> minPeriod,
+            vector<int> maxPeriod, vector<double> dYMin,
+            vector<double> dYMax, vector<double> start,
+            vector<double> theta, vector<double> phi,
+            vector<double> noise_var, vector<double> emaAlpha);
     TrendOU(Config config);
     TrendOU(pybind11::dict config);
     ~TrendOU(){}
@@ -428,14 +477,14 @@ namespace madigan{
     std::size_t currentTime() const { return timestamp_; }
 
   private:
-    void initParams(std::vector<double> trendProb, std::vector<int> minPeriod,
-                    std::vector<int> maxPeriod, std::vector<double> dYMin,
-                    std::vector<double> dYMax, std::vector<double> start,
-                    std::vector<double> theta, std::vector<double> phi,
-                    std::vector<double> noise_var, std::vector<double> emaAlpha);
+    void initParams(vector<double> trendProb, vector<int> minPeriod,
+                    vector<int> maxPeriod, vector<double> dYMin,
+                    vector<double> dYMax, vector<double> start,
+                    vector<double> theta, vector<double> phi,
+                    vector<double> noise_var, vector<double> emaAlpha);
   private:
     const double dT{1.};
-    std::vector<double> trendProb;
+    vector<double> trendProb;
     vector<int> minPeriod;
     vector<int> maxPeriod;
     vector<double> dY;
@@ -447,31 +496,31 @@ namespace madigan{
     vector<double> emaAlpha;
     vector<double> ema;
     vector<double> start; // for resetting
-    std::vector<double> ouMean;
+    vector<double> ouMean;
     std::size_t timestamp_{0};
     std::default_random_engine generator;
-    std::vector<std::normal_distribution<double>> ouNoiseDist;
-    std::vector<std::normal_distribution<double>> trendNoiseDist;
-    std::vector<std::uniform_real_distribution<double>> dYDist;
-    std::vector<std::uniform_int_distribution<int>> trendLenDist;
+    vector<std::normal_distribution<double>> ouNoiseDist;
+    vector<std::normal_distribution<double>> trendNoiseDist;
+    vector<std::uniform_real_distribution<double>> dYDist;
+    vector<std::uniform_int_distribution<int>> trendLenDist;
     std::uniform_real_distribution<double> uniformDist{0., 1.};
     PriceVector currentData_;
 
 
-    std::vector<bool> trending;
-    std::vector<int> currentDirection;
-    std::vector<int> currentTrendLen;
+    vector<bool> trending;
+    vector<int> currentDirection;
+    vector<int> currentTrendLen;
 
   };
 
   class TrendyOU: public DataSourceTick{
   public:
     TrendyOU();
-    TrendyOU(std::vector<double> trendProb, std::vector<int> minPeriod,
-            std::vector<int> maxPeriod, std::vector<double> dYMin,
-            std::vector<double> dYMax, std::vector<double> start,
-            std::vector<double> theta, std::vector<double> phi,
-            std::vector<double> noise_var, std::vector<double> emaAlpha);
+    TrendyOU(vector<double> trendProb, vector<int> minPeriod,
+            vector<int> maxPeriod, vector<double> dYMin,
+            vector<double> dYMax, vector<double> start,
+            vector<double> theta, vector<double> phi,
+            vector<double> noise_var, vector<double> emaAlpha);
     TrendyOU(Config config);
     TrendyOU(pybind11::dict config);
     ~TrendyOU(){}
@@ -483,14 +532,14 @@ namespace madigan{
     std::size_t currentTime() const { return timestamp_; }
 
   private:
-    void initParams(std::vector<double> trendProb, std::vector<int> minPeriod,
-                    std::vector<int> maxPeriod, std::vector<double> dYMin,
-                    std::vector<double> dYMax, std::vector<double> start,
-                    std::vector<double> theta, std::vector<double> phi,
-                    std::vector<double> noise_var, std::vector<double> emaAlpha);
+    void initParams(vector<double> trendProb, vector<int> minPeriod,
+                    vector<int> maxPeriod, vector<double> dYMin,
+                    vector<double> dYMax, vector<double> start,
+                    vector<double> theta, vector<double> phi,
+                    vector<double> noise_var, vector<double> emaAlpha);
   private:
     const double dT{1.};
-    std::vector<double> trendProb;
+    vector<double> trendProb;
     vector<int> minPeriod;
     vector<int> maxPeriod;
     vector<double> dY;
@@ -504,20 +553,20 @@ namespace madigan{
     vector<double> start;
     vector<double> ouComponent;
     vector<double> trendComponent;
-    std::vector<double> ouMean;
+    vector<double> ouMean;
     std::size_t timestamp_{0};
     std::default_random_engine generator;
-    std::vector<std::normal_distribution<double>> ouNoiseDist;
-    std::vector<std::normal_distribution<double>> trendNoiseDist;
-    std::vector<std::uniform_real_distribution<double>> dYDist;
-    std::vector<std::uniform_int_distribution<int>> trendLenDist;
+    vector<std::normal_distribution<double>> ouNoiseDist;
+    vector<std::normal_distribution<double>> trendNoiseDist;
+    vector<std::uniform_real_distribution<double>> dYDist;
+    vector<std::uniform_int_distribution<int>> trendLenDist;
     std::uniform_real_distribution<double> uniformDist{0., 1.};
     PriceVector currentData_;
 
 
-    std::vector<bool> trending;
-    std::vector<int> currentDirection;
-    std::vector<int> currentTrendLen;
+    vector<bool> trending;
+    vector<int> currentDirection;
+    vector<int> currentTrendLen;
 
   };
 

@@ -50,6 +50,10 @@ class Agent(ABC):
     def preprocessor(self):
         return self._preprocessor
 
+    @property
+    def assets(self):
+        return self._env.assets
+
     @classmethod
     @abstractmethod
     def from_config(cls, config):

@@ -8,23 +8,12 @@ import torch.nn.functional as F
 
 from .dqn import DQN
 from ...environments import make_env
+from ...environments.reward_shaping import RewardShaper, make_reward_shaper
 from ..net.conv_net_iqn import ConvNetIQN
-from ...utils import default_device, DiscreteActionSpace, DiscreteRangeSpace, ternarize_array
+from ...utils import default_device, DiscreteActionSpace, DiscreteRangeSpace
 from ...utils.preprocessor import make_preprocessor
 from ...utils.config import Config
 from ...utils.data import State, SARSD
-
-
-def get_model_class(name):
-    if name in ("ConvNet", ):
-        return ConvNetIQN
-    # elif name == ("MLPNet", ):
-    #     return MLPNetIQN
-    else:
-        raise NotImplementedError(f"model {name} is not Implemented")
-
-
-# p = type('params', (object, ), params)
 
 
 class IQN(DQN):
@@ -45,6 +34,7 @@ class IQN(DQN):
             action_space: tuple,
             discount: float,
             nstep_return: int,
+            reward_shaper: RewardShaper,
             replay_size: int,
             replay_min_size: int,
             noisy_net: bool,
@@ -68,10 +58,10 @@ class IQN(DQN):
             nTau2: int,
             k_huber: float):
         super().__init__(env, preprocessor, input_shape, action_space,
-                         discount, nstep_return, replay_size, replay_min_size,
-                         noisy_net, noisy_net_sigma, eps, eps_decay, eps_min,
-                         batch_size, test_steps, unit_size, savepath,
-                         double_dqn, tau_soft_update, model_class,
+                         discount, nstep_return, reward_shaper, replay_size,
+                         replay_min_size, noisy_net, noisy_net_sigma, eps,
+                         eps_decay, eps_min, batch_size, test_steps, unit_size,
+                         savepath, double_dqn, tau_soft_update, model_class,
                          model_config, lr)
 
         self.nTau1 = nTau1
@@ -82,19 +72,20 @@ class IQN(DQN):
     @classmethod
     def from_config(cls, config):
         env = make_env(config)
-        preprocessor = make_preprocessor(config)
+        preprocessor = make_preprocessor(config, env.nAssets)
         input_shape = preprocessor.feature_output_shape
         atoms = config.discrete_action_atoms + 1
-        action_space = DiscreteRangeSpace((0, atoms), config.n_assets)
+        action_space = DiscreteRangeSpace((0, atoms), env.nAssets)
+        reward_shaper = make_reward_shaper(config)
         aconf = config.agent_config
         unit_size = aconf.unit_size_proportion_avM
-        savepath = Path(config.basepath)/config.experiment_id/'models'
+        savepath = Path(config.basepath) / config.experiment_id / 'models'
         return cls(env, preprocessor, input_shape, action_space,
-                   aconf.discount, aconf.nstep_return, aconf.replay_size,
-                   aconf.replay_min_size, aconf.noisy_net,
-                   aconf.noisy_net_sigma, aconf.eps,
-                   aconf.eps_decay, aconf.eps_min, aconf.batch_size,
-                   config.test_steps, unit_size, savepath, aconf.double_dqn,
+                   aconf.discount, aconf.nstep_return, reward_shaper,
+                   aconf.replay_size, aconf.replay_min_size, aconf.noisy_net,
+                   aconf.noisy_net_sigma, aconf.eps, aconf.eps_decay,
+                   aconf.eps_min, aconf.batch_size, config.test_steps,
+                   unit_size, savepath, aconf.double_dqn,
                    aconf.tau_soft_update, config.model_config.model_class,
                    config.model_config, config.optim_config.lr,
                    config.agent_config.nTau1, config.agent_config.nTau2,
@@ -160,10 +151,10 @@ class IQN(DQN):
         quantiles_next = self.model_t(next_state, tau=tau2)
         assert quantiles_next.shape[1:] == (self.nTau2, self.n_assets,
                                             self.action_atoms)
-        quantiles_next = (quantiles_next * one_hot).sum(-1)
+        quantiles_next = (quantiles_next * one_hot[:, None, :, 0, :]).sum(-1)
         assert quantiles_next.shape[1:] == (self.nTau2, self.n_assets)
         Gt = reward[:, None, None] + (~done[:, None, None] *
-                                      (self.discount ** self.nstep_return) *
+                                      (self.discount**self.nstep_return) *
                                       quantiles_next)
         assert Gt.shape[1:] == (self.nTau2, self.n_assets)
         return Gt
@@ -185,7 +176,6 @@ class IQN(DQN):
 
         Gt = self.calculate_Gt_target(next_state, reward, done)
         Qt = (quantiles * action_mask).sum(-1)
-        # assert Qt.shape == Gt.shape
         loss, td_error = self.loss_fn(Qt, Gt, tau1)
         self.opt.zero_grad()
         loss.backward()
@@ -208,7 +198,7 @@ class IQN(DQN):
         """
         assert Qt.shape[1:] == (self.nTau1, self.n_assets)
         assert Gt.shape[1:] == (self.nTau2, self.n_assets)
-        td_error = Gt.unsqueeze(1) - Qt.unsqueeze(-1)
+        td_error = Gt.unsqueeze(1) - Qt.unsqueeze(2)
         assert td_error.shape[1:] == (self.nTau1, self.nTau2, self.n_assets)
         huber_loss = torch.where(
             td_error.abs() <= self.k_huber, 0.5 * td_error.pow(2),

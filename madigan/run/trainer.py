@@ -8,6 +8,7 @@ from queue import Queue
 import yaml
 
 from tqdm import tqdm
+import h5py
 import numpy as np
 import pandas as pd
 import torch
@@ -106,9 +107,13 @@ class Trainer:
             self.logger.info(f'logging {len(test_metrics)} test runs')
             for (env_step, test_run) in test_metrics:
                 test_df = pd.DataFrame(test_run)
-                test_filename = self.logdir/(f'test_env_steps_{env_step}'+ \
+                test_filename = self.logdir/(
+                    f'test_env_steps_{env_step}' +
                     f'_episode_steps_{len(test_df)}.hdf5')
                 test_df.to_hdf(test_filename, 'full_run', append=False)
+                with h5py.File(test_filename, 'a') as f:
+                    f.attrs['asset_names'] = [asset.code for asset in
+                                              self.agent.env.assets]
                 summary = test_summary(test_df)
                 summary['env_steps'] = [self.agent.env_steps]
                 summary['training_steps'] = [self.agent.training_steps]
@@ -219,9 +224,6 @@ class Trainer:
         returns tuple of pandas df (train_logs, test_logs)
 
         """
-        flush_freq = self.log_freq
-        test_freq = self.test_freq
-        model_save_freq = self.config.model_save_freq
         nsteps = nsteps or self.train_steps
         train_metrics = []
         test_metrics = []
@@ -232,13 +234,11 @@ class Trainer:
 
         # fill replay buffer up to replay_min_size before training
         self.logger.info('initializing buffer')
-        # burn_in_train_loop = iter(self.agent.step(self.agent.replay_min_size))
-        # train_metrics.extend(next(burn_in_train_loop))
         self.agent.initialize_buffer()
         test_metrics.append((i, self.agent.test_episode()))
 
         self.logger.info("Starting Training")
-        train_loop = self.agent.step(nsteps)
+        train_loop = self.agent.step(nsteps, log_freq=2000)
 
         progress_bar = tqdm(total=i+nsteps, colour='#9fc693')
         progress_bar.update(i)
@@ -253,18 +253,18 @@ class Trainer:
                 # max_running_reward = max(max_running_reward,
                 #                          train_metric[-1]['running_reward'])
 
-                if steps_since_test > test_freq:
+                if steps_since_test > self.test_freq:
                     self.logger.info("Testing Model")
                     test_metrics.append((i, self.agent.test_episode()))
                     steps_since_test = 0
 
-                if steps_since_save > model_save_freq:
+                if steps_since_save > self.config.model_save_freq:
                     self.logger.info("Saving Agent State")
                     self.agent.checkpoint()  # checkpoint history
                     self.agent.save_state()  # main lineage
                     steps_since_save = 0
 
-                if steps_since_flush > flush_freq:
+                if steps_since_flush > self.log_freq:
                     self.logger.info("Saving Log Metrics")
                     self.save_logs(train_metrics, test_metrics)
                     train_metrics, test_metrics = [], []

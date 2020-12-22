@@ -18,15 +18,15 @@ namespace madigan{
   public:
     Config config;
   public:
-    Env(string sourceType, Assets assets, double initCash): assets_(assets), initCash_(initCash),
-                                                            dataSourceType_(sourceType){
+    Env(string sourceType, double initCash): initCash_(initCash),
+                                             dataSourceType_(sourceType){
       initMembers(); }
 
-    Env(string sourceType, Assets assets, double initCash, Config config):
-      assets_(assets), initCash_(initCash), dataSourceType_(sourceType), config(config){
+    Env(string sourceType, double initCash, Config config):
+      initCash_(initCash), dataSourceType_(sourceType), config(config){
       initMembers(); }
-    Env(string sourceType, Assets assets, double initCash, pybind11::dict py_config)
-      : Env(sourceType, assets, initCash, makeConfigFromPyDict(py_config)){};
+    Env(string sourceType, double initCash, pybind11::dict py_config)
+      : Env(sourceType, initCash, makeConfigFromPyDict(py_config)){};
 
     Env(const Env& other)=delete;
 
@@ -136,6 +136,7 @@ namespace madigan{
     }else{
       dataSource_ = makeDataSource<PriceVector>(dataSourceType_);
     }
+    assets_ = dataSource_->assets();
     initAccountants();
   }
 

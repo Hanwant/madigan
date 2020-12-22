@@ -116,12 +116,12 @@ class SACDiscrete(OffPolicyActorCritic):
     @classmethod
     def from_config(cls, config):
         env = make_env(config)
-        preprocessor = make_preprocessor(config)
+        preprocessor = make_preprocessor(config, env.nAssets)
         input_shape = preprocessor.feature_output_shape
         # add an extra asset for cash holdings
         # used in repr of port weights returned by env.ledgerNormedFull
         atoms = config.discrete_action_atoms + 1
-        action_space = DiscreteRangeSpace((0, atoms), config.n_assets)
+        action_space = DiscreteRangeSpace((0, atoms), env.nAssets)
         aconf = config.agent_config
         unit_size = aconf.unit_size_proportion_avM
         savepath = Path(config.basepath) / config.experiment_id / 'models'

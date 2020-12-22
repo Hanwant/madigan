@@ -68,13 +68,16 @@ def test_sharpe_ewma_window():
     for reward in rewards:
         rolling_sharpe.append(shaper.stream(reward))
     rolling_sharpe = np.array(rolling_sharpe[:])
-    import matplotlib.pyplot as plt
-    # plt.plot(rewards, label='rewards')
-    plt.plot(rolling_sharpe, label='shaper')
-    plt.plot(rolling_sharpe_ref, label='ref')
-    plt.legend()
-    plt.show()
+    PLOT = false
+    if PLOT:
+        import matplotlib.pyplot as plt
+        # plt.plot(rewards, label='rewards')
+        plt.plot(rolling_sharpe, label='shaper')
+        plt.plot(rolling_sharpe_ref, label='ref')
+        plt.legend()
+        plt.show()
     np.testing.assert_allclose(rolling_sharpe, rolling_sharpe_ref)
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

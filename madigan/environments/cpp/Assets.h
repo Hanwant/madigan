@@ -29,9 +29,10 @@ namespace madigan{
     return os;
   }
 
-  struct Assets :public std::vector<Asset>{
+  struct Assets :public vector<Asset>{
     Assets(){};
-    // using std::vector<Asset>::std::vector<Asset>(std::initializer_list);
+    // using vector<Asset>::vector<Asset>(std::initializer_list);
+    using vector::vector;
     Assets(std::initializer_list<string> assetNames){
       for(auto name: assetNames){
         push_back(Asset(name));
@@ -56,7 +57,7 @@ namespace madigan{
     return os;
   }
 
-  // typedef std::vector<Asset> Assets;
+  // typedef vector<Asset> Assets;
   // template<>
   // Assets::Assets(vector<string> assetNames){
   //   for (auto name: assetNames){

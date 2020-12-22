@@ -4,15 +4,15 @@ import numpy as np
 
 def make_env(config):
     if config.env_type in ("Synth", ):
-        assets = Assets(config.assets)
         if config.data_source_config is not None:
-            env = Env(config.data_source_type, assets, config.init_cash, config)
+            env = Env(config.data_source_type, config.init_cash, config)
         else:
-            env = Env(config.data_source_type, assets, config.init_cash)
+            env = Env(config.data_source_type, config.init_cash)
         env.setRequiredMargin(config.required_margin)
         env.setMaintenanceMargin(config.maintenance_margin)
-        env.setTransactionCost(config.transaction_cost_rel, config.transaction_cost_rel)
-        env.setSlippage(config.slippage_rel, config.slippage_rel)
+        env.setTransactionCost(config.transaction_cost_rel,
+                               config.transaction_cost_abs)
+        env.setSlippage(config.slippage_rel, config.slippage_abs)
         return env
     raise NotImplementedError(f"Env type {config.env_type} not implemented")
 

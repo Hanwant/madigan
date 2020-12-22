@@ -108,7 +108,7 @@ namespace madigan{
       // wavetables[num_wavetables].len = len;
       // wavetables[num_wavetables].top_freq = top_freq;
       T* table = new T[len + 1];
-      waveTables.emplace_back(WaveTable<T>({topFreq, len, table}));
+      waveTables.push_back(WaveTable<T>({topFreq, len, table}));
       for (int i=0; i < len; i++){
         table[i] = tableIn[i];
       }

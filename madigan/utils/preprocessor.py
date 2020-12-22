@@ -9,7 +9,7 @@ from ..utils.data import State
 # from ..environments.cpp import State as StateA
 
 
-def make_preprocessor(config):
+def make_preprocessor(config, n_assets):
     """
     Choices for config.preprocessor_type:
     StackerDiscrete (== WindowedStacker):  maintains a fixed size window of obs
@@ -19,13 +19,13 @@ def make_preprocessor(config):
     """
     if config.preprocessor_type in ("WindowedStacker", "StackerDiscrete",
                                     "StackerDiscreteReturns"):
-        return StackerDiscrete.from_config(config)
-    elif config.preprocessor_type in ("StackerContinuous"):
-        return StackerContinuous.from_config(config)
-    elif config.preprocessor_type in ("RollerDiscrete", ):
-        return RollerDiscrete.from_config(config)
-    elif config.preprocessor_type in ("CustomA", ):
-        return CustomA.from_config(config)
+        return StackerDiscrete.from_config(config, n_assets)
+    if config.preprocessor_type in ("StackerContinuous"):
+        return StackerContinuous.from_config(config, n_assets)
+    if config.preprocessor_type in ("RollerDiscrete"):
+        return RollerDiscrete.from_config(config, n_assets)
+    if config.preprocessor_type in ("CustomA", n_assets):
+        return CustomA.from_config(config, n_assets)
     raise NotImplementedError(
         f"{config['preprocessor_type']} is not implemented ")
 
@@ -47,6 +47,10 @@ def make_normalizer(norm_type):
         return standard_norm
     if norm_type == 'expanding':
         return lambda x: x / _expanding_mean(x)
+    else:
+        raise NotImplementedError(f"norm_type {norm_type} is not implemented."
+                                  "choose from : 'lookback', 'lookback_log', "
+                                  "'standard_normal', 'expanding'")
 
 
 def standard_norm(x):
@@ -54,8 +58,8 @@ def standard_norm(x):
     Nan safe version of standard normalization
     otherwise a lambda is enough I.e lambda x: (x-x.mean()) / x.std()
     """
-    mean = x.mean()
-    res = np.nan_to_num((x-mean) / x.std(), 0.)
+    mean = x.mean(0)
+    res = np.nan_to_num((x-mean) / x.std(0), 0.)
     return res
 
 
@@ -72,15 +76,16 @@ class PreProcessor(ABC):
         pass
 
     @classmethod
-    def from_config(cls, config):
-        return make_preprocessor(config)
+    def from_config(cls, config, n_assets):
+        return make_preprocessor(config, n_assets)
 
     @abstractmethod
     def initialize_history(self):
         pass
 
 class StackerDiscrete(PreProcessor):
-    def __init__(self, window_len, norm=True, norm_type='lookback'):
+    def __init__(self, window_len: int, n_assets: int,
+                 norm: bool = True, norm_type: str = 'standard_normal'):
         self.k = window_len
         self.min_tf = self.k
         self.norm = norm
@@ -88,14 +93,14 @@ class StackerDiscrete(PreProcessor):
         self.price_buffer = deque(maxlen=self.k)
         self.portfolio_buffer = deque(maxlen=self.k)
         self.time_buffer = deque(maxlen=self.k)
-        self.feature_output_shape = (self.k, 1)
+        self.feature_output_shape = (self.k, n_assets)
 
     @classmethod
-    def from_config(cls, config):
+    def from_config(cls, config, n_assets):
         pconf = config.preprocessor_config
         norm = pconf.norm if 'norm' in pconf.keys() else False
         norm_type = pconf.norm_type if 'norm_type' in pconf.keys() else None
-        return cls(pconf.window_length, norm, norm_type)
+        return cls(pconf.window_length, n_assets, norm, norm_type)
 
     def __len__(self):
         return len(self.price_buffer)
@@ -186,7 +191,7 @@ class RollerDiscrete(PreProcessor):
         self.feature_output_shape = (window_len, n_feats)
 
     @classmethod
-    def from_config(cls, config):
+    def from_config(cls, config, n_assets):
         window_len = config.preprocessor_config.window_length
         timeframes = config.preprocessor_config.timeframes
         return cls(timeframes, window_len)
@@ -268,8 +273,8 @@ class AutoEncoder(PreProcessor):
         pass
 
     @classmethod
-    def from_config(cls, config):
-        return make_preprocessor(config)
+    def from_config(cls, config, n_assets):
+        return make_preprocessor(config, n_assets)
 
     @abstractmethod
     def initialize_history(self):
