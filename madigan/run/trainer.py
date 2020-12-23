@@ -253,18 +253,18 @@ class Trainer:
                 # max_running_reward = max(max_running_reward,
                 #                          train_metric[-1]['running_reward'])
 
-                if steps_since_test > self.test_freq:
+                if steps_since_test >= self.test_freq:
                     self.logger.info("Testing Model")
                     test_metrics.append((i, self.agent.test_episode()))
                     steps_since_test = 0
 
-                if steps_since_save > self.config.model_save_freq:
+                if steps_since_save >= self.config.model_save_freq:
                     self.logger.info("Saving Agent State")
                     self.agent.checkpoint()  # checkpoint history
                     self.agent.save_state()  # main lineage
                     steps_since_save = 0
 
-                if steps_since_flush > self.log_freq:
+                if steps_since_flush >= self.log_freq:
                     self.logger.info("Saving Log Metrics")
                     self.save_logs(train_metrics, test_metrics)
                     train_metrics, test_metrics = [], []

@@ -227,15 +227,19 @@ class DQN(OffPolicyQ):
             one_hot = F.one_hot(behaviour_actions,
                                 self.action_atoms).to(self.device)
             # (bs, n_assets, 1)
-            greedy_qvals_next = (self.model_t(next_state) * one_hot).sum(-1)
+            greedy_qvals_next = (self.model_t(next_state) * one_hot).sum(
+                -1).mean(-1)  # pick max within assets and mean across assets
         else:
             # (bs, n_assets, 1)
-            greedy_qvals_next = self.model_t(next_state).max(-1)[0]
-        # reward and done have an extended dimension to accommodate for n_assets
+            greedy_qvals_next = self.model_t(next_state).max(-1)[0].mean(
+                -1)  # pick max within assets and mean across assets
         # As actions for different assets are considered in parallel
-        Gt = reward[..., None] + (~done[..., None] *
-                                  (self.discount**self.nstep_return) *
-                                  greedy_qvals_next)  # Gt = (bs, n_assets)
+        # Gt = reward[..., None] + (~done[..., None] *
+        #                           (self.discount**self.nstep_return) *
+        #                           greedy_qvals_next)  # Gt = (bs, n_assets)
+        Gt = reward + (~done * self.discount ** self.nstep_return *
+                       greedy_qvals_next)   # (bs, )
+        # assert Gt.shape == (next_state.price.shape[0], )
         return Gt
 
     def train_step(self, sarsd: SARSD = None):
@@ -247,7 +251,7 @@ class DQN(OffPolicyQ):
 
         action_mask = F.one_hot(action, self.action_atoms).to(self.device)
         qvals = self.model_b(state)
-        Qt = (qvals * action_mask).sum(-1)
+        Qt = (qvals * action_mask).sum(-1).mean(-1)  # (bs, )
         Gt = self.calculate_Gt_target(next_state, reward, done)
         assert Qt.shape == Gt.shape
 

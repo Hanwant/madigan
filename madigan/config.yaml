@@ -2,7 +2,7 @@ agent_config:
   action_atoms: 3
   ae_temp: 0.5
   batch_size: 34
-  discount: 0.99
+  discount: 0.999
   discrete_action_atoms: 3
   double_dqn: true
   dueling: true
@@ -18,7 +18,7 @@ agent_config:
   noisy_net_sigma: 0.5
   nTau1: 32
   nTau2: 8
-  nstep_return: 10
+  nstep_return: 5
   nsteps: 1000000
   replay_min_size: 20000
   replay_size: 100000
@@ -28,40 +28,38 @@ agent_config:
   tau_embed_size: 64
   tau_soft_update: 0.0001
   train_freq: 4
-  unit_size_proportion_avM: 0.001
+  unit_size_proportion_avM: 0.05
   proximal_portfolio_penalty: .5
   target_entropy_ratio: 0.98
   learn_entropy_temp: false
   entropy_temp: 0.2
   transaction_thresh: 0.02
 agent_type: DQN
-assets:
-- sine1
 basepath: /media/hemu/Data/madigan/experiments/
 data_source_config:
   amp:
   - 1.
   - 1.
-#  - 2.
+  - 2.
   dX: 0.01
   freq:
   - 3.
   - 3.
-#  - 1.
+  - 1.
   mu:
   - 5.
   - 5.
-#  - 8.
-  noise: .0
+  - 8.
+  noise: .1
   phase:
   - 0.0
   - 0.5
-#  - 0.0
+  - 0.0
 data_source_type: Synth
 discrete_action_atoms: 3
 discrete_actions: true
 env_type: Synth
-experiment_id: DQN_Synth_opposite_phase
+experiment_id: DQN_Synth_Pair_plusLow_freq_Noise.1trans.02_Sortino
 init_cash: 1000000
 log_freq: 10000
 lot_unit_value: 10000
@@ -127,7 +125,7 @@ preprocessor_type: StackerDiscrete
 required_margin: 1.0
 reward_clip: *id001
 reward_shaper_config:
-  reward_shaper: None
+  reward_shaper: SortinoFixedWindow
   window: 1000
 slippage_abs: 0.0
 slippage_rel: 0.0

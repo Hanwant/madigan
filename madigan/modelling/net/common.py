@@ -41,15 +41,21 @@ class DuelingHeadDQN(nn.Module):
         self.action_atoms = output_shape[1]
         Linear = partial(NoisyLinear, sigma=noisy_net_sigma) \
             if noisy_net else nn.Linear
-        self.value_net = Linear(d_model, self.n_assets)
+        # self.value_net = Linear(d_model, self.n_assets)
+        self.value_net = Linear(d_model, 1)
         self.adv_net = Linear(d_model, self.n_assets*self.action_atoms)
 
     def forward(self, state_emb):
+        bs = state_emb.shape[0]
         value = self.value_net(state_emb)
-        adv = self.adv_net(state_emb).view(state_emb.shape[0],
-                                           self.n_assets, self.action_atoms)
-        qvals = value[..., None] + adv - adv.mean(-1, keepdim=True)
-        return qvals
+        # adv = self.adv_net(state_emb).view(
+        # bs, self.n_assets, self.action_atoms)
+        # qvals = value[..., None] + adv - adv.mean(-1, keepdim=True)
+        # return qvals
+        adv = self.adv_net(state_emb)
+        qvals = value + adv - adv.mean(-1, keepdim=True)
+        # import ipdb; ipdb.set_trace()
+        return qvals.view(bs, self.n_assets, self.action_atoms)
 
 class NoisyLinear(nn.Module):
     """

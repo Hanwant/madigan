@@ -93,7 +93,7 @@ class ConvNet(QNetworkBase):
         assert state is not None or state_emb is not None
         if state_emb is None:
             state_emb = self.convnet_state_encoder(state)  # (bs, d_model)
-        qvals = self.output_head(state_emb)  # (bs, n_assets, action_atoms)
+        qvals = self.output_head(state_emb)  # (bs, n_assets*action_atoms)
         return qvals
 
 

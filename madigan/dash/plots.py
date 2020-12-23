@@ -368,6 +368,8 @@ class TestEpisodePlots(QGridLayout):
         self.plots['cash'].showGrid(1, 1)
         self.plots['availableMargin'].showGrid(1, 1)
         self.plots['transactions'].showGrid(1, 1)
+        limits = np.finfo('float64')
+        # self.plots['transactions'].setYRange(limits.min, limits.max)
         self.plots['ledgerNormed'].showGrid(1, 1)
 
         self.episode_table = QListWidget()

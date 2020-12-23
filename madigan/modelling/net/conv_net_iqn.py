@@ -41,16 +41,21 @@ class DuelingHeadIQN(nn.Module):
         self.action_atoms = output_shape[1]
         Linear = partial(NoisyLinear, sigma=noisy_net_sigma) \
             if noisy_net else nn.Linear
-        self.value_net = Linear(d_model, self.n_assets)
+        # self.value_net = Linear(d_model, self.n_assets)
+        self.value_net = Linear(d_model, 1)
         self.adv_net = Linear(d_model, self.n_assets * self.action_atoms)
 
     def forward(self, state_emb):
-        value = self.value_net(state_emb)
-        adv = self.adv_net(state_emb).view(state_emb.shape[0],
-                                           state_emb.shape[1], self.n_assets,
-                                           self.action_atoms)
-        qvals = value[..., None] + adv - adv.mean(-1, keepdim=True)
-        return qvals  # (bs, nTau, n_assets, action_atoms)
+        value = self.value_net(state_emb)[..., None]
+        # adv = self.adv_net(state_emb).view(state_emb.shape[0],
+        #                                    state_emb.shape[1], self.n_assets,
+        #                                    self.action_atoms)
+        # qvals = value[..., None] + adv - adv.mean(-1, keepdim=True)
+        # return qvals  # (bs, nTau, n_assets, action_atoms)
+        adv = self.adv_net(state_emb)
+        qvals = value + adv - adv.mean(-1, keepdim=True)
+        return qvals.view(state_emb.shape[0], state_emb.shape[1],
+                          self.n_assets, self.action_atoms)
 
 
 class TauEmbedLayer(nn.Module):
