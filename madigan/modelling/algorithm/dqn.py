@@ -29,9 +29,8 @@ class DQN(OffPolicyQ):
     """
     Implements a base DQN agent from which extensions can inherit
     The Agent instance can be called directly to get an action based on a state:
-        action = dqn(state)
-    or:
-        action = dqn.get_action(state)
+        action = agent.get_action(state)
+        transaction = agent.action_to_transaction(action)
     use dqn.step(n) to step through n environment interactions
     The method for training a single batch is self.train_step(sarsd) where sarsd is a class with ndarray members (I.e of shape (bs, time, feats))
     """
@@ -176,7 +175,7 @@ class DQN(OffPolicyQ):
         takes in numpy arrays and returns greedy actions
         """
         qvals = self.get_qvals(state, target=target, device=device)
-        actions = qvals.max(-1)[1][:, 0]  # get rid of last dim
+        actions = qvals.max(-1)[1].squeeze()  # (self.n_assets, )
         return actions
 
     def __call__(self,
