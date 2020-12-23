@@ -125,8 +125,8 @@ packages = find_packages(exclude=['arena'])
 print('Packages: ', packages)
 
 EXT_MODULES = [cythonize(EXT_MODULES,
-                         compiler_directives={'language_level': "3"}),
-               [CMakeExtension('madigan.environments.cpp')]]
+                         compiler_directives={'language_level': "3"})[0],
+               CMakeExtension('madigan.environments.cpp')]
 
 setup(
     name='madigan',
@@ -136,6 +136,6 @@ setup(
     python_requires='>=3.7',
     packages=packages,
     include_package_data=True,
-    ext_modules=EXT_MODULES[0],
+    ext_modules=EXT_MODULES,
     # include_dirs=[numpy.get_include()]
 )
