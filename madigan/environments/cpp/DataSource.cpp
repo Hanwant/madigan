@@ -26,6 +26,9 @@ namespace madigan{
     else if (dataSourceType == "SineDynamicTrend"){
       return make_unique<SineDynamicTrend>();
     }
+    else if (dataSourceType == "Gaussian"){
+      return make_unique<Gaussian>();
+    }
     else if (dataSourceType == "OU"){
       return make_unique<OU>();
     }
@@ -68,6 +71,9 @@ namespace madigan{
     else if (dataSourceType == "SineDynamicTrend"){
       return make_unique<SineDynamicTrend>(config);
     }
+    else if (dataSourceType == "Gaussian"){
+      return make_unique<Gaussian>(config);
+    }
     else if (dataSourceType == "OU"){
       return make_unique<OU>(config);
     }
@@ -95,7 +101,7 @@ namespace madigan{
     }
   }
 
-  bool checkKeysPresent(Config config, std::vector<string> keys){
+  bool checkKeysPresent(Config config, vector<string> keys){
     bool allKeysPresent{true};
     for (auto key: keys){
       if (config.find(key) == config.end()){
@@ -199,8 +205,8 @@ namespace madigan{
 
   // SYNTH SOURCE  //////////////////////////////////////////////////////////////////////////
 
-  void Synth::initParams(std::vector<double> _freq, std::vector<double> _mu,
-                         std::vector<double> _amp, std::vector<double> _phase,
+  void Synth::initParams(vector<double> _freq, vector<double> _mu,
+                         vector<double> _amp, vector<double> _phase,
                          double _dX, double _noise)
   {
     this->freq=_freq;
@@ -228,8 +234,8 @@ namespace madigan{
     initParams(freq, mu, amp, phase, dX, 0.);
   }
 
-  Synth::Synth(std::vector<double> _freq, std::vector<double> _mu,
-               std::vector<double> _amp, std::vector<double> _phase,
+  Synth::Synth(vector<double> _freq, vector<double> _mu,
+               vector<double> _amp, vector<double> _phase,
                double _dX, double noise){
     if ((_freq.size() == _mu.size()) && (_mu.size() == _amp.size()) &&
         (_amp.size() == _phase.size())){
@@ -331,8 +337,8 @@ namespace madigan{
     initParams(freq, mu, amp, phase, dX, 0.);
   }
 
-  SineAdder::SineAdder(std::vector<double> _freq, std::vector<double> _mu,
-                       std::vector<double> _amp, std::vector<double> _phase,
+  SineAdder::SineAdder(vector<double> _freq, vector<double> _mu,
+                       vector<double> _amp, vector<double> _phase,
                        double _dX, double noise){
     if ((_freq.size() == _mu.size()) && (_mu.size() == _amp.size()) &&
         (_amp.size() == _phase.size())){
@@ -385,8 +391,8 @@ namespace madigan{
     // Config config = makeConfigFromPyDict(py_config);
 
   }
-  void SineAdder::initParams(std::vector<double> _freq, std::vector<double> _mu,
-                             std::vector<double> _amp, std::vector<double> _phase,
+  void SineAdder::initParams(vector<double> _freq, vector<double> _mu,
+                             vector<double> _amp, vector<double> _phase,
                              double _dX, double _noise)
   {
     this->freq=_freq;
@@ -778,25 +784,82 @@ namespace madigan{
   }
 
 
+  ///////////////////////////////////////////////////////////////////////////////////////////
+  // Gaussian ///////////////////////////////////////////////////////////////////////////////
+  ///////////////////////////////////////////////////////////////////////////////////////////
+  void Gaussian::initParams(vector<double> mean, vector<double> var){
+    if (mean.size() == var.size()){
+      this->mean=mean;
+      this->var=var;
+      currentData_.resize(mean.size());
+      for (int i=0; i < mean.size(); i++){
+        std::string assetName = "Gaussian_" + std::to_string(i);
+        this->assets_.push_back(Asset(assetName));
+        noiseDistribution.push_back(std::normal_distribution<double>(mean[i], var[i]));
+        currentData_(i) = mean[i];
+      }
+      generator.seed(std::chrono::system_clock::now().time_since_epoch().count());
+    }
+    else{
+      throw std::length_error("parameters passed to DataSource<PriceVector> of type Gaussian"
+                              " need to be vectors of same length");
+    }
+  }
+
+  Gaussian::Gaussian(vector<double> mean, vector<double> var){
+    initParams(mean, var);
+  }
+  Gaussian::Gaussian(): Gaussian({2., 5, 10., 15}, {1., 1., 2., 5.}){}
+
+  Gaussian::Gaussian(Config config){
+    bool allKeysPresent{true};
+    if (config.find("data_source_config") == config.end()){
+      throw ConfigError("config passed but doesn't contain generator params");
+      allKeysPresent = false;
+    }
+    Config params = std::any_cast<Config>(config["data_source_config"]);
+    for (auto key: {"mean", "var"}){
+      if (params.find(key) == params.end()){
+        allKeysPresent=false;
+        throw ConfigError("generator parameters don't have all required constructor arguments");
+      }
+    }
+    if (allKeysPresent){
+      vector<double> mean = std::any_cast<vector<double>>(params["mean"]);
+      vector<double> var = std::any_cast<vector<double>>(params["var"]);
+      initParams(mean, var);
+    }
+    else{
+      vector<double> mean{2., 5., 10., 15.};
+      vector<double> var{1., 1., 2., 5.};
+      initParams(mean, var);
+    }
+  }
+
+  Gaussian::Gaussian(pybind11::dict py_config): Gaussian::Gaussian(makeConfigFromPyDict(py_config)){}
+
+  const PriceVector& Gaussian::getData() {
+    for (int i=0; i < nAssets(); i++){
+      currentData_(i) = noiseDistribution[i](generator);
+    }
+    timestamp_ += 1;
+    return currentData_;
+  }
+
+
   // OU ///////////////////////////////////////////////////////////////////////////////
-  void OU::initParams(std::vector<double> mean, std::vector<double> theta,
-                      std::vector<double> phi, std::vector<double> noise_var ) {
-    if ((mean.size() == theta.size()) && (theta.size() == phi.size())
-        && (phi.size() == noise_var.size())){
+  void OU::initParams(vector<double> mean, vector<double> theta,
+                      vector<double> phi) {
+    if ((mean.size() == theta.size()) && (theta.size() == phi.size())){
       this->mean=mean;
       this->theta=theta;
       this->phi=phi;
-      this->noise_var=noise_var;
-      for (auto noise: noise_var){
-        noiseDistribution.push_back(std::normal_distribution<double>(0., noise));
-      }
+      currentData_.resize(mean.size());
       for (int i=0; i < mean.size(); i++){
         std::string assetName = "OU_" + std::to_string(i);
         this->assets_.push_back(Asset(assetName));
-      }
-      currentData_.resize(assets_.size());
-      for (const auto& val: mean){
-        currentData_ << val;
+        noiseDistribution.push_back(std::normal_distribution<double>(0., 1.));
+        currentData_(i) = mean[i];
       }
       generator.seed(std::chrono::system_clock::now().time_since_epoch().count());
     }
@@ -806,11 +869,10 @@ namespace madigan{
     }
   }
 
-  OU::OU(std::vector<double> mean, std::vector<double> theta, std::vector<double> phi,
-              std::vector<double> noise_var ) {
-    initParams(mean, theta, phi, noise_var);
+  OU::OU(vector<double> mean, vector<double> theta, vector<double> phi){
+    initParams(mean, theta, phi);
   }
-  OU::OU(): OU({2., 4.3, 3., 0.5}, {1., 0.3, 2., 0.5}, {2., 2.1, 2.2, 2.3}, {1., 1.2, 1.3, 1.}){}
+  OU::OU(): OU({2., 4.3, 3., 0.5}, {1., 0.3, 2., 0.5}, {2., 2.1, 2.2, 2.3}){}
 
   OU::OU(Config config){
     bool allKeysPresent{true};
@@ -819,7 +881,7 @@ namespace madigan{
       allKeysPresent = false;
     }
     Config params = std::any_cast<Config>(config["data_source_config"]);
-    for (auto key: {"mean", "theta", "phi", "noise_var"}){
+    for (auto key: {"mean", "theta", "phi"}){
       if (params.find(key) == params.end()){
         allKeysPresent=false;
         throw ConfigError("generator parameters don't have all required constructor arguments");
@@ -829,15 +891,13 @@ namespace madigan{
       vector<double> mean= std::any_cast<vector<double>>(params["mean"]);
       vector<double> theta= std::any_cast<vector<double>>(params["theta"]);
       vector<double> phi = std::any_cast<vector<double>>(params["phi"]);
-      vector<double> noise_var = std::any_cast<vector<double>>(params["noise_var"]);
-      initParams(mean, theta, phi, noise_var);
+      initParams(mean, theta, phi);
     }
     else{
       vector<double> mean{2., 4.3, 3., 0.5};
       vector<double> theta{1., 0.3, 2., 0.5};
       vector<double> phi{2., 2.1, 2.2, 2.3};
-      vector<double> noise_var{1., 1.2, 1.3, 1.};
-      initParams(mean, theta, phi, noise_var);
+      initParams(mean, theta, phi);
     }
   }
 
@@ -853,10 +913,10 @@ namespace madigan{
   }
 
   // SIMPLE TREND //////////////////////////////////////////////////////////////////////
-  void SimpleTrend::initParams(std::vector<double> trendProb, std::vector<int> minPeriod,
-                               std::vector<int> maxPeriod, std::vector<double> noise,
-                               std::vector<double> start, std::vector<double> dYMin,
-                               std::vector<double> dYMax) {
+  void SimpleTrend::initParams(vector<double> trendProb, vector<int> minPeriod,
+                               vector<int> maxPeriod, vector<double> noise,
+                               vector<double> start, vector<double> dYMin,
+                               vector<double> dYMax) {
     if ((trendProb.size() == minPeriod.size()) && (minPeriod.size() == maxPeriod.size())
         && (maxPeriod.size() == noise.size()) && (noise.size() == start.size())
         && (start.size() == dYMin.size()) && (dYMin.size() == dYMax.size())){
@@ -889,10 +949,10 @@ namespace madigan{
     generator.seed(std::chrono::system_clock::now().time_since_epoch().count());
   }
 
-  SimpleTrend::SimpleTrend(std::vector<double> trendProb, std::vector<int> minPeriod,
-                           std::vector<int> maxPeriod, std::vector<double> noise,
-                           std::vector<double> start, std::vector<double> dYMin,
-                           std::vector<double> dYMax) {
+  SimpleTrend::SimpleTrend(vector<double> trendProb, vector<int> minPeriod,
+                           vector<int> maxPeriod, vector<double> noise,
+                           vector<double> start, vector<double> dYMin,
+                           vector<double> dYMax) {
     initParams(trendProb, minPeriod, maxPeriod, noise, start, dYMin, dYMax);
   }
 
@@ -958,11 +1018,11 @@ namespace madigan{
 
   // TREND OU //////////////////////////////////////////////////////////////////////
 
-  void TrendOU::initParams(std::vector<double> trendProb, std::vector<int> minPeriod,
-                           std::vector<int> maxPeriod, std::vector<double> dYMin,
-                           std::vector<double> dYMax, std::vector<double> start,
-                           std::vector<double> theta, std::vector<double> phi,
-                           std::vector<double> noiseTrend, std::vector<double> emaAlpha){
+  void TrendOU::initParams(vector<double> trendProb, vector<int> minPeriod,
+                           vector<int> maxPeriod, vector<double> dYMin,
+                           vector<double> dYMax, vector<double> start,
+                           vector<double> theta, vector<double> phi,
+                           vector<double> noiseTrend, vector<double> emaAlpha){
     if ((trendProb.size() == minPeriod.size()) && (minPeriod.size() == maxPeriod.size())
         && (maxPeriod.size() == phi.size()) && (phi.size() == noiseTrend.size())
         && (start.size() == dYMin.size()) && (dYMin.size() == dYMax.size())
@@ -1004,11 +1064,11 @@ namespace madigan{
     generator.seed(std::chrono::system_clock::now().time_since_epoch().count());
   }
 
-  TrendOU::TrendOU(std::vector<double> trendProb, std::vector<int> minPeriod,
-                   std::vector<int> maxPeriod, std::vector<double> dYMin,
-                   std::vector<double> dYMax, std::vector<double> start,
-                   std::vector<double> theta, std::vector<double> phi,
-                   std::vector<double> noiseTrend, std::vector<double> emaAlpha) {
+  TrendOU::TrendOU(vector<double> trendProb, vector<int> minPeriod,
+                   vector<int> maxPeriod, vector<double> dYMin,
+                   vector<double> dYMax, vector<double> start,
+                   vector<double> theta, vector<double> phi,
+                   vector<double> noiseTrend, vector<double> emaAlpha) {
     initParams(trendProb, minPeriod, maxPeriod, dYMin, dYMax, start,
                theta, phi, noiseTrend, emaAlpha);
   }
@@ -1099,11 +1159,11 @@ namespace madigan{
 
   // TRENDY OU //////////////////////////////////////////////////////////////////////
 
-  void TrendyOU::initParams(std::vector<double> trendProb, std::vector<int> minPeriod,
-                           std::vector<int> maxPeriod, std::vector<double> dYMin,
-                           std::vector<double> dYMax, std::vector<double> start,
-                           std::vector<double> theta, std::vector<double> phi,
-                           std::vector<double> noiseTrend, std::vector<double> emaAlpha){
+  void TrendyOU::initParams(vector<double> trendProb, vector<int> minPeriod,
+                           vector<int> maxPeriod, vector<double> dYMin,
+                           vector<double> dYMax, vector<double> start,
+                           vector<double> theta, vector<double> phi,
+                           vector<double> noiseTrend, vector<double> emaAlpha){
     if ((trendProb.size() == minPeriod.size()) && (minPeriod.size() == maxPeriod.size())
         && (maxPeriod.size() == phi.size()) && (phi.size() == noiseTrend.size())
         && (start.size() == dYMin.size()) && (dYMin.size() == dYMax.size())
@@ -1148,11 +1208,11 @@ namespace madigan{
     generator.seed(std::chrono::system_clock::now().time_since_epoch().count());
   }
 
-  TrendyOU::TrendyOU(std::vector<double> trendProb, std::vector<int> minPeriod,
-                   std::vector<int> maxPeriod, std::vector<double> dYMin,
-                   std::vector<double> dYMax, std::vector<double> start,
-                   std::vector<double> theta, std::vector<double> phi,
-                   std::vector<double> noiseTrend, std::vector<double> emaAlpha) {
+  TrendyOU::TrendyOU(vector<double> trendProb, vector<int> minPeriod,
+                     vector<int> maxPeriod, vector<double> dYMin,
+                     vector<double> dYMax, vector<double> start,
+                     vector<double> theta, vector<double> phi,
+                     vector<double> noiseTrend, vector<double> emaAlpha) {
     initParams(trendProb, minPeriod, maxPeriod, dYMin, dYMax, start,
                theta, phi, noiseTrend, emaAlpha);
   }

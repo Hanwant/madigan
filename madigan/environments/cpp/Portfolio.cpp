@@ -253,42 +253,22 @@ namespace madigan{
   }
 
   void Portfolio::handleTransaction(int assetIdx, double transactionPrice, double units,
-                         double transactionCost){
+                                    double transactionCost){
     // Keeping track of average entry price - for pnl/position calculation
     double& currentUnits = ledger_(assetIdx);
     double& meanEntryPrice = meanEntryPrices_(assetIdx);
-
-    // std::cout << "==========================================================\n";
-    // std::cout << "----------------------------------------------------------\n";
-    // std::cout << "Pre Transaction\n";
-    // std::cout << "Current Units " << currentUnits << "\n";
-    // std::cout << "units to buy " << units << "\n";
-    // std::cout << "transactionPrice " << transactionPrice<< "\n";
-    // std::cout << "meanEntryPrice " << meanEntryPrice << "\n";
-    // std::cout << "sign bits: "<< std::signbit(currentUnits) << ", "<< std::signbit(units) << "\n";
-
     if (std::signbit(currentUnits) != std::signbit(units)){
       if (abs(units) > abs(currentUnits)){
         // CLOSE POSITION
         units += currentUnits; // take away amount required to close position
         cash_ += currentUnits*transactionPrice; // do cash accounting first to close position
         currentUnits = 0.; // explicitly close position by setting ledger_(assetIdx) to 0.
-        // SET NEW MEAN ENTRY PRICE
         meanEntryPrice = transactionPrice;
-        // std::cout<< "reversed and set mean entry to new: " << meanEntryPrice << "\n";
       }
     }
     else{
-      // std::cout<< "accumulating trans, mean, unit, curr: ";
-      // std::cout<< transactionPrice << ", ";
-      // std::cout<< meanEntryPrice<< ", ";
-      // std::cout<< units << ", ";
-      // std::cout<< currentUnits<< ", \n";
       meanEntryPrice += // dollar weighted average of position entry prices
         (transactionPrice - meanEntryPrice) * (units /(units + currentUnits));
-      // std::cout << "accum numer, denom : "<<(transactionPrice - meanEntryPrice) <<", "<< (units /(units + currentUnits));
-      // std::cout <<"\n";
-      // std::cout<< "accumulated and set mean entry to new: " << meanEntryPrice << "\n";
     }
     // Accounting
     double amount_in_base_currency = transactionPrice * units;
@@ -300,24 +280,32 @@ namespace madigan{
     cash_ -= (marginToUse +transactionCost);
     currentUnits += units;
 
-    // std::cout << "----------------------------------------------------------\n";
-    // std::cout << "Post Transaction\n";
-    // std::cout << "Current Units " << currentUnits << "\n";
-    // std::cout << "units to buy " << units << "\n";
-    // std::cout << "meanEntryPrice " << meanEntryPrice << "\n";
-
-    if (abs(currentUnits) < 0.000001){
+    if (abs(currentUnits) < 0.000001){  // assume position is closed
       meanEntryPrice = 0.;
       if (borrowedMarginRef > 0.){
         cash_ -= borrowedMarginRef;
         borrowedMarginRef = 0.;
       }
     }
-    if (borrowedMarginRef < 0. ){
-      cash_ -= borrowedMarginRef;
+    if (borrowedMarginRef < 0. ){  // if borrowed margin has been repaid
+      cash_ -= borrowedMarginRef;   // transfer amount back to account in cash
       borrowedMarginRef = 0.;
     }
   }
+
+
+  // }
+  void Portfolio::close(int assetIdx, double transactionPrice,
+                        double transactionCost){
+    double& currentUnits = ledger_(assetIdx);
+    if (currentUnits != 0.){
+      handleTransaction(assetIdx, transactionPrice, -1*currentUnits,
+                        transactionCost);
+    }
+  }
+
+
+  // DIFFERENT VERSIONS/TEMPLATES OF HANDLETRANSACTION
 
   // void Portfolio::handleTransaction(int assetIdx, double transactionPrice, double units,
   //                        double transactionCost){
@@ -359,19 +347,6 @@ namespace madigan{
   //     cash_ -= borrowedMarginRef;
   //     borrowedMarginRef = 0.;
   //   }
-
-  // }
-  void Portfolio::close(int assetIdx, double transactionPrice,
-                        double transactionCost){
-    double& currentUnits = ledger_(assetIdx);
-    // std::cout << "CLOSING\n";
-    // std::cout << "transPrice: " << transactionPrice << "\n";
-    if (currentUnits != 0.){
-      handleTransaction(assetIdx, transactionPrice, -1*currentUnits,
-                        transactionCost);
-    }
-  }
-
   // void Portfolio::handleTransaction(int assetIdx, double transactionPrice, double units,
   //                                   double transactionCost){
 

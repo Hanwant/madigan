@@ -344,11 +344,38 @@ namespace madigan{
     const PriceVector& getData();
   };
 
+  class Gaussian: public DataSourceTick{
+  public:
+    Gaussian();
+    Gaussian(vector<double> mean, vector<double> var);
+    Gaussian(Config config);
+    Gaussian(pybind11::dict config);
+    ~Gaussian(){}
+    const PriceVector& getData();
+    const pybind11::array_t<double> getData_np() ;
+    const PriceVector& currentData() const{ return currentData_;}
+    const PriceVector& currentPrices() const{ return currentData_;}
+    void reset(){}
+    std::size_t currentTime() const { return timestamp_; }
+
+  protected:
+    virtual void initParams(vector<double> mean, vector<double> var);
+
+  protected:
+    const double dT{1.};
+    vector<double> mean;
+    vector<double> var;
+    std::size_t timestamp_;
+    std::default_random_engine generator;
+    vector<std::normal_distribution<double>> noiseDistribution;
+    PriceVector currentData_;
+  };
+
   class OU: public DataSourceTick{
   public:
     OU();
     OU(vector<double> mean, vector<double> theta,
-       vector<double> phi, vector<double> noise_var);
+       vector<double> phi);
     OU(Config config);
     OU(pybind11::dict config);
     ~OU(){}
@@ -361,14 +388,13 @@ namespace madigan{
 
   protected:
     virtual void initParams(vector<double> mean, vector<double> theta,
-                            vector<double> phi, vector<double> noise_var);
+                            vector<double> phi);
 
   protected:
     const double dT{1.};
     vector<double> mean;
     vector<double> theta;
     vector<double> phi;
-    vector<double> noise_var;
     std::size_t timestamp_;
     std::default_random_engine generator;
     vector<std::normal_distribution<double>> noiseDistribution;

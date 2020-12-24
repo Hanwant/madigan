@@ -52,6 +52,19 @@ namespace madigan {
           throw ConfigError("config for DataSource type SineDynamicTrend needs data_source_config");
         }
       }
+      else if ( dataSourceType == "Gaussian"){
+        auto datasource_pydictFound=std::find_if(dict.begin(), dict.end(),
+                                                 [](const std::pair<pybind11::handle, pybind11::handle>& pair){
+                                                   return string(pybind11::str(pair.first)) == "data_source_config";
+                                                 });
+        if (datasource_pydictFound != dict.end()){
+          pybind11::dict datasource_pydict = dict[pybind11::str("data_source_config")];
+          config = makeGaussianConfigFromPyDict(datasource_pydict);
+        }
+        else{
+          throw ConfigError("config for DataSource type Gaussian needs data_source_config");
+        }
+      }
       else if ( dataSourceType == "OU"){
         auto datasource_pydictFound=std::find_if(dict.begin(), dict.end(),
                                          [](const std::pair<pybind11::handle, pybind11::handle>& pair){
@@ -294,8 +307,38 @@ namespace madigan {
   }
 
 
+   Config makeGaussianConfigFromPyDict(pybind11::dict datasource_pydict){
+    for (auto key: {"mean", ""}){
+      auto keyFound=std::find_if(datasource_pydict.begin(), datasource_pydict.end(),
+                                 [key](const std::pair<pybind11::handle, pybind11::handle>& pair){
+                                   return string(pybind11::str(pair.first)) == key;
+                                 });
+      if (keyFound == datasource_pydict.end()){
+        throw ConfigError(string(key)+" key not found in data_source_config in config");
+      }
+    }
+    vector<double> mean;
+    vector<double> var;
+    for(auto& item: datasource_pydict){
+      string key = string(pybind11::str(item.first));
+      if(key == "mean"){
+        mean= item.second.cast<vector<double>>();
+      }
+      if(key == "var"){
+        var = item.second.cast<vector<double>>();
+      }
+    }
+    Config config{
+      {"data_source_type", "Gaussian"},
+      {"data_source_config", Config{{"mean", mean},
+                                    {"var", var}}
+      }
+    };
+    return config;
+  }
+
    Config makeOUConfigFromPyDict(pybind11::dict datasource_pydict){
-    for (auto key: {"mean", "theta", "phi", "noise_var"}){
+    for (auto key: {"mean", "theta", "phi"}){
       auto keyFound=std::find_if(datasource_pydict.begin(), datasource_pydict.end(),
                                  [key](const std::pair<pybind11::handle, pybind11::handle>& pair){
                                    return string(pybind11::str(pair.first)) == key;
@@ -307,7 +350,6 @@ namespace madigan {
     vector<double> mean;
     vector<double> theta;
     vector<double> phi;
-    vector<double> noise_var;
     for(auto& item: datasource_pydict){
       string key = string(pybind11::str(item.first));
       if(key == "mean"){
@@ -319,16 +361,12 @@ namespace madigan {
       if(key == "phi"){
         phi = item.second.cast<vector<double>>();
       }
-      if(key == "noise_var"){
-        noise_var = item.second.cast<vector<double>>();
-      }
     }
     Config config{
       {"data_source_type", "OU"},
       {"data_source_config", Config{{"mean", mean},
                                     {"theta", theta},
-                                    {"phi", phi},
-                                    {"noise_var", noise_var}}
+                                    {"phi", phi}}
       }
     };
     return config;
