@@ -10,8 +10,7 @@ import torch.nn as nn
 from .base import QNetworkBase
 from .common import NoisyLinear, NormalHeadDQN, DuelingHeadDQN, Conv1DEncoder
 from .common import ConvNetStateEncoder
-from .utils import calc_conv_out_shape
-from .utils import calc_pad_to_conserve, ACT_FN_DICT
+from .utils import ACT_FN_DICT
 from .utils import xavier_initialization, orthogonal_initialization
 from ...utils.data import State
 

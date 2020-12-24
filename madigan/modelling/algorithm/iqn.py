@@ -124,39 +124,34 @@ class IQN(DQN):
         to be used in td error and loss calculation
         """
         bs = reward.shape[0]
-        tau_greedy = torch.rand(bs,
-                                self.nTau1,
-                                dtype=torch.float32,
-                                device=reward.device,
-                                requires_grad=False)
+        tau_greedy = torch.rand(bs, self.nTau1, dtype=torch.float32,
+                                device=reward.device, requires_grad=False)
         tau_greedy = self.risk_distortion(tau_greedy)
-        tau2 = torch.rand(bs,
-                          self.nTau2,
-                          dtype=torch.float32,
-                          device=reward.device,
-                          requires_grad=False)
+        tau2 = torch.rand(bs, self.nTau2, dtype=torch.float32,
+                          device=reward.device, requires_grad=False)
 
         if self.double_dqn:
             greedy_quantiles = self.model_b(
-                next_state, tau=tau_greedy)  #(bs, nTau1, nassets, nactions)
+                next_state, tau=tau_greedy)  # (bs, nTau1, nassets, nactions)
         else:
             greedy_quantiles = self.model_t(
-                next_state, tau=tau_greedy)  #(bs, nTau1, nassets, nactions)
+                next_state, tau=tau_greedy)  # (bs, nTau1, nassets, nactions)
         greedy_actions = torch.argmax(greedy_quantiles.mean(1),
                                       dim=-1,
-                                      keepdim=True)  #(bs, nassets,  nactions)
+                                      keepdim=True)  # (bs, nassets,  nactions)
         assert greedy_actions.shape[1:] == (self.n_assets, 1)
         one_hot = F.one_hot(greedy_actions,
                             self.action_atoms).to(reward.device)
         quantiles_next = self.model_t(next_state, tau=tau2)
         assert quantiles_next.shape[1:] == (self.nTau2, self.n_assets,
                                             self.action_atoms)
-        quantiles_next = (quantiles_next * one_hot[:, None, :, 0, :]).sum(-1)
-        assert quantiles_next.shape[1:] == (self.nTau2, self.n_assets)
-        Gt = reward[:, None, None] + (~done[:, None, None] *
-                                      (self.discount**self.nstep_return) *
-                                      quantiles_next)
-        assert Gt.shape[1:] == (self.nTau2, self.n_assets)
+        quantiles_next = (quantiles_next * one_hot[:, None, :, 0, :]).sum(
+            -1).mean(-1)  # get max qval within asset and average across assets
+        assert quantiles_next.shape[1:] == (self.nTau2, )
+        Gt = reward[:, None] + (~done[:, None] *
+                                (self.discount**self.nstep_return) *
+                                quantiles_next)
+        assert Gt.shape[1:] == (self.nTau2, )
         return Gt
 
     def train_step(self, sarsd=None):
@@ -166,16 +161,14 @@ class IQN(DQN):
         state, action, reward, next_state, done = self.prep_sarsd_tensors(
             sarsd)
         bs = reward.shape[0]
-        tau1 = torch.rand(bs,
-                          self.nTau1,
-                          dtype=torch.float32,
+        tau1 = torch.rand(bs, self.nTau1, dtype=torch.float32,
                           device=reward.device)
         quantiles = self.model_b(state, tau=tau1)
         action_mask = F.one_hot(action[:, None],
                                 self.action_atoms).to(self.device)
 
-        Gt = self.calculate_Gt_target(next_state, reward, done)
-        Qt = (quantiles * action_mask).sum(-1)
+        Gt = self.calculate_Gt_target(next_state, reward, done)  # (bs, nTau2)
+        Qt = (quantiles * action_mask).sum(-1).mean(-1)  # (bs, nTau1)
         loss, td_error = self.loss_fn(Qt, Gt, tau1)
         self.opt.zero_grad()
         loss.backward()
@@ -196,15 +189,15 @@ class IQN(DQN):
             loss: scalar
             td_error: scalar
         """
-        assert Qt.shape[1:] == (self.nTau1, self.n_assets)
-        assert Gt.shape[1:] == (self.nTau2, self.n_assets)
+        assert Qt.shape[1:] == (self.nTau1, )
+        assert Gt.shape[1:] == (self.nTau2, )
         td_error = Gt.unsqueeze(1) - Qt.unsqueeze(2)
-        assert td_error.shape[1:] == (self.nTau1, self.nTau2, self.n_assets)
+        assert td_error.shape[1:] == (self.nTau1, self.nTau2, )
         huber_loss = torch.where(
             td_error.abs() <= self.k_huber, 0.5 * td_error.pow(2),
             self.k_huber * (td_error.abs() - self.k_huber / 2))
         assert huber_loss.shape == td_error.shape
-        quantile_loss = torch.abs(tau[..., None, None] -
+        quantile_loss = torch.abs(tau[:, :, None] -
                                   (td_error.detach() < 0.).float()) *\
             huber_loss / self.k_huber
         assert quantile_loss.shape == huber_loss.shape

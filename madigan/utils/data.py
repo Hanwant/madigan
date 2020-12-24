@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 import numpy as np
+import torch
 
 @dataclass
 class State:
@@ -26,3 +27,15 @@ class SARSD:
     reward: float
     next_state: State
     done: bool
+
+@dataclass
+class SARSDH:
+    """
+    For use in Recurrent DQN style algorithms
+    """
+    state: State
+    action: np.ndarray
+    reward: float
+    next_state: State
+    done: bool
+    hidden: np.ndarray

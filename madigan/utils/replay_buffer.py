@@ -2,11 +2,13 @@ import pickle
 import math
 from collections import deque
 from random import sample
+from typing import List, Union
 
 import numpy as np
+import torch
 import cpprb
 
-from .data import SARSD, State
+from .data import SARSD, SARSDH, State
 
 # DQNTYPES refers to agents which share the same obs types
 # this includes DDPG as it doesn't store logp
@@ -36,8 +38,8 @@ def make_env_dict_cpprb(agent_class, obs_shape, action_shape):
             "discounts": {}
         }
     else:
-        raise NotImplementedError("cpprb spec has been implemented only for " +
-                                  "the following agent_classes: " +
+        raise NotImplementedError("cpprb spec has been implemented only for "
+                                  "the following agent_classes: "
                                   f"{DQNTYPES}")
     return env_dict
 
@@ -82,28 +84,18 @@ class ReplayBufferC:
                                   "only for the following agent_classes: " +
                                   f"{DQNTYPES}")
 
-    def save_to_file(self, savepath):
-        """
-        Extracts transitions and saves them to file
-        Instead of pickling the class - not supported (Cython)
-        """
-        transitions = self.get_all_transitions()
-        with open(savepath, 'wb') as f:
-            pickle.dump(transitions, f)
-
-    def load_from_file(self, loadpath):
-        if loadpath.is_file():
-            with open(loadpath, 'rb') as f:
-                transitions = pickle.load(f)
-                super().add(transitions)
-
 
 class ReplayBufferC_SARSD(cpprb.ReplayBuffer, ReplayBufferC):
     """
+    Replay Buffer wrapper for cpprb for agents in DQNTYPES.
     Wraps replay buffer from cpprb to maintain consistent api
     Uses SARSD and State dataclasses as intermediaries for i/o
     when sampling and adding
     """
+
+    def __len__(self):
+        return self.get_stored_size()
+
     def sample(self, size):
         data = super().sample(size)
         sarsd = SARSD(
@@ -121,6 +113,70 @@ class ReplayBufferC_SARSD(cpprb.ReplayBuffer, ReplayBufferC):
                     next_state_portfolio=sarsd.next_state.portfolio,
                     done=sarsd.done)
 
+    def save_to_file(self, savepath):
+        """
+        Extracts transitions and saves them to file
+        Instead of pickling the class - not supported (Cython)
+        """
+        transitions = self.get_all_transitions()
+        with open(savepath, 'wb') as f:
+            pickle.dump(transitions, f)
+
+    def load_from_file(self, loadpath):
+        if loadpath.is_file():
+            with open(loadpath, 'rb') as f:
+                transitions = pickle.load(f)
+                super().add(transitions)
+
+
+class NStepBuffer:
+    """
+    Utility class to prevent code duplicaiton.
+    It must however be co-ordinated by a class using it (I.e ReplayBuffer)
+    It doesn't have access to the main replay buffer and doesn't care if the
+    numbers of sampels in its buffer is > nstep. It is the containers
+    responsibility to flush and add the processesd samples to a main buffer.
+    """
+    def __init__(self, nstep, discount):
+        self.nstep = nstep
+        self.discount = discount
+        self.discounts = [
+            math.pow(self.discount, i) for i in range(nstep)
+        ]
+        self._buffer = []
+
+    def add(self, sarsd: SARSD) -> None:
+        self._buffer.append(sarsd)
+
+    def full(self) -> bool:
+        return len(self._buffer) == self.nstep
+
+    def pop_nstep_sarsd(self) -> SARSD:
+        """
+        Calculates nstep discounted return from the nstep buffer
+        and returns the sarsd with the adjusted return and next_state offset to t+n
+        """
+        reward = sum([
+            self.discounts[i] * dat.reward
+            for i, dat in enumerate(self._buffer)
+        ])
+        nstep_sarsd = self._buffer.pop(0)
+        nstep_sarsd.reward = reward
+        if len(self._buffer):
+            nstep_sarsd.next_state = self._buffer[-1].next_state
+            nstep_sarsd.done = self._buffer[-1].done
+            # if self._nstep_buffer[-1].done:
+            #     nstep_sarsd.done = 1
+        return nstep_sarsd
+
+    def flush_nstep_buffer(self):
+        """
+        Useful to call at end of episodes (I.e if not done.)
+        """
+
+    def __len__(self):
+        return len(self._buffer)
+
 
 class ReplayBuffer:
     """
@@ -130,14 +186,8 @@ class ReplayBuffer:
         self.size = size
         self.nstep_return = nstep_return
         self.discount = discount
-        self.discounts = [
-            math.pow(self.discount, i) for i in range(nstep_return)
-        ]
         self._buffer = [None] * size
-        # For small lists, pop(0) has similar performance to deque().popleft()
-        # And better performance for iteration when calculating the discounted sum
-        # self._nstep_buffer = deque(maxlen=nstep)
-        self._nstep_buffer = []
+        self._nstep_buffer = NStepBuffer(self.nstep_return, self.discount)
         self.filled = 0
         self.current_idx = 0
 
@@ -148,8 +198,9 @@ class ReplayBuffer:
 
     @classmethod
     def from_config(cls, config):
-        return cls(config.rb_size, config.nstep_return,
-                   config.agent_config.discount)
+        aconf = config.agent_config
+        return cls(aconf.replay_size, config.nstep_return,
+                   aconf.discount)
 
     @property
     def buffer(self):
@@ -162,38 +213,21 @@ class ReplayBuffer:
     def load_from_file(self, loadpath):
         if loadpath.is_file():
             with open(loadpath, 'rb') as f:
-                self = pickle.load(f)
-
-    def pop_nstep_sarsd(self):
-        """
-        Calculates nstep discounted return from the nstep buffer
-        and returns the sarsd with the adjusted return and next_state offset to t+n
-        """
-        reward = sum([
-            self.discounts[i] * dat.reward
-            for i, dat in enumerate(self._nstep_buffer)
-        ])
-        nstep_sarsd = self._nstep_buffer.pop(0)
-        nstep_sarsd.reward = reward
-        if len(self._nstep_buffer):
-            nstep_sarsd.next_state = self._nstep_buffer[-1].next_state
-            nstep_sarsd.done = self._nstep_buffer[-1].done
-            # if self._nstep_buffer[-1].done:
-            #     nstep_sarsd.done = 1
-        return nstep_sarsd
+                loaded = pickle.load(f)
+            self.__dict__ = loaded.__dict__
 
     def add(self, sarsd):
         """
         Adds sarsd to nstep buffer.
         If nstep buffer is full, adds to replay buffer first
         """
-        self._nstep_buffer.append(sarsd)
+        self._nstep_buffer.add(sarsd)
         if sarsd.done:
             while len(self._nstep_buffer) > 0:
-                nstep_sarsd = self.pop_nstep_sarsd()
+                nstep_sarsd = self._nstep_buffer.pop_nstep_sarsd()
                 self._add_to_replay(nstep_sarsd)
         elif len(self._nstep_buffer) == self.nstep_return:
-            nstep_sarsd = self.pop_nstep_sarsd()
+            nstep_sarsd = self._nstep_buffer.pop_nstep_sarsd()
             self._add_to_replay(nstep_sarsd)
 
     def _add_to_replay(self, sarsd):
@@ -206,27 +240,224 @@ class ReplayBuffer:
         if self.filled < self.size:
             self.filled += 1
 
+    def sample(self, n: int):
+        if self.filled < self.size:
+            return self.batchify(sample(self._buffer[:self.filled], n))
+        return self.batchify(sample(self._buffer, n))
+
+    def batchify(self, batch: List[SARSD]):
+        state_price = np.stack([s.state.price for s in batch])
+        state_port = np.stack([s.state.portfolio for s in batch])
+        state_time = np.stack([s.state.timestamp for s in batch])
+        state = State(state_price, state_port, state_time)
+        next_state_price = np.stack([s.next_state.price for s in batch])
+        next_state_port = np.stack(
+            [s.next_state.portfolio for s in batch])
+        next_state_time = np.stack(
+            [s.next_state.timestamp for s in batch])
+        next_state = State(next_state_price, next_state_port,
+                           next_state_time)
+        action = np.stack([s.action for s in batch])
+        reward = np.stack([s.reward for s in batch])
+        done = np.stack([s.done for s in batch])
+        return SARSD(state, action, reward, next_state, done)
+
+    def get_full(self):
+        return self.batchify(self._buffer[:self.filled])
+
+    def get_latest(self, size):
+        return self.batchify(self._buffer[self.filled - size:self.filled])
+
+    def clear(self):
+        self._buffer = [None] * self.size
+        self.filled = 0
+        self.current_idx = 0
+        self._nstep_buffer = []
+
+
+    def __getitem__(self, item):
+        if isinstance(item, int):
+            return self._buffer[item]
+        elif isinstance(item, slice):
+            return self.batchify(self._buffer[item])
+
+    def __len__(self):
+        return self.filled
+
+    def __repr__(self):
+        return f'replay_buffer size {self.size} filled {self.filled}\n' + \
+            repr(self._buffer[:1]).strip(']') + '  ...  ' + \
+            repr(self._buffer[-1:]).strip('[')
+
+
+class EpisodeReplayBuffer:
+    """
+    For use with recurrent agents.
+    Uses SARSDH as main data structure unit
+    """
+    def __init__(self, size: int, episode_len: int, min_episode_len: int,
+                 episode_overlap: int, store_hidden: bool,
+                 nstep_return: int, discount: float):
+        self.size = size
+        self.episode_len = episode_len + nstep_return
+        self.min_episode_len = min_episode_len + nstep_return
+        self.episode_overlap = episode_overlap + nstep_return
+        self.store_hidden = store_hidden
+        if self.min_episode_len < self.episode_overlap:
+            raise ValueError("min_episode_len should be >= episode_overlap")
+        self.nstep_return = nstep_return
+        self.discount = discount
+        self.discounts = [
+            math.pow(self.discount, i) for i in range(nstep_return)
+        ]
+        self._buffer = [None] * size
+        self._nstep_buffer = []
+        self._episode_buffer = []
+        self.filled = 0
+        self.current_idx = 0
+        self.episode_idx = 0
+
+    @classmethod
+    def from_agent(cls, agent):
+        return cls(agent.episode_len, agent.episode_burn_in_steps,
+                   agent.episode_overlap, agent.store_hidden,
+                   agent.replay_size, agent.nstep_return, agent.discount)
+
+    @classmethod
+    def from_config(cls, config):
+        aconf = config.agent_config
+        return cls(aconf.episode_len, aconf.episode_burn_in_steps,
+                   aconf.episode_overlap, aconf.store_hidden, aconf.replay_size,
+                   aconf.nstep_return, aconf.discount)
+
+    @property
+    def buffer(self):
+        return self._buffer
+
+    def save_to_file(self, savepath):
+        with open(savepath, 'wb') as f:
+            pickle.dump(self, f)
+
+    def load_from_file(self, loadpath):
+        if loadpath.is_file():
+            with open(loadpath, 'rb') as f:
+                loaded = pickle.load(f)
+            self.__dict__.update(loaded.__dict__)
+
+
+    def pop_nstep_sarsd(self):
+        """
+        Calculates nstep discounted return from the nstep buffer
+        and returns the sarsdh with the adjusted return and next_state offset to t+n
+        """
+        reward = sum([
+            self.discounts[i] * dat.reward
+            for i, dat in enumerate(self._nstep_buffer)
+        ])
+        nstep_sarsdh = self._nstep_buffer.pop(0)
+        nstep_sarsdh.reward = reward
+        if len(self._nstep_buffer) > 0:
+            nstep_sarsdh.next_state = self._nstep_buffer[-1].next_state
+            nstep_sarsdh.done = self._nstep_buffer[-1].done
+            # if self._nstep_buffer[-1].done:
+            #     nstep_sarsdh.done = 1
+        return nstep_sarsdh
+
+    def add(self, sarsdh):
+        """
+        Adds sarsdh to nstep buffer.
+        If nstep buffer is full, adds to replay buffer first
+        """
+        self._nstep_buffer.append(sarsdh)
+        if sarsdh.done:
+            while len(self._nstep_buffer) > 0:
+                nstep_sarsdh = self.pop_nstep_sarsdh()
+                self._add_to_episode(nstep_sarsdh)
+        elif len(self._nstep_buffer) == self.nstep_return:
+            nstep_sarsdh = self.pop_nstep_sarsdh()
+            self._add_to_episode(nstep_sarsdh)
+
+    def _add_to_episode(self, sarsdh):
+        if self.episode_idx < self.episode_len:
+            self._episode_buffer[self.episode_idx] = sarsdh
+            self.episode_idx += 1
+        elif self.episode_idx == self.episode_len:
+            self.flush_episode_to_main()
+        # HEURISTIC
+        if sarsdh.done and self.episode_idx >= self.min_episode_len:
+            self.flush_episode_to_main()
+
+    def flush_episode_to_main(self):
+        """
+        Add episode to replay.
+        Sets first 'episode_overlap' number of elements to the last in their
+        episode and resets self.episode_idx to this number so that new samples
+        get added to the end after the overlap with the previous episode.
+        """
+        sarsdh = self.make_episode_sarsdh(
+            self._episode_buffer[:self.episode_idx])
+        self._add_to_replay(sarsdh)
+        self._episode_buffer[: self.episode_overlap] = \
+            self._episode_buffer[self.episode_idx - self.episode_overlap:]
+        self.episode_idx = self.episode_overlap
+
+    def _add_to_replay(self, episode: SARSDH):
+        """
+        Adds the given sarsdh (assuming adjusted for nstep returns)
+        to  the replay buffer
+        """
+        self._buffer[self.current_idx] = episode
+        self.current_idx = (self.current_idx + 1) % self.size
+        if self.filled < self.size:
+            self.filled += 1
+
+    def make_episode_sarsd(self, episode: List[Union[SARSD, SARSDH]]
+                            ) -> Union[SARSD, SARSDH]:
+        state_price = np.stack([s.state.price for s in episode])
+        state_port = np.stack([s.state.portfolio for s in episode])
+        state_time = np.stack([s.state.timestamp for s in episode])
+        state = State(state_price, state_port, state_time)
+        next_state_price = np.stack([s.next_state.price for s in episode])
+        next_state_port = np.stack(
+            [s.next_state.portfolio for s in episode])
+        next_state_time = np.stack(
+            [s.next_state.timestamp for s in episode])
+        next_state = State(next_state_price, next_state_port,
+                           next_state_time)
+        action = np.stack([s.action for s in episode])
+        reward = np.stack([s.reward for s in episode])
+        done = np.stack([s.done for s in episode])
+        if self.store_hidden:
+            hidden_state = episode[0].hidden_state
+            return SARSDH(state, action, reward, next_state, done, hidden_state)
+        return SARSD(state, action, reward, next_state, done)
+
     def sample(self, n):
         if self.filled < self.size:
             return self.batchify(sample(self._buffer[:self.filled], n))
-        else:
-            return self.batchify(sample(self._buffer, n))
+        return self.batchify(sample(self._buffer, n))
 
-    def batchify(self, sample):
-        state_price = np.stack([s.state.price for s in sample])
-        state_port = np.stack([s.state.portfolio for s in sample])
-        state_time = np.stack([s.state.timestamp for s in sample])
+    def batchify(self, batch: List[Union[SARSD, SARSDH]]
+                 ) -> Union[SARSD, SARSDH]:
+        state_price = np.stack([episode.state.price for episode in batch])
+        state_port = np.stack([episode.state.portfolio for episode in batch])
+        state_time = np.stack([episode.state.timestamp for episode in batch])
         state = State(state_price, state_port, state_time)
-        next_state_price = np.stack([s.next_state.price for s in sample])
-        next_state_port = np.stack(
-            [s.next_state.portfolio for s in sample])
-        next_state_time = np.stack(
-            [s.next_state.timestamp for s in sample])
+        next_state_price = np.stack([episode.next_state.price
+                                     for episode in batch])
+        next_state_port = np.stack([episode.next_state.portfolio
+                                    for episode in batch])
+        next_state_time = np.stack([episode.next_state.timestamp
+                                    for episode in batch])
         next_state = State(next_state_price, next_state_port,
                            next_state_time)
-        action = np.stack([s.action for s in sample])
-        reward = np.stack([s.reward for s in sample])
-        done = np.stack([s.done for s in sample])
+        action = np.stack([episode.action for episode in batch])
+        reward = np.stack([episode.reward for episode in batch])
+        done = np.stack([episode.done for episode in batch])
+        if self.store_hidden:
+            hidden_state = np.stack([episode.hidden_state
+                                    for episode in batch])
+            return SARSDH(state, action, reward, next_state, done, hidden_state)
         return SARSD(state, action, reward, next_state, done)
 
     def get_full(self):
@@ -260,16 +491,3 @@ class ReplayBuffer:
             repr(self._buffer[:1]).strip(']') + '  ...  ' + \
             repr(self._buffer[-1:]).strip('[')
 
-    # def _batchify(self, sample):
-    #     state_price = np.array([s.state.price for s in sample])
-    #     state_port = np.array([s.state.portfolio for s in sample])
-    #     state_time = np.array([s.state.timestamp for s in sample])
-    #     state = State(state_price, state_port, state_time)
-    #     next_state_price = np.array([s.next_state.price for s in sample])
-    #     next_state_port = np.array([s.next_state.portfolio for s in sample])
-    #     next_state_time = np.array([s.next_state.timestamp for s in sample])
-    #     next_state = State(next_state_price, next_state_port, next_state_time)
-    #     action = np.array([s.action for s in sample])
-    #     reward = np.array([s.reward for s in sample])
-    #     done = np.array([s.done for s in sample])
-    #     return SARSD(state, action, reward, next_state, done)

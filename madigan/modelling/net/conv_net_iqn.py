@@ -46,7 +46,7 @@ class DuelingHeadIQN(nn.Module):
         self.adv_net = Linear(d_model, self.n_assets * self.action_atoms)
 
     def forward(self, state_emb):
-        value = self.value_net(state_emb)[..., None]
+        value = self.value_net(state_emb)
         # adv = self.adv_net(state_emb).view(state_emb.shape[0],
         #                                    state_emb.shape[1], self.n_assets,
         #                                    self.action_atoms)

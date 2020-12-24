@@ -9,6 +9,7 @@ import torch
 from .base import Agent
 from ...environments import get_env_info
 from ...utils.replay_buffer import ReplayBuffer
+# from ...utils.replay_buffer import ReplayBufferC as ReplayBuffer
 from ...utils.data import SARSD, State
 from ...utils.metrics import list_2_dict
 from ...utils import DiscreteRangeSpace
@@ -111,7 +112,7 @@ class OffPolicyQ(Agent):
             running_cost += np.sum(info.brokerResponse.transactionCost)
             running_reward += reward
             if done:
-                reward = -.5
+                reward = -.1
             sarsd = SARSD(state, action, reward, next_state, done)
             self.buffer.add(sarsd)
 
@@ -179,3 +180,67 @@ class OffPolicyQ(Agent):
                 break
             i += 1
         return list_2_dict(tst_metrics)
+
+class OffPolicyQRecurrent(OffPolicyQ):
+    """
+    Base class for recurrent agents.
+    """
+    def step(self, n, reset: bool = True, log_freq: int = None):
+        """
+        Performs n steps of interaction with the environment
+        Accumulates experiences inside self.buffer (replay buffer for offpolicy)
+        performs train_step when conditions are met (replay_min_size)
+        n: int = number of training steps
+        reset: bool = whether to reset environment before commencing training
+        log_freq: int = frequency with which to yield results to caller.
+        """
+        self.train_mode()
+        trn_metrics = []
+        if reset:
+            self.reset_state()
+        state = self._preprocessor.current_data()
+        log_freq = min(log_freq if log_freq is not None else self.log_freq, n)
+        running_reward = 0.  # for logging
+        running_cost = 0.  # for logging
+        # i = 0
+        max_steps = self.training_steps + n
+        while True:
+            self.model_b.sample_noise()
+
+            action, transaction = self.explore(state)
+            _next_state, reward, done, info = self._env.step(transaction)
+            reward = self.reward_shaper.stream(reward)
+            self._preprocessor.stream_state(_next_state)
+            next_state = self._preprocessor.current_data()
+
+            running_cost += np.sum(info.brokerResponse.transactionCost)
+            running_reward += reward
+            if done:
+                reward = -.1
+            sarsd = SARSD(state, action, reward, next_state, done)
+            self.buffer.add(sarsd)
+
+            if done:
+                self.reset_state()
+                state = self._preprocessor.current_data()
+                running_reward = 0.
+            else:
+                state = next_state
+
+            if len(self.buffer) > self.replay_min_size:
+                _trn_metrics = self.train_step()
+                _trn_metrics['eps'] = self.eps
+                _trn_metrics['running_reward'] = running_reward
+                trn_metrics.append(_trn_metrics)
+                self.training_steps += 1
+
+                if self.training_steps % log_freq == 0:
+                    yield trn_metrics
+                    trn_metrics.clear()
+
+                if self.training_steps > max_steps:
+                    yield trn_metrics
+                    break
+
+            self.env_steps += 1
+

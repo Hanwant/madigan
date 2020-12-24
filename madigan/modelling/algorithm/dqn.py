@@ -123,6 +123,19 @@ class DQN(OffPolicyQ):
         self.model_b.eval()
         self.model_t.eval()
 
+    @torch.no_grad()
+    def get_qvals(self, state, target=False, device=None):
+        """
+        External interface - for inference and env interaction
+        Takes in numpy arrays
+        and return qvals for actions
+        """
+        device = device or self.device
+        state = self.prep_state_tensors(state, device=device)
+        if target:
+            return self.model_t(state)
+        return self.model_b(state)
+
     @property
     def action_space(self) -> np.ndarray:
         """
@@ -156,26 +169,13 @@ class DQN(OffPolicyQ):
         return transactions
 
     @torch.no_grad()
-    def get_qvals(self, state, target=False, device=None):
-        """
-        External interface - for inference and env interaction
-        Takes in numpy arrays
-        and return qvals for actions
-        """
-        device = device or self.device
-        state = self.prep_state_tensors(state, device=device)
-        if target:
-            return self.model_t(state)
-        return self.model_b(state)
-
-    @torch.no_grad()
     def get_action(self, state, target=False, device=None):
         """
         External interface - for inference and env interaction
         takes in numpy arrays and returns greedy actions
         """
         qvals = self.get_qvals(state, target=target, device=device)
-        actions = qvals.max(-1)[1].squeeze()  # (self.n_assets, )
+        actions = qvals.max(-1)[1].squeeze(0)  # (self.n_assets, )
         return actions
 
     def __call__(self,
@@ -225,20 +225,16 @@ class DQN(OffPolicyQ):
             behaviour_actions = self.model_b(next_state).max(-1)[1]
             one_hot = F.one_hot(behaviour_actions,
                                 self.action_atoms).to(self.device)
-            # (bs, n_assets, 1)
             greedy_qvals_next = (self.model_t(next_state) * one_hot).sum(
                 -1).mean(-1)  # pick max within assets and mean across assets
         else:
-            # (bs, n_assets, 1)
             greedy_qvals_next = self.model_t(next_state).max(-1)[0].mean(
                 -1)  # pick max within assets and mean across assets
-        # As actions for different assets are considered in parallel
-        # Gt = reward[..., None] + (~done[..., None] *
-        #                           (self.discount**self.nstep_return) *
-        #                           greedy_qvals_next)  # Gt = (bs, n_assets)
+
+        assert greedy_qvals_next.shape == (reward.shape[0], )  # (bs, )
         Gt = reward + (~done * self.discount ** self.nstep_return *
                        greedy_qvals_next)   # (bs, )
-        # assert Gt.shape == (next_state.price.shape[0], )
+        assert Gt.shape == (next_state.price.shape[0], )
         return Gt
 
     def train_step(self, sarsd: SARSD = None):

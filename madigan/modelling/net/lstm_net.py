@@ -1,51 +1,37 @@
+from functools import reduce
+
 import torch
 import torch.nn as nn
 
+from .base import QNetworkBase
+from .common import ConvNetStateEncoder, DuelingHead, NormalHead
 from .utils import xavier_initialization, orthogonal_initialization
-from ...utils.data import State
+from .utils import ACT_FN_DICT
+from ...utils.data import State, SARSD
 
-class PortEmbed(nn.Module):
-    """
-    Create embedding from portfolio
-    """
-    def __init__(self, n_assets, d_model):
-        super().__init__()
-        self.embed = nn.Linear(n_assets, d_model)
-    def forward(self, raw_port):
-        return self.embed(raw_port)
+class LSTMEncoder(nn.Module):
+    def __init__(self, d_model: int, num_layers: int):
+        self.d_model = d_model
+        self.num_layers = num_layers
+        self.layers = nn.LSTM(d_model, d_model, num_layers, batch_first=True)
 
-class NormalHead(nn.Module):
-    def __init__(self, d_model, output_shape):
-        super().__init__()
-        self.n_assets = output_shape[0]
-        self.action_atoms = output_shape[1]
-        self.out = nn.Linear(d_model, self.n_assets*self.action_atoms)
-    def forward(self, state_emb):
-        qvals = self.out(state_emb).view(state_emb.shape[0],
-                                         self.n_assets, self.action_atoms)
-        return qvals
-
-class DuelingHead(nn.Module):
-    def __init__(self, d_model, output_shape):
-        super().__init__()
-        self.n_assets = output_shape[0]
-        self.action_atoms = output_shape[1]
-        self.value_net = nn.Linear(d_model, self.n_assets)
-        self.adv_net = nn.Linear(d_model, self.n_assets*self.action_atoms)
-    def forward(self, state_emb):
-        value = self.value_net(state_emb)
-        adv = self.adv_net(state_emb).view(state_emb.shape[0],
-                                           self.n_assets, self.action_atoms)
-        qvals = value[..., None] + adv - adv.mean(-1, keepdim=True)
-        return qvals
-
-class LSTM(nn.Module):
+class LSTMNet(QNetworkBase):
     """
-    For use in DQN
+    For use in DQN. Wraps ConvNetStateEncoder and adds a linear layer on top
+    as an output head. May be a normal or dueling head.
     """
-    def __init__(self, input_shape: tuple, output_shape: tuple, d_model=512,
-                 channels=[32, 32], kernels=[5, 5], strides=[1, 1],
-                 dueling=True, preserve_window_len: bool = False,
+    def __init__(self,
+                 input_shape: tuple,
+                 output_shape: tuple,
+                 d_model=512,
+                 channels=[32, 32],
+                 kernels=[5, 5],
+                 strides=[1, 1],
+                 dueling=True,
+                 preserve_window_len: bool = False,
+                 act_fn: str = 'silu',
+                 noisy_net: bool = False,
+                 noisy_net_sigma: float = 0.5,
                  **extra):
         """
         input_shape: (window_length, n_features)
@@ -53,35 +39,47 @@ class LSTM(nn.Module):
         """
         super().__init__()
 
+        assert len(input_shape) == 2, \
+            "input_shape should be (window_len, n_feats)"
         window_len = input_shape[0]
         assert window_len >= reduce(lambda x, y: x+y, kernels), \
             "window_length should be at least as long as sum of kernels"
 
         self.input_shape = input_shape
+        self.window_len = window_len
         self.n_assets = output_shape[0]
         self.action_atoms = output_shape[1]
         self.d_model = d_model
-        self.act = nn.GELU()
-        self.price_project = nn.Linear(window_len[0]*channels[-1], d_model)
-        self.port_project = nn.Linear(self.n_assets+1, d_model)
+        self.act = ACT_FN_DICT[act_fn]()
+        self.noisy_net = noisy_net
+        self.noisy_net_sigma = noisy_net_sigma
+        self.convnet_state_encoder = ConvNetStateEncoder(
+            input_shape,
+            self.n_assets,
+            d_model,
+            channels,
+            kernels,
+            strides,
+            preserve_window_len=preserve_window_len,
+            act_fn=act_fn,
+            noisy_net=noisy_net,
+            noisy_net_sigma=noisy_net_sigma,
+            **extra)
+        self.recurrent_encoder = LSTMEncoder(d_model)
         if dueling:
             self.output_head = DuelingHead(d_model, output_shape)
         else:
             self.output_head = NormalHead(d_model, output_shape)
 
-    def get_state_emb(self, state: State):
+    def get_state_emb(self, sarsd: SARSD):
         """
         Given a State object containing tensors as .price and .portfolio
         attributes, returns an embedding of shape (bs, d_model)
         """
-        price = state.price.transpose(-1, -2) # switch features and time dimension
-        port = state.portfolio
-        price_emb = self.conv_layers(price).view(price.shape[0], -1)
-        price_emb = self.price_project(price_emb)
-        port_emb = self.port_project(port)
-        state_emb = price_emb * port_emb
-        out = self.act(state_emb)
-        return out
+        conv_emb = self.convnet_state_encoder(sarsd.state) # (bs, seq_len, d_model)
+        state_emb = self.recurrent_encoder(conv_emb, sarsd.reward, sarsd.action)
+        return state_emb
+
 
     def forward(self, state: State = None, state_emb: torch.Tensor = None):
         """
