@@ -4,6 +4,7 @@ from abc import abstractmethod
 from random import random
 
 import numpy as np
+import pandas as pd
 import torch
 
 from .base import Agent
@@ -44,6 +45,7 @@ class OffPolicyQ(Agent):
         self.centered_actions = np.arange(
             self.action_atoms) - self.action_atoms // 2
         self.log_freq = 2000
+        self.debug_savepath = self.savepath.parent / 'logs/debug_trainloop.csv'
 
     def save_buffer(self):
         with open(self.bufferpath, 'wb') as f:
@@ -81,7 +83,11 @@ class OffPolicyQ(Agent):
             steps = self.replay_min_size - len(self.buffer)
             self.step(steps)
 
-    def step(self, n, reset: bool = True, log_freq: int = None):
+    def step(self,
+             n,
+             reset: bool = True,
+             log_freq: int = None,
+             DEBUG: bool = False):
         """
         Performs n steps of interaction with the environment
         Accumulates experiences inside self.buffer (replay buffer for offpolicy)
@@ -100,17 +106,38 @@ class OffPolicyQ(Agent):
         running_cost = 0.  # for logging
         # i = 0
         max_steps = self.training_steps + n
+        DEBUG = True
+        if DEBUG:
+            print("DEBUGGING")
+            debug_logs = []
         while True:
             self.model_b.sample_noise()
 
             action, transaction = self.explore(state)
             _next_state, reward, done, info = self._env.step(transaction)
+            running_cost += np.sum(info.brokerResponse.transactionCost)
+            if DEBUG:
+                debug_metrics = {
+                    'action': action,
+                    'transaction': transaction,
+                    'reward_pre_shape': reward,
+                    'done': done,
+                    # 'info': info,
+                    'transactionCost': info.brokerResponse.transactionCost,
+                    'transactionUnit': info.brokerResponse.transactionUnits,
+                    'running_cost': running_cost,
+                    **get_env_info(self._env)
+                }
             reward = self.reward_shaper.stream(reward)
+            running_reward += reward
+            if DEBUG:
+                debug_metrics['reward_post_shape'] = reward
+                debug_metrics['running_reward'] = running_reward
+                debug_logs.append(debug_metrics)
+
             self._preprocessor.stream_state(_next_state)
             next_state = self._preprocessor.current_data()
 
-            running_cost += np.sum(info.brokerResponse.transactionCost)
-            running_reward += reward
             if done:
                 reward = -.1
             sarsd = SARSD(state, action, reward, next_state, done)
@@ -133,6 +160,16 @@ class OffPolicyQ(Agent):
                 if self.training_steps % log_freq == 0:
                     yield trn_metrics
                     trn_metrics.clear()
+                    if DEBUG:
+                        print("Saving debug logs")
+                        df = pd.DataFrame(list_2_dict(debug_logs))
+                        if not self.debug_savepath.is_file():
+                            df.to_csv(self.debug_savepath, mode='w')
+                        else:
+                            df.to_csv(self.debug_savepath,
+                                      mode='a',
+                                      header=False)
+                        debug_logs = []
 
                 if self.training_steps > max_steps:
                     yield trn_metrics
@@ -180,6 +217,7 @@ class OffPolicyQ(Agent):
                 break
             i += 1
         return list_2_dict(tst_metrics)
+
 
 class OffPolicyQRecurrent(OffPolicyQ):
     """
@@ -243,4 +281,3 @@ class OffPolicyQRecurrent(OffPolicyQ):
                     break
 
             self.env_steps += 1
-
