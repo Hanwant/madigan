@@ -194,14 +194,12 @@ namespace madigan{
 
   SRDIMulti Env::step(const AmountVector& units){
 
-    double prevEq = broker_->defaultPortfolio_->equity();
-
-    PriceVector newPrices = dataSource_->getData();
-
-    double currentEq = broker_->defaultPortfolio_->equity();
-    double reward = log(std::max(currentEq / prevEq, 0.3)); // limit to log(0.3) = -1.2
-
+    double prevEq = defaultPortfolio_->equity();
     BrokerResponseMulti response = broker_->handleTransaction(units);
+    PriceVector newPrices = dataSource_->getData();
+    double currentEq = defaultPortfolio_->equity();
+    double reward = log(std::max(currentEq / prevEq, 0.01)); // limit to log(0.01) = -4.6
+
     bool done{false};
     RiskInfo risk = broker_->checkRisk();
     for(const auto& risk: response.riskInfo){
@@ -220,13 +218,11 @@ namespace madigan{
   SRDISingle Env::step(int assetIdx, double units){
 
     double prevEq = broker_->defaultPortfolio_->equity();
-
-    PriceVector newPrices = dataSource_->getData();
-
-    double currentEq = broker_->defaultPortfolio_->equity();
-    double reward = log(std::max(currentEq / prevEq, 0.3));
-
     BrokerResponseSingle response = broker_->handleTransaction(assetIdx, units);
+    PriceVector newPrices = dataSource_->getData();
+    double currentEq = broker_->defaultPortfolio_->equity();
+    double reward = log(std::max(currentEq / prevEq, 0.01));
+
 
     RiskInfo risk = broker_->checkRisk();
     bool done{false};
