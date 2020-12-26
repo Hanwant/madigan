@@ -149,7 +149,7 @@ class NStepBuffer:
         self._buffer.append(sarsd)
 
     def full(self) -> bool:
-        return len(self._buffer) == self.nstep
+        return len(self._buffer) >= self.nstep
 
     def pop_nstep_sarsd(self) -> SARSD:
         """
@@ -162,9 +162,11 @@ class NStepBuffer:
         ])
         nstep_sarsd = self._buffer.pop(0)
         nstep_sarsd.reward = reward
-        if len(self._buffer):
-            nstep_sarsd.next_state = self._buffer[-1].next_state
-            nstep_sarsd.done = self._buffer[-1].done
+        if len(self._buffer) > 0:
+            # nstep_idx = min(self.nstep, len(self)) - 1
+            nstep_idx = -1
+            nstep_sarsd.next_state = self._buffer[nstep_idx].next_state
+            nstep_sarsd.done = self._buffer[nstep_idx].done
             # if self._nstep_buffer[-1].done:
             #     nstep_sarsd.done = 1
         return nstep_sarsd
@@ -173,6 +175,10 @@ class NStepBuffer:
         """
         Useful to call at end of episodes (I.e if not done.)
         """
+        out = []
+        while self.full():
+            out.append(self.pop_nstep_sarsd())
+        return out
 
     def __len__(self):
         return len(self._buffer)
@@ -222,13 +228,13 @@ class ReplayBuffer:
         If nstep buffer is full, adds to replay buffer first
         """
         self._nstep_buffer.add(sarsd)
+        if self._nstep_buffer.full():
+            nstep_sarsd = self._nstep_buffer.pop_nstep_sarsd()
+            self._add_to_replay(nstep_sarsd)
         if sarsd.done:
             while len(self._nstep_buffer) > 0:
                 nstep_sarsd = self._nstep_buffer.pop_nstep_sarsd()
                 self._add_to_replay(nstep_sarsd)
-        elif len(self._nstep_buffer) == self.nstep_return:
-            nstep_sarsd = self._nstep_buffer.pop_nstep_sarsd()
-            self._add_to_replay(nstep_sarsd)
 
     def _add_to_replay(self, sarsd):
         """
@@ -274,7 +280,6 @@ class ReplayBuffer:
         self.current_idx = 0
         self._nstep_buffer = []
 
-
     def __getitem__(self, item):
         if isinstance(item, int):
             return self._buffer[item]
@@ -299,9 +304,9 @@ class EpisodeReplayBuffer:
                  episode_overlap: int, store_hidden: bool,
                  nstep_return: int, discount: float):
         self.size = size
-        self.episode_len = episode_len + nstep_return
-        self.min_episode_len = min_episode_len + nstep_return
-        self.episode_overlap = episode_overlap + nstep_return
+        self.episode_len = episode_len
+        self.min_episode_len = min_episode_len
+        self.episode_overlap = episode_overlap
         self.store_hidden = store_hidden
         if self.min_episode_len < self.episode_overlap:
             raise ValueError("min_episode_len should be >= episode_overlap")
@@ -354,37 +359,37 @@ class EpisodeReplayBuffer:
             self.discounts[i] * dat.reward
             for i, dat in enumerate(self._nstep_buffer)
         ])
-        nstep_sarsdh = self._nstep_buffer.pop(0)
-        nstep_sarsdh.reward = reward
+        nstep_sarsd = self._nstep_buffer.pop(0)
+        nstep_sarsd.reward = reward
         if len(self._nstep_buffer) > 0:
-            nstep_sarsdh.next_state = self._nstep_buffer[-1].next_state
-            nstep_sarsdh.done = self._nstep_buffer[-1].done
+            nstep_sarsd.next_state = self._nstep_buffer[-1].next_state
+            nstep_sarsd.done = self._nstep_buffer[-1].done
             # if self._nstep_buffer[-1].done:
             #     nstep_sarsdh.done = 1
-        return nstep_sarsdh
+        return nstep_sarsd
 
-    def add(self, sarsdh):
+    def add(self, sarsd):
         """
         Adds sarsdh to nstep buffer.
         If nstep buffer is full, adds to replay buffer first
         """
-        self._nstep_buffer.append(sarsdh)
-        if sarsdh.done:
+        self._nstep_buffer.append(sarsd)
+        if sarsd.done:
             while len(self._nstep_buffer) > 0:
-                nstep_sarsdh = self.pop_nstep_sarsdh()
+                nstep_sarsdh = self.pop_nstep_sarsd()
                 self._add_to_episode(nstep_sarsdh)
         elif len(self._nstep_buffer) == self.nstep_return:
-            nstep_sarsdh = self.pop_nstep_sarsdh()
+            nstep_sarsdh = self.pop_nstep_sarsd()
             self._add_to_episode(nstep_sarsdh)
 
-    def _add_to_episode(self, sarsdh):
+    def _add_to_episode(self, sarsd):
         if self.episode_idx < self.episode_len:
-            self._episode_buffer[self.episode_idx] = sarsdh
+            self._episode_buffer[self.episode_idx] = sarsd
             self.episode_idx += 1
         elif self.episode_idx == self.episode_len:
             self.flush_episode_to_main()
         # HEURISTIC
-        if sarsdh.done and self.episode_idx >= self.min_episode_len:
+        if sarsd.done and self.episode_idx >= self.min_episode_len:
             self.flush_episode_to_main()
 
     def flush_episode_to_main(self):
@@ -394,9 +399,9 @@ class EpisodeReplayBuffer:
         episode and resets self.episode_idx to this number so that new samples
         get added to the end after the overlap with the previous episode.
         """
-        sarsdh = self.make_episode_sarsdh(
+        sarsd = self.make_episode_sarsd(
             self._episode_buffer[:self.episode_idx])
-        self._add_to_replay(sarsdh)
+        self._add_to_replay(sarsd)
         self._episode_buffer[: self.episode_overlap] = \
             self._episode_buffer[self.episode_idx - self.episode_overlap:]
         self.episode_idx = self.episode_overlap
@@ -412,7 +417,7 @@ class EpisodeReplayBuffer:
             self.filled += 1
 
     def make_episode_sarsd(self, episode: List[Union[SARSD, SARSDH]]
-                            ) -> Union[SARSD, SARSDH]:
+                            )-> Union[SARSD, SARSDH]:
         state_price = np.stack([s.state.price for s in episode])
         state_port = np.stack([s.state.portfolio for s in episode])
         state_time = np.stack([s.state.timestamp for s in episode])

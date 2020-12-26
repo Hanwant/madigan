@@ -9,7 +9,7 @@ import torch
 
 from .base import Agent
 from ...environments import get_env_info
-from ...utils.replay_buffer import ReplayBuffer
+from ...utils.replay_buffer import ReplayBuffer, EpisodeReplayBuffer
 # from ...utils.replay_buffer import ReplayBufferC as ReplayBuffer
 from ...utils.data import SARSD, State
 from ...utils.metrics import list_2_dict
@@ -106,7 +106,7 @@ class OffPolicyQ(Agent):
         running_cost = 0.  # for logging
         # i = 0
         max_steps = self.training_steps + n
-        DEBUG = True
+        DEBUG = False
         if DEBUG:
             print("DEBUGGING")
             debug_logs = []
@@ -219,18 +219,92 @@ class OffPolicyQ(Agent):
         return list_2_dict(tst_metrics)
 
 
-class OffPolicyQRecurrent(OffPolicyQ):
+class OffPolicyQRecurrent(Agent):
     """
-    Base class for recurrent agents.
+    Recurrent OffPolicyQ Base
     """
+    def __init__(self, env, preprocessor, input_shape, action_space, discount,
+                 nstep_return, reward_shaper, replay_size, replay_min_size,
+                 noisy_net, eps, eps_decay, eps_min, batch_size, test_steps,
+                 unit_size, savepath):
+        super().__init__(env, preprocessor, input_shape, action_space,
+                         discount, nstep_return, reward_shaper, savepath)
+        self.noisy_net = noisy_net
+        self.eps = eps
+        self.eps_decay = max(eps_decay, 1 -
+                             eps_decay)  # to make sure we use 0.99999 not 1e-5
+        self.eps_min = eps_min
+        self.replay_size = replay_size
+        self.nstep_return = nstep_return
+        self.discount = discount
+        self.buffer = EpisodeReplayBuffer.from_agent(self)
+        self.bufferpath = self.savepath.parent / 'replay.pkl'
+        self.replay_min_size = replay_min_size
+        self.batch_size = batch_size
+        self.test_steps = test_steps
+        self.unit_size = unit_size
+        self.action_atoms = self.action_space.action_atoms
+        self.n_assets = self.action_space.n_assets
+        self.centered_actions = np.arange(
+            self.action_atoms) - self.action_atoms // 2
+        self.log_freq = 2000
+        self.debug_savepath = self.savepath.parent / 'logs/debug_trainloop.csv'
+
+    def save_buffer(self):
+        with open(self.bufferpath, 'wb') as f:
+            pickle.dump(self.buffer, f)
+
+    def load_buffer(self):
+        if self.bufferpath.is_file():
+            with open(self.bufferpath, 'rb') as f:
+                self.buffer = pickle.load(f)
+
+    @abstractmethod
+    def get_qvals(self,
+                  state: State,
+                  prev_action: torch.Tensor,
+                  prev_reward: float,
+                  target: bool = False):
+        pass
+
+    @abstractmethod
+    def get_action(self,
+                   state: State,
+                   prev_action: torch.Tensor,
+                   prev_reward: float,
+                   target: bool = False):
+        pass
+
+    def explore(self, state: State, prev_action: torch.Tensor,
+                prev_reward: float) -> Tuple[np.ndarray, np.ndarray]:
+        if self.noisy_net:
+            action = self.get_action(state,
+                                     prev_action,
+                                     prev_reward,
+                                     target=False).cpu().numpy()
+        else:
+            if random() < self.eps:
+                action = self.get_action(state,
+                                         prev_action,
+                                         prev_reward,
+                                         target=False).cpu().numpy()
+            else:
+                action = self.action_space.sample()
+            self.eps = max(self.eps_min, self.eps * self.eps_decay)
+        return action, self.action_to_transaction(action)
+
     def step(self, n, reset: bool = True, log_freq: int = None):
         """
         Performs n steps of interaction with the environment
         Accumulates experiences inside self.buffer (replay buffer for offpolicy)
         performs train_step when conditions are met (replay_min_size)
-        n: int = number of training steps
-        reset: bool = whether to reset environment before commencing training
-        log_freq: int = frequency with which to yield results to caller.
+        @params:
+            n: int = number of training steps
+            reset: bool = whether to reset environment before commencing training
+            log_freq: int = frequency with which to yield results to caller.
+        yields:
+            train_metrics: dict
+
         """
         self.train_mode()
         trn_metrics = []
@@ -242,10 +316,12 @@ class OffPolicyQRecurrent(OffPolicyQ):
         running_cost = 0.  # for logging
         # i = 0
         max_steps = self.training_steps + n
+        reward = 0.
+        action = torch.zeros_like(torch.from_numpy(self.action_space.sample()))
         while True:
             self.model_b.sample_noise()
 
-            action, transaction = self.explore(state)
+            action, transaction = self.explore(state, action, reward)
             _next_state, reward, done, info = self._env.step(transaction)
             reward = self.reward_shaper.stream(reward)
             self._preprocessor.stream_state(_next_state)

@@ -68,7 +68,7 @@ def test_sharpe_ewma_window():
     for reward in rewards:
         rolling_sharpe.append(shaper.stream(reward))
     rolling_sharpe = np.array(rolling_sharpe[:])
-    PLOT = false
+    PLOT = False
     if PLOT:
         import matplotlib.pyplot as plt
         # plt.plot(rewards, label='rewards')
@@ -86,8 +86,8 @@ if __name__ == "__main__":
 
     debug = args.debug
 
-    tests = [test_sharpe_fixed_window, test_numba_ewstd,
-             test_sharpe_ewma_window]
+    tests = (test_sharpe_fixed_window, test_numba_ewstd,
+             test_sharpe_ewma_window)
     num_tests = len(tests)
     completed = 0
     failed = []

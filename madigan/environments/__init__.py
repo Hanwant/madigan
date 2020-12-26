@@ -27,6 +27,15 @@ def get_env_info(env):
         "availableMargin": env.availableMargin,
         "usedMargin": env.usedMargin,
         "borrowedAssetValue": env.borrowedAssetValue,
+        "borrowedMargin": env.borrowedMargin,
         "ledger": np.array(env.ledger, copy=True),
         "ledgerNormed": np.array(env.ledgerNormed, copy=True),
     }
+
+def format_env_info(info_dict):
+    """ for printing """
+    # return yaml.dump(info_dict, default_flow_style=None, sort_keys=False)
+    formatted = ""
+    for k, v in info_dict.items():
+        formatted += k + ": " + repr(v) + "\n"
+    return formatted

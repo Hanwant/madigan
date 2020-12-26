@@ -14,9 +14,7 @@ from .utils import discrete_action_to_transaction, abs_port_norm
 from ..utils import get_model_class
 from ...environments import make_env
 from ...environments.reward_shaping import RewardShaper, make_reward_shaper
-from ..net.conv_net import ConvNet
-from ..net.mlp_net import MLPNet
-from ...utils import default_device, DiscreteActionSpace, DiscreteRangeSpace
+from ...utils import DiscreteActionSpace, DiscreteRangeSpace
 from ...utils import ActionSpace
 from ...utils.preprocessor import make_preprocessor
 from ...utils.config import Config
@@ -92,10 +90,6 @@ class DQN(OffPolicyQ):
                    unit_size, savepath, aconf.double_dqn,
                    aconf.tau_soft_update, config.model_config.model_class,
                    config.model_config, config.optim_config.lr)
-
-    @property
-    def env(self):
-        return self._env
 
     def to(self, device):
         """

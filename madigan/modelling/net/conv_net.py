@@ -15,8 +15,6 @@ from .utils import xavier_initialization, orthogonal_initialization
 from ...utils.data import State
 
 
-
-
 class ConvNet(QNetworkBase):
     """
     For use in DQN. Wraps ConvNetStateEncoder and adds a linear layer on top
@@ -29,6 +27,7 @@ class ConvNet(QNetworkBase):
                  channels=[32, 32],
                  kernels=[5, 5],
                  strides=[1, 1],
+                 dilations=[1, 1],
                  dueling=True,
                  preserve_window_len: bool = False,
                  act_fn: str = 'silu',
@@ -62,6 +61,7 @@ class ConvNet(QNetworkBase):
             channels,
             kernels,
             strides,
+            dilations,
             preserve_window_len=preserve_window_len,
             act_fn=act_fn,
             noisy_net=noisy_net,

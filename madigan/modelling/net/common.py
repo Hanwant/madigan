@@ -54,7 +54,6 @@ class DuelingHeadDQN(nn.Module):
         # return qvals
         adv = self.adv_net(state_emb)
         qvals = value + adv - adv.mean(-1, keepdim=True)
-        # import ipdb; ipdb.set_trace()
         return qvals.view(bs, self.n_assets, self.action_atoms)
 
 class NoisyLinear(nn.Module):
@@ -126,7 +125,8 @@ class Conv1DLayer(nn.Module):
             self.pad = nn.ReplicationPad1d(causal_pad)
         self.act = ACT_FN_DICT[act_fn]()
         # self.norm = nn.BatchNorm1d(channels_out)
-        self.pool = nn.MaxPool1d(kernel, stride=stride)
+        # self.pool = nn.MaxPool1d(kernel, stride=stride)
+        self.pool = nn.AvgPool1d(kernel, stride=stride)
         # self.pool = lambda x: x
         self.norm = lambda x: x
 
@@ -141,9 +141,11 @@ class Conv1DLayer(nn.Module):
 class Conv1DEncoder(nn.Module):
     """
     Wraps and orchestrates a sequence of Conv1DLayers
+    Mainly for encoding a sequence of prices.
+    Returns an encoding of size d_model
     """
-    def __init__(self, input_shape: tuple, channels: list, kernels: list,
-                 strides: list = None, dilations: list = None,
+    def __init__(self, input_shape: tuple, d_model: int, channels: list,
+                 kernels: list, strides: list = None, dilations: list = None,
                  preserve_window_len: bool = False, act_fn: str = 'gelu',
                  causal_dim: int = 0):
         super().__init__()
@@ -162,9 +164,13 @@ class Conv1DEncoder(nn.Module):
                                       preserve_window_len, act_fn,
                                       causal_dim))
             self.layers = nn.Sequential(*layers)
+        pool_size = d_model // channels[-1]
+        self.price_pool = nn.AdaptiveAvgPool1d(pool_size)
 
     def forward(self, x):
-        return self.layers(x)
+        price_emb = self.layers(x)
+        price_emb = self.price_pool(price_emb).view(x.shape[0], -1)
+        return price_emb
 
 
 class ConvNetStateEncoder(nn.Module):
@@ -205,6 +211,7 @@ class ConvNetStateEncoder(nn.Module):
         self.act = ACT_FN_DICT[act_fn]()
         self.conv_encoder = Conv1DEncoder(
             input_shape,
+            d_model,
             channels,
             kernels,
             strides=strides,
@@ -217,13 +224,6 @@ class ConvNetStateEncoder(nn.Module):
         self.noisy_net_sigma = noisy_net_sigma
         Linear = partial(NoisyLinear, sigma=noisy_net_sigma) \
             if noisy_net else nn.Linear
-
-        # dummy_input = torch.randn(1, *input_shape[::-1])
-        # conv_out_shape = self.conv_encoder(dummy_input).shape
-        # conv_out_size = conv_out_shape[-1] * conv_out_shape[-2]
-        pool_size = d_model // channels[-1]
-        # print(conv_out_shape, conv_out_size, pool_size, d_model)
-        self.price_pool = nn.AdaptiveMaxPool1d(pool_size)
 
         # normalized portfolio vector fed to model is number of assets + 1
         # +1 for cash (base currency) which is also included in the vector
@@ -238,8 +238,6 @@ class ConvNetStateEncoder(nn.Module):
                                       -2)  # switch features and time dimension
         port = state.portfolio
         price_emb = self.conv_encoder(price)
-        price_emb = self.price_pool(price_emb).view(price.shape[0], -1)
-        # price_emb = self.price_project(price_emb)
         port_emb = self.port_project(port)
         state_emb = price_emb * port_emb
         out = self.act(state_emb)

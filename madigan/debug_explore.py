@@ -41,11 +41,17 @@ def plot_a(m):
     fig, axes = plt.subplots(4, 4, sharex='all')
     for ax, label in zip(axes.flatten(),
         ('running_reward', 'reward_pre_shape', 'reward_post_shape', 'running_reward_pre_recon',
-        'running_reward_post_recon', 'running_reward_equity_recon', 'usedMargin', 'equity', 
+        'running_reward_post_recon', 'running_reward_equity_recon', 'balance', 'equity', 
         'pnl', 'transactionCost', 'transactionUnit', 'cash',
         'availableMargin', 'borrowedAssetValue', 'ledger', 'usedMargin')):
         ax.plot(m[label], label=label)
         ax.set_title(label)
+    dones = m['done'][m['done']==True].index.values
+    min = m['running_reward'].min()
+    max = m['running_reward'].max()
+    axes[0, 0].vlines(dones, min-(max-min)*.1, max + (max-min)*.1,
+                      colors='red', label='done')
+    axes[0, 0].legend()
     return fig, axes
     
 def plot_b(m):
