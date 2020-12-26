@@ -18,7 +18,7 @@ from ...utils import DiscreteActionSpace, DiscreteRangeSpace
 from ...utils import ActionSpace
 from ...utils.preprocessor import make_preprocessor
 from ...utils.config import Config
-from ...utils.data import State, SARSD
+from ...utils.data import StateRecurrent, SARSDR
 
 # p = type('params', (object, ), params)
 
@@ -35,10 +35,9 @@ class RDQN(OffPolicyQRecurrent):
     def __init__(self, env, preprocessor, input_shape: tuple,
                  action_space: ActionSpace, discount: float, nstep_return: int,
                  reward_shaper: RewardShaper, replay_size: int,
-                 replay_min_size: int, noisy_net: bool,
-                 noisy_net_sigma: float, eps: float, eps_decay: float,
-                 eps_min: float, batch_size: int, test_steps: int,
-                 unit_size: float, savepath: Union[Path, str],
+                 replay_min_size: int, noisy_net: bool, noisy_net_sigma: float,
+                 eps: float, eps_decay: float, eps_min: float, batch_size: int,
+                 test_steps: int, unit_size: float, savepath: Union[Path, str],
                  double_dqn: bool, tau_soft_update: float, model_class: str,
                  model_config: Union[dict, Config], lr: float):
         super().__init__(env, preprocessor, input_shape, action_space,
@@ -82,9 +81,8 @@ class RDQN(OffPolicyQRecurrent):
         unit_size = aconf.unit_size_proportion_avM
         savepath = Path(config.basepath) / config.experiment_id / 'models'
         return cls(env, preprocessor, input_shape, action_space,
-                   aconf.discount, aconf.nstep_return,
-                   reward_shaper, aconf.replay_size,
-                   aconf.replay_min_size, aconf.noisy_net,
+                   aconf.discount, aconf.nstep_return, reward_shaper,
+                   aconf.replay_size, aconf.replay_min_size, aconf.noisy_net,
                    aconf.noisy_net_sigma, aconf.eps, aconf.eps_decay,
                    aconf.eps_min, aconf.batch_size, config.test_steps,
                    unit_size, savepath, aconf.double_dqn,
@@ -118,8 +116,10 @@ class RDQN(OffPolicyQRecurrent):
         self.model_t.eval()
 
     @torch.no_grad()
-    def get_qvals(self, state, action: torch.Tensor, reward: float,
-                  target: float = False, device=None):
+    def get_qvals(self,
+                  state: StateRecurrent,
+                  target: float = False,
+                  device=None):
         """
         External interface - for inference and env interaction
         Takes in numpy arrays
@@ -127,24 +127,9 @@ class RDQN(OffPolicyQRecurrent):
         """
         device = device or self.device
         state = self.prep_state_tensors(state, device=device)
-        action = action.unsqueeze(0)
-        reward = self.prep_reward(reward)
         if target:
-            return self.model_t(state, action, reward)
-        return self.model_b(state, action, reward)
-
-    def prep_action(self, action: torch.Tensor) -> torch.Tensor:
-        """
-        Adds batch dim
-        """
-        return action.unsqueeze(0)
-
-    def prep_reward(self, reward: float) -> torch.Tensor:
-        """
-        Convert scalar reward to tensor for auto-regressive model.
-        Scalar -> tensor of shape (1, 1, 1)  (batch, seq_len, feature_dim)
-        """
-        return torch.tensor([[[reward]]], dtype=torch.float32, device=self.device)
+            return self.model_t(state)
+        return self.model_b(state)
 
     @property
     def action_space(self) -> np.ndarray:
@@ -179,18 +164,20 @@ class RDQN(OffPolicyQRecurrent):
         return transactions
 
     @torch.no_grad()
-    def get_action(self, state, action: torch.Tensor, reward: float,
-                   target: bool = False, device=None):
+    def get_action(self,
+                   state,
+                   target: bool = False,
+                   device=None):
         """
         External interface - for inference and env interaction
         takes in numpy arrays and returns greedy actions
         """
-        qvals = self.get_qvals(state, action, reward, target, device)
+        qvals = self.get_qvals(state, target, device)
         actions = qvals.max(-1)[1].squeeze(0)  # (self.n_assets, )
         return actions
 
     def __call__(self,
-                 state: State,
+                 state: StateRecurrent,
                  target: bool = False,
                  raw_qvals: bool = False,
                  max_qvals: bool = False):
@@ -200,14 +187,24 @@ class RDQN(OffPolicyQRecurrent):
         if not batch:
             price = torch.as_tensor(state.price[None, ...],
                                     dtype=torch.float32).to(self.device)
-            port = torch.as_tensor(state.portfolio[None, -1],
+            port = torch.as_tensor(state.portfolio[None, ...],
                                    dtype=torch.float32).to(self.device)
+            action = torch.as_tensor(state.action[None, ...],
+                                     dtype=torch.Long).to(self.device)
+            reward = torch.as_tensor(state.reward[None, ..., None],
+                                     dtype=torch.float32).to(self.device)
         else:
             price = torch.as_tensor(state.price,
                                     dtype=torch.float32).to(self.device)
-            port = torch.as_tensor(state.portfolio[:, -1],
+            port = torch.as_tensor(state.portfolio,
                                    dtype=torch.float32).to(self.device)
-        return State(price, abs_port_norm(port), state.timestamp)
+            action = torch.as_tensor(state.action,
+                                     dtype=torch.Long).to(self.device)
+            reward = torch.as_tensor(state.reward[..., None],
+                                     dtype=torch.float32).to(self.device)
+        action = F.one_hot(action, self.action_atoms).flatten(-2, -1)
+        return StateRecurrent(price, abs_port_norm(port), state.timestamp,
+                              action, reward)
 
     def prep_sarsd_tensors(self, sarsd, device=None):
         state = self.prep_state_tensors(sarsd.state, batch=True)
@@ -233,22 +230,23 @@ class RDQN(OffPolicyQRecurrent):
         to be used in td error and loss calculation
         """
         if self.double_dqn:
-            behaviour_actions = self.model_b(next_state).max(-1)[1]
+            behaviour_actions, (h, c) = self.model_b(next_state).max(-1)[1]
             one_hot = F.one_hot(behaviour_actions,
                                 self.action_atoms).to(self.device)
-            greedy_qvals_next = (self.model_t(next_state) * one_hot).sum(
-                -1).mean(-1)  # pick max within assets and mean across assets
+            greedy_qvals_next = (
+                self.model_t(next_state) * one_hot).sum(-1).mean(
+                    -1)  # pick max within assets and mean across assets
         else:
             greedy_qvals_next = self.model_t(next_state).max(-1)[0].mean(
                 -1)  # pick max within assets and mean across assets
 
         assert greedy_qvals_next.shape == (reward.shape[0], )  # (bs, )
-        Gt = reward + (~done * self.discount ** self.nstep_return *
-                       greedy_qvals_next)   # (bs, )
+        Gt = reward + (~done * self.discount**self.nstep_return *
+                       greedy_qvals_next)  # (bs, )
         assert Gt.shape == (next_state.price.shape[0], )
         return Gt
 
-    def train_step(self, sarsd: SARSD = None):
+    def train_step(self, sarsd: SARSDR = None):
         self.model_b.sample_noise()
         self.model_t.sample_noise()
         sarsd = self.buffer.sample(self.batch_size) if sarsd is None else sarsd
