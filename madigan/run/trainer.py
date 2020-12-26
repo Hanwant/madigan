@@ -226,11 +226,12 @@ class Trainer:
         self = Trainer.from_config(self.config)  # automatically do init
 
     def test_episode(self):
-        test_episode(self.agent,
-                     self.test_env,
-                     self.test_preprocessor,
-                     self.agent.test_steps,
-                     reset=True)
+        """
+        Tests the agent on a test environment instead of its internal
+        env which it is using to train.
+        """
+        return test_episode(self.agent, self.test_env, self.test_preprocessor,
+                            self.agent.test_steps, reset=True)
 
     def train(self, nsteps=None):
         """
