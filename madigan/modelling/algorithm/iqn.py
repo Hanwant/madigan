@@ -37,6 +37,10 @@ class IQN(DQN):
             reward_shaper: RewardShaper,
             replay_size: int,
             replay_min_size: int,
+            prioritized_replay: bool,
+            per_alpha: float,
+            per_beta: float,
+            per_beta_steps: int,
             noisy_net: bool,
             noisy_net_sigma: float,
             eps: float,
@@ -59,10 +63,11 @@ class IQN(DQN):
             k_huber: float):
         super().__init__(env, preprocessor, input_shape, action_space,
                          discount, nstep_return, reward_shaper, replay_size,
-                         replay_min_size, noisy_net, noisy_net_sigma, eps,
-                         eps_decay, eps_min, batch_size, test_steps, unit_size,
-                         savepath, double_dqn, tau_soft_update, model_class,
-                         model_config, lr)
+                         replay_min_size, prioritized_replay, per_alpha,
+                         per_beta, per_beta_steps, noisy_net, noisy_net_sigma,
+                         eps, eps_decay, eps_min, batch_size, test_steps,
+                         unit_size, savepath, double_dqn, tau_soft_update,
+                         model_class, model_config, lr)
 
         self.nTau1 = nTau1
         self.nTau2 = nTau2
@@ -80,16 +85,17 @@ class IQN(DQN):
         aconf = config.agent_config
         unit_size = aconf.unit_size_proportion_avM
         savepath = Path(config.basepath) / config.experiment_id / 'models'
-        return cls(env, preprocessor, input_shape, action_space,
-                   aconf.discount, aconf.nstep_return, reward_shaper,
-                   aconf.replay_size, aconf.replay_min_size, aconf.noisy_net,
-                   aconf.noisy_net_sigma, aconf.eps, aconf.eps_decay,
-                   aconf.eps_min, aconf.batch_size, config.test_steps,
-                   unit_size, savepath, aconf.double_dqn,
-                   aconf.tau_soft_update, config.model_config.model_class,
-                   config.model_config, config.optim_config.lr,
-                   config.agent_config.nTau1, config.agent_config.nTau2,
-                   config.agent_config.k_huber)
+        return cls(
+            env, preprocessor, input_shape, action_space, aconf.discount,
+            aconf.nstep_return, reward_shaper, aconf.replay_size,
+            aconf.replay_min_size, aconf.prioritized_replay, aconf.per_alpha,
+            aconf.per_beta, aconf.per_beta_steps, aconf.noisy_net,
+            aconf.noisy_net_sigma, aconf.eps, aconf.eps_decay, aconf.eps_min,
+            aconf.batch_size, config.test_steps, unit_size, savepath,
+            aconf.double_dqn, aconf.tau_soft_update,
+            config.model_config.model_class, config.model_config,
+            config.optim_config.lr, config.agent_config.nTau1,
+            config.agent_config.nTau2, config.agent_config.k_huber)
 
     @torch.no_grad()
     def get_quantiles(self, state, target=False, device=None):
@@ -124,11 +130,17 @@ class IQN(DQN):
         to be used in td error and loss calculation
         """
         bs = reward.shape[0]
-        tau_greedy = torch.rand(bs, self.nTau1, dtype=torch.float32,
-                                device=reward.device, requires_grad=False)
+        tau_greedy = torch.rand(bs,
+                                self.nTau1,
+                                dtype=torch.float32,
+                                device=reward.device,
+                                requires_grad=False)
         tau_greedy = self.risk_distortion(tau_greedy)
-        tau2 = torch.rand(bs, self.nTau2, dtype=torch.float32,
-                          device=reward.device, requires_grad=False)
+        tau2 = torch.rand(bs,
+                          self.nTau2,
+                          dtype=torch.float32,
+                          device=reward.device,
+                          requires_grad=False)
 
         if self.double_dqn:
             greedy_quantiles = self.model_b(
@@ -145,8 +157,9 @@ class IQN(DQN):
         quantiles_next = self.model_t(next_state, tau=tau2)
         assert quantiles_next.shape[1:] == (self.nTau2, self.n_assets,
                                             self.action_atoms)
-        quantiles_next = (quantiles_next * one_hot[:, None, :, 0, :]).sum(
-            -1).mean(-1)  # get max qval within asset and average across assets
+        quantiles_next = (
+            quantiles_next * one_hot[:, None, :, 0, :]).sum(-1).mean(
+                -1)  # get max qval within asset and average across assets
         assert quantiles_next.shape[1:] == (self.nTau2, )
         Gt = reward[:, None] + (~done[:, None] *
                                 (self.discount**self.nstep_return) *
@@ -154,14 +167,17 @@ class IQN(DQN):
         assert Gt.shape[1:] == (self.nTau2, )
         return Gt
 
-    def train_step(self, sarsd=None):
+    def train_step(self, sarsd: SARSD = None, weights: np.ndarray = None):
         self.model_b.sample_noise()
         self.model_t.sample_noise()
-        sarsd = sarsd or self.buffer.sample(self.batch_size)
+        sarsd, weights = self.buffer.sample(
+            self.batch_size) if sarsd is None else (sarsd, weights)
         state, action, reward, next_state, done = self.prep_sarsd_tensors(
             sarsd)
         bs = reward.shape[0]
-        tau1 = torch.rand(bs, self.nTau1, dtype=torch.float32,
+        tau1 = torch.rand(bs,
+                          self.nTau1,
+                          dtype=torch.float32,
                           device=reward.device)
         quantiles = self.model_b(state, tau=tau1)
         action_mask = F.one_hot(action[:, None],
@@ -169,7 +185,11 @@ class IQN(DQN):
 
         Gt = self.calculate_Gt_target(next_state, reward, done)  # (bs, nTau2)
         Qt = (quantiles * action_mask).sum(-1).mean(-1)  # (bs, nTau1)
-        loss, td_error = self.loss_fn(Qt, Gt, tau1)
+        loss, td_error = self.loss_fn(
+            Qt, Gt, tau1,
+            torch.from_numpy(weights).to(self.device))
+        if self.prioritized_replay:
+            self.buffer.update_priority(td_error)
         self.opt.zero_grad()
         loss.backward()
         self.opt.step()
@@ -177,12 +197,12 @@ class IQN(DQN):
         self.update_target()
         return {
             'loss': loss.detach().item(),
-            'td_error': td_error.detach().item(),
+            'td_error': td_error.mean().item(),
             'Qt': Qt.detach().mean().item(),
             'Gt': Gt.detach().mean().item()
         }
 
-    def loss_fn(self, Qt, Gt, tau):
+    def loss_fn(self, Qt, Gt, tau, weights: torch.Tensor = None):
         """
         Quantile Huber Loss
         returns:  (loss, td_error)
@@ -192,7 +212,10 @@ class IQN(DQN):
         assert Qt.shape[1:] == (self.nTau1, )
         assert Gt.shape[1:] == (self.nTau2, )
         td_error = Gt.unsqueeze(1) - Qt.unsqueeze(2)
-        assert td_error.shape[1:] == (self.nTau1, self.nTau2, )
+        assert td_error.shape[1:] == (
+            self.nTau1,
+            self.nTau2,
+        )
         huber_loss = torch.where(
             td_error.abs() <= self.k_huber, 0.5 * td_error.pow(2),
             self.k_huber * (td_error.abs() - self.k_huber / 2))
@@ -201,8 +224,12 @@ class IQN(DQN):
                                   (td_error.detach() < 0.).float()) *\
             huber_loss / self.k_huber
         assert quantile_loss.shape == huber_loss.shape
-
-        return quantile_loss.mean(-1).sum(-1).mean(), td_error.abs().mean()
+        if weights is None:
+            loss = quantile_loss.mean(-1).sum(-1)
+        else:
+            loss = quantile_loss.mean(-1).sum(-1) * weights
+        assert loss.shape == (Qt.shape[0], )
+        return loss.mean(), td_error.abs().mean(-1).mean(-1).detach()
 
 
 class IQNCURL(IQN):

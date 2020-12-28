@@ -126,8 +126,8 @@ class Conv1DLayer(nn.Module):
         self.act = ACT_FN_DICT[act_fn]()
         # self.norm = nn.BatchNorm1d(channels_out)
         # self.pool = nn.MaxPool1d(kernel, stride=stride)
-        self.pool = nn.AvgPool1d(kernel, stride=stride)
-        # self.pool = lambda x: x
+        # self.pool = nn.AvgPool1d(kernel, stride=stride)
+        self.pool = lambda x: x
         self.norm = lambda x: x
 
     def forward(self, x):
@@ -153,7 +153,7 @@ class Conv1DEncoder(nn.Module):
             strides = [1 for i in range(len(kernels))]
         assert len(kernels) == len(strides) == len(channels) == len(dilations)
         assert len(input_shape) == 2
-        window_len = input_shape[0]
+        # window_len = input_shape[0]
         input_feats = input_shape[1]
         channels = [input_feats] + channels
         layers = []

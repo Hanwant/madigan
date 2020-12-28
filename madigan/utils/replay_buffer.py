@@ -8,6 +8,7 @@ import numpy as np
 import torch
 import cpprb
 
+from .segment_tree import SumTree, MinTree
 from .data import SARSD, SARSDR, State, StateRecurrent
 
 # DQNTYPES refers to agents which share the same obs types
@@ -195,12 +196,23 @@ class ReplayBuffer:
 
     @classmethod
     def from_agent(cls, agent):
+        if agent.prioritized_replay:
+            return PrioritizedReplayBuffer(agent.replay_size,
+                                           agent.nstep_return, agent.discount,
+                                           agent.per_alpha, agent.per_beta,
+                                           agent.per_beta_steps)
         return cls(agent.replay_size, agent.nstep_return, agent.discount)
 
     @classmethod
     def from_config(cls, config):
         aconf = config.agent_config
-        return cls(aconf.replay_size, config.nstep_return, aconf.discount)
+        if aconf.prioritized_replay:
+            return PrioritizedReplayBuffer(aconf.replay_size,
+                                           aconf.nstep_return, aconf.discount,
+                                           aconf.per_alpha, aconf.per_beta,
+                                           aconf.per_beta_steps)
+
+        return cls(aconf.replay_size, aconf.nstep_return, aconf.discount)
 
     @property
     def buffer(self):
@@ -215,6 +227,8 @@ class ReplayBuffer:
             with open(loadpath, 'rb') as f:
                 loaded = pickle.load(f)
             self.__dict__ = loaded.__dict__
+            if 'cached_idxs' in self.__dict__.keys():
+                self.__dict__['cached_idxs'] = None
 
     def add(self, sarsd):
         """
@@ -230,20 +244,52 @@ class ReplayBuffer:
                 nstep_sarsd = self._nstep_buffer.pop_nstep_sarsd()
                 self._add_to_replay(nstep_sarsd)
 
-    def _add_to_replay(self, sarsd):
+    def _add_to_replay(self, nstep_sarsd: SARSD):
         """
         Adds the given sarsd (assuming adjusted for nstep returns)
         to  the replay buffer
         """
-        self._buffer[self.current_idx] = sarsd
+        self._buffer[self.current_idx] = nstep_sarsd
         self.current_idx = (self.current_idx + 1) % self.size
         if self.filled < self.size:
             self.filled += 1
 
     def sample(self, n: int):
+        """
+        Returns a tuple of sampled batch and importance sampling weights.
+        As this uniform sampling buffer doesn't provide prioritized replay,
+        weights will be None (returned to keep consistent interface)
+        """
+        idxs = self._sample_idxs(n)
+        return self._sample(idxs), None
+
+    def sample_old(self, n: int):
         if self.filled < self.size:
-            return self.batchify(sample(self._buffer[:self.filled], n))
-        return self.batchify(sample(self._buffer, n))
+            return self.batchify(sample(self._buffer[:self.filled], n)), None
+        return self.batchify(sample(self._buffer, n)), None
+
+    def _sample_idxs(self, n):
+        return np.random.randint(0, self.filled, n)
+
+    def _sample(self, idxs):
+        """ Given batch indices, returns SARSD of collated samples"""
+        state_price = np.stack([self._buffer[idx].state.price for idx in idxs])
+        state_port = np.stack(
+            [self._buffer[idx].state.portfolio for idx in idxs])
+        state_time = np.stack(
+            [self._buffer[idx].state.timestamp for idx in idxs])
+        state = State(state_price, state_port, state_time)
+        next_state_price = np.stack(
+            [self._buffer[idx].next_state.price for idx in idxs])
+        next_state_port = np.stack(
+            [self._buffer[idx].next_state.portfolio for idx in idxs])
+        next_state_time = np.stack(
+            [self._buffer[idx].next_state.timestamp for idx in idxs])
+        next_state = State(next_state_price, next_state_port, next_state_time)
+        action = np.stack([self._buffer[idx].action for idx in idxs])
+        reward = np.stack([self._buffer[idx].reward for idx in idxs])
+        done = np.stack([self._buffer[idx].done for idx in idxs])
+        return SARSD(state, action, reward, next_state, done)
 
     def batchify(self, batch: List[SARSD]):
         state_price = np.stack([s.state.price for s in batch])
@@ -284,6 +330,69 @@ class ReplayBuffer:
         return f'replay_buffer size {self.size} filled {self.filled}\n' + \
             repr(self._buffer[:1]).strip(']') + '  ...  ' + \
             repr(self._buffer[-1:]).strip('[')
+
+
+class PrioritizedReplayBuffer(ReplayBuffer):
+    def __init__(self,
+                 size,
+                 nstep_return,
+                 discount,
+                 alpha=0.6,
+                 beta=0.4,
+                 beta_steps=10**5,
+                 min_pa=0.,
+                 max_pa=1.,
+                 eps=0.01):
+        super().__init__(size, nstep_return, discount)
+        self.alpha = alpha
+        self.beta = beta
+        self.beta_diff = (1. - beta) / beta_steps
+        self.min_pa = min_pa
+        self.max_pa = max_pa
+        self.eps = eps
+        tree_size = 1
+        while tree_size < size:
+            tree_size <<= 1
+        self.tree_sum = SumTree(tree_size)
+        self.tree_min = MinTree(tree_size)
+        self.cached_idxs = None
+
+    def _add_to_replay(self, nstep_sarsd: SARSD):
+        super()._add_to_replay(nstep_sarsd)
+        self.tree_min[self.current_idx] = self.max_pa
+        self.tree_sum[self.current_idx] = self.max_pa
+
+    def sample(self, n: int):
+        assert self.cached_idxs is None, "Update priorities before sampling"
+
+        total_pa = self.tree_sum.reduce(0, self.filled)
+        rand = np.random.rand(n) * total_pa
+        self.cached_idxs = [self.tree_sum.find_prefixsum_idx(r) for r in rand]
+        self.beta = min(1., self.beta + self.beta_diff)
+
+        weight = self._calc_weight(self.cached_idxs)
+        batch = self._sample(self.cached_idxs)
+        # batch = [self._buffer[idx] for idx in self.cached_idxs]
+        return batch, weight
+
+    def _calc_weight(self, idxs: list) -> np.ndarray:
+        min_pa = self.tree_min.reduce(0, self.filled)
+        weight = [(self.tree_sum[i] / min_pa)**-self.beta for i in idxs]
+        weight = np.array(weight, dtype=np.float32)
+        return weight
+
+    def update_priority(self, td_error: torch.Tensor):
+        assert self.cached_idxs is not None, "Sample another batch before updating priorities"
+        assert len(td_error.shape) == 1
+        pa = self._calc_pa(td_error).cpu().numpy()
+        for i, idx in enumerate(self.cached_idxs):
+            self.tree_sum[idx] = pa[i]
+            self.tree_min[idx] = pa[i]
+        self.cached_idxs = None
+
+    def _calc_pa(self, td_error: torch.Tensor) -> torch.Tensor:
+        return torch.clip((td_error + self.eps)**self.alpha, self.min_pa,
+                          self.max_pa)
 
 
 class EpisodeReplayBuffer:
@@ -406,8 +515,7 @@ class EpisodeReplayBuffer:
         if self.filled < self.size:
             self.filled += 1
 
-    def make_episode_sarsd(
-            self, episode: List[SARSDR]) -> SARSDR:
+    def make_episode_sarsd(self, episode: List[SARSDR]) -> SARSDR:
         """ Called when flushing data from Episode BUffer to Main Buffer """
         state_price = np.stack([s.state.price for s in episode])
         state_port = np.stack([s.state.portfolio for s in episode])

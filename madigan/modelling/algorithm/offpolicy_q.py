@@ -22,8 +22,9 @@ class OffPolicyQ(Agent):
     """
     def __init__(self, env, preprocessor, input_shape, action_space, discount,
                  nstep_return, reward_shaper, replay_size, replay_min_size,
-                 noisy_net, eps, eps_decay, eps_min, batch_size, test_steps,
-                 unit_size, savepath):
+                 prioritized_replay, per_alpha, per_beta, per_beta_steps,
+                 noisy_net, eps, eps_decay, eps_min,
+                 batch_size, test_steps, unit_size, savepath):
         super().__init__(env, preprocessor, input_shape, action_space,
                          discount, nstep_return, reward_shaper, savepath)
         self.noisy_net = noisy_net
@@ -34,9 +35,13 @@ class OffPolicyQ(Agent):
         self.replay_size = replay_size
         self.nstep_return = nstep_return
         self.discount = discount
+        self.replay_min_size = replay_min_size
+        self.prioritized_replay = prioritized_replay
+        self.per_alpha = per_alpha
+        self.per_beta = per_beta
+        self.per_beta_steps = per_beta_steps
         self.buffer = ReplayBuffer.from_agent(self)
         self.bufferpath = self.savepath.parent / 'replay.pkl'
-        self.replay_min_size = replay_min_size
         self.batch_size = batch_size
         self.test_steps = test_steps
         self.unit_size = unit_size

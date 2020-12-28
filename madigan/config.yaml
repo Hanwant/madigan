@@ -18,13 +18,17 @@ agent_config:
   learn_entropy_temp: false
   nTau1: 32
   nTau2: 8
-  noisy_net: false
+  noisy_net: true
   noisy_net_sigma: 0.5
   nstep_return: 5
   nsteps: 1000000
+  per_alpha: 0.6
+  per_beta: 0.4
+  per_beta_steps: 100000
+  prioritized_replay: true
   proximal_portfolio_penalty: 0.5
   replay_min_size: 20000
-  replay_size: 300000
+  replay_size: 100000
   reward_clip: &id001 !!python/tuple
   - -1.0
   - 1.0
@@ -38,22 +42,22 @@ agent_type: IQN
 basepath: /media/hemu/Data/madigan/experiments/
 data_source_config:
   mean:
-#  - 10.0
-#  - 5.0
+  - 10.0
+  - 5.0
   - 1.0
   phi:
-#  - 0.04
-#  - 0.02
+  - 0.04
+  - 0.02
   - 0.01
   theta:
-#  - 0.15
-#  - 0.15
+  - 0.15
+  - 0.15
   - 0.15
 data_source_type: OU
 discrete_action_atoms: 3
 discrete_actions: true
 env_type: Synth
-experiment_id: IQN_OU_Single_Decreasing_unit.005_NoNoisy_NoReShap_Replay300_AvgPool_AdaptiveAvg
+experiment_id: IQN_OU_Triple_Decreasing_PER_Test
 init_cash: 1000000
 log_freq: 10000
 lot_unit_value: 10000

@@ -35,16 +35,18 @@ class DQN(OffPolicyQ):
     def __init__(self, env, preprocessor, input_shape: tuple,
                  action_space: ActionSpace, discount: float, nstep_return: int,
                  reward_shaper: RewardShaper, replay_size: int,
-                 replay_min_size: int, noisy_net: bool,
-                 noisy_net_sigma: float, eps: float, eps_decay: float,
-                 eps_min: float, batch_size: int, test_steps: int,
-                 unit_size: float, savepath: Union[Path, str],
+                 replay_min_size: int, prioritized_replay: bool,
+                 per_alpha: float, per_beta: float, per_beta_steps: int,
+                 noisy_net: bool, noisy_net_sigma: float, eps: float,
+                 eps_decay: float, eps_min: float, batch_size: int,
+                 test_steps: int, unit_size: float, savepath: Union[Path, str],
                  double_dqn: bool, tau_soft_update: float, model_class: str,
                  model_config: Union[dict, Config], lr: float):
         super().__init__(env, preprocessor, input_shape, action_space,
                          discount, nstep_return, reward_shaper, replay_size,
-                         replay_min_size, noisy_net, eps, eps_decay, eps_min,
-                         batch_size, test_steps, unit_size, savepath)
+                         replay_min_size, prioritized_replay, per_alpha,
+                         per_beta, per_beta_steps, noisy_net, eps, eps_decay,
+                         eps_min, batch_size, test_steps, unit_size, savepath)
 
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self._action_space = action_space
@@ -82,9 +84,10 @@ class DQN(OffPolicyQ):
         unit_size = aconf.unit_size_proportion_avM
         savepath = Path(config.basepath) / config.experiment_id / 'models'
         return cls(env, preprocessor, input_shape, action_space,
-                   aconf.discount, aconf.nstep_return,
-                   reward_shaper, aconf.replay_size,
-                   aconf.replay_min_size, aconf.noisy_net,
+                   aconf.discount, aconf.nstep_return, reward_shaper,
+                   aconf.replay_size, aconf.replay_min_size,
+                   aconf.prioritized_replay, aconf.per_alpha, aconf.per_beta,
+                   aconf.per_beta_steps, aconf.noisy_net,
                    aconf.noisy_net_sigma, aconf.eps, aconf.eps_decay,
                    aconf.eps_min, aconf.batch_size, config.test_steps,
                    unit_size, savepath, aconf.double_dqn,
@@ -206,8 +209,12 @@ class DQN(OffPolicyQ):
                                device=self.device)
         return state, action, reward, next_state, done
 
-    def loss_fn(self, Q_t, G_t):
-        return F.smooth_l1_loss(Q_t, G_t)
+    def loss_fn(self, Q_t, G_t, weights: torch.Tensor = None):
+        loss = F.smooth_l1_loss(Q_t, G_t, reduce=False)
+        assert loss.shape == (Q_t.shape[0], )
+        if weights is None:
+            return loss.mean()
+        return (loss * weights).mean()
 
     @torch.no_grad()
     def calculate_Gt_target(self, next_state, reward, done):
@@ -219,22 +226,28 @@ class DQN(OffPolicyQ):
             behaviour_actions = self.model_b(next_state).max(-1)[1]
             one_hot = F.one_hot(behaviour_actions,
                                 self.action_atoms).to(self.device)
-            greedy_qvals_next = (self.model_t(next_state) * one_hot).sum(
-                -1).mean(-1)  # pick max within assets and mean across assets
+            greedy_qvals_next = (
+                self.model_t(next_state) * one_hot).sum(-1).mean(
+                    -1)  # pick max within assets and mean across assets
         else:
             greedy_qvals_next = self.model_t(next_state).max(-1)[0].mean(
                 -1)  # pick max within assets and mean across assets
 
         assert greedy_qvals_next.shape == (reward.shape[0], )  # (bs, )
-        Gt = reward + (~done * self.discount ** self.nstep_return *
-                       greedy_qvals_next)   # (bs, )
+        Gt = reward + (~done * self.discount**self.nstep_return *
+                       greedy_qvals_next)  # (bs, )
         assert Gt.shape == (next_state.price.shape[0], )
         return Gt
 
-    def train_step(self, sarsd: SARSD = None):
+    def train_step(self, sarsd: SARSD = None, weights: np.ndarray = None):
+        """
+        Provides interface for training on externally provided sarsd samples as
+        well as importance sampling weights for prioritized experience replay.
+        """
         self.model_b.sample_noise()
         self.model_t.sample_noise()
-        sarsd = self.buffer.sample(self.batch_size) if sarsd is None else sarsd
+        sarsd, weights = self.buffer.sample(
+            self.batch_size) if sarsd is None else (sarsd, weights)
         state, action, reward, next_state, done = self.prep_sarsd_tensors(
             sarsd)
 
@@ -244,7 +257,10 @@ class DQN(OffPolicyQ):
         Gt = self.calculate_Gt_target(next_state, reward, done)
         assert Qt.shape == Gt.shape
 
-        loss = self.loss_fn(Qt, Gt)
+        td_error = (Gt - Qt).abs().detach()
+        loss = self.loss_fn(Qt, Gt, torch.from_numpy(weights).to(self.device))
+        if self.prioritized_replay:
+            self.buffer.update_priority(td_error.squeeze())
 
         self.opt.zero_grad()
         loss.backward()
@@ -253,11 +269,10 @@ class DQN(OffPolicyQ):
                                  norm_type=2)
         self.opt.step()
 
-        td_error = (Gt - Qt).abs().mean().detach().item()
         self.update_target()
         return {
             'loss': loss.detach().item(),
-            'td_error': td_error,
+            'td_error': td_error.mean().item(),
             'Qt': Qt.detach().mean().item(),
             'Gt': Gt.detach().mean().item()
         }
@@ -346,7 +361,7 @@ class DQNAE(DQN):
         sarsd = sarsd or self.buffer.sample(self.batch_size)
         state = self.prep_state_tensors(sarsd.state, batch=True)
         # contrastive unsupervised objective
-        loss_ae = self.ae_temp*self.model_b.reconstruction_loss(state)
+        loss_ae = self.ae_temp * self.model_b.reconstruction_loss(state)
         self.ae_opt.zero_grad()
         loss_ae.backward()
         self.ae_opt.step()
@@ -369,14 +384,12 @@ class DQNAE(DQN):
         savepath = Path(config.basepath) / config.experiment_id / 'models'
         return cls(env, preprocessor, input_shape, action_space,
                    aconf.discount, aconf.nstep_return, reward_shaper,
-                   aconf.replay_size, aconf.replay_min_size,
-                   aconf.noisy_net,  aconf.noisy_net_sigma,
-                   aconf.eps, aconf.eps_decay,
+                   aconf.replay_size, aconf.replay_min_size, aconf.noisy_net,
+                   aconf.noisy_net_sigma, aconf.eps, aconf.eps_decay,
                    aconf.eps_min, aconf.batch_size, config.test_steps,
                    unit_size, savepath, aconf.double_dqn,
                    aconf.tau_soft_update, config.model_config.model_class,
-                   config.model_config, config.optim_config.lr,
-                   aconf.ae_temp)
+                   config.model_config, config.optim_config.lr, aconf.ae_temp)
 
 
 class DQNCURL(DQN):

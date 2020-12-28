@@ -2,7 +2,6 @@ from typing import List
 from pathlib import Path
 import json
 import yaml
-import numpy as np
 
 
 class Config(dict):
@@ -125,6 +124,9 @@ def make_config(
         replay_min_size: int = 50_000,  # Min size before training
         episode_length: int = 1024,
         nstep_return: int = 3,  # Agent/Model spec
+        prioritized_replay: bool = False,
+        per_alpha: float = 0.6,
+        per_beta : float = 0.4,
 
         # Training ############################################################
         nsteps: int = 100000,  # number_of_training_steps to run for
@@ -227,6 +229,9 @@ def make_config(
         'replay_size': replay_size,
         'episode_length': episode_length,
         'replay_min_size': replay_min_size,
+        'prioritized_replay': prioritized_replay,
+        'per_alpha': per_alpha,
+        'per_beta': per_beta,
         'train_freq': train_freq,
         'target_update_freq': target_update_freq,
         'batch_size': batch_size,
