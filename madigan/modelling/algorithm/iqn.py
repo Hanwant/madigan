@@ -185,11 +185,13 @@ class IQN(DQN):
 
         Gt = self.calculate_Gt_target(next_state, reward, done)  # (bs, nTau2)
         Qt = (quantiles * action_mask).sum(-1).mean(-1)  # (bs, nTau1)
-        loss, td_error = self.loss_fn(
-            Qt, Gt, tau1,
-            torch.from_numpy(weights).to(self.device))
         if self.prioritized_replay:
+            weights = torch.from_numpy(weights).to(self.device)
+            loss, td_error = self.loss_fn(Qt, Gt, tau1, weights)
             self.buffer.update_priority(td_error)
+        else:
+            loss, td_error = self.loss_fn(Qt, Gt, tau1, None)
+
         self.opt.zero_grad()
         loss.backward()
         self.opt.step()

@@ -166,12 +166,18 @@ class DQN(OffPolicyQ):
         return transactions
 
     @torch.no_grad()
-    def get_action(self, state, target=False, device=None):
+    def get_action(self,
+                   state: State,
+                   qvals: torch.Tensor = None,
+                   target=False,
+                   device=None):
         """
         External interface - for inference and env interaction
         takes in numpy arrays and returns greedy actions
         """
-        qvals = self.get_qvals(state, target=target, device=device)
+        assert state is not None or qvals is not None
+        if qvals is None:
+            qvals = self.get_qvals(state, target=target, device=device)
         actions = qvals.max(-1)[1].squeeze(0)  # (self.n_assets, )
         return actions
 
@@ -258,10 +264,10 @@ class DQN(OffPolicyQ):
         assert Qt.shape == Gt.shape
 
         td_error = (Gt - Qt).abs().detach()
-        loss = self.loss_fn(Qt, Gt, torch.from_numpy(weights).to(self.device))
         if self.prioritized_replay:
             self.buffer.update_priority(td_error.squeeze())
-
+            weights = torch.from_numpy(weights).to(self.device)
+        loss = self.loss_fn(Qt, Gt, weights)
         self.opt.zero_grad()
         loss.backward()
         nn.utils.clip_grad_norm_(self.model_b.parameters(),
@@ -336,29 +342,18 @@ class DQNAE(DQN):
     This agent just wraps the DQN class to include the AE objective
     along with the normal train step.
     """
-    def __init__(self, env, preprocessor, input_shape: tuple,
-                 action_space: ActionSpace, discount: float, nstep_return: int,
-                 replay_size: int, replay_min_size: int, noisy_net: bool,
-                 noisy_net_sigma: float, eps: float, eps_decay: float,
-                 eps_min: float, batch_size: int, test_steps: int,
-                 unit_size: float, savepath: Union[Path, str],
-                 double_dqn: bool, tau_soft_update: float, model_class: str,
-                 model_config: Union[dict, Config], lr: float, ae_temp: float):
-        super().__init__(env, preprocessor, input_shape, action_space,
-                         discount, nstep_return, replay_size, replay_min_size,
-                         noisy_net, noisy_net_sigma, eps, eps_decay, eps_min,
-                         batch_size, test_steps, unit_size, savepath,
-                         double_dqn, tau_soft_update, model_class,
-                         model_config, lr)
+    def __init__(self, ae_temp: float, *args, **kw):
+        super().__init__(*args, **kw)
         self.ae_opt = torch.optim.Adam(self.model_b.parameters(),
                                        lr=self.opt.param_groups[0]['lr'])
         self.ae_temp = ae_temp
 
-    def train_step(self, sarsd: SARSD = None):
+    def train_step(self, sarsd: SARSD = None, weights: torch.Tensor = None):
         """
         wraps train_step() of DQN to include the AE objective
         """
-        sarsd = sarsd or self.buffer.sample(self.batch_size)
+        sarsd, weights = sarsd, weights if sarsd is not None else self.buffer.sample(
+            self.batch_size)
         state = self.prep_state_tensors(sarsd.state, batch=True)
         # contrastive unsupervised objective
         loss_ae = self.ae_temp * self.model_b.reconstruction_loss(state)
@@ -368,7 +363,7 @@ class DQNAE(DQN):
         # do normal rl training objective and add 'loss_curl' to output dict
         return {
             'loss_ae': loss_ae.detach().item(),
-            **super().train_step(sarsd)
+            **super().train_step(sarsd, weights)
         }
 
     @classmethod
@@ -382,14 +377,14 @@ class DQNAE(DQN):
         aconf = config.agent_config
         unit_size = aconf.unit_size_proportion_avM
         savepath = Path(config.basepath) / config.experiment_id / 'models'
-        return cls(env, preprocessor, input_shape, action_space,
+        return cls(aconf.ae_temp, env, preprocessor, input_shape, action_space,
                    aconf.discount, aconf.nstep_return, reward_shaper,
                    aconf.replay_size, aconf.replay_min_size, aconf.noisy_net,
                    aconf.noisy_net_sigma, aconf.eps, aconf.eps_decay,
                    aconf.eps_min, aconf.batch_size, config.test_steps,
                    unit_size, savepath, aconf.double_dqn,
                    aconf.tau_soft_update, config.model_config.model_class,
-                   config.model_config, config.optim_config.lr, aconf.ae_temp)
+                   config.model_config, config.optim_config.lr)
 
 
 class DQNCURL(DQN):

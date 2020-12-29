@@ -16,8 +16,9 @@ import pyqtgraph as pg
 ############# Factory Methods #################################################
 ###############################################################################
 def make_train_plots(agent_type, title=None, **kw):
-    if agent_type in ("DQN", "DQNCURL", "DQNReverser", "DQNReverserCURL",
-                      "IQN", "IQNCURL", "IQNReverser", "IQNReverserCURL",
+    if agent_type in ("DQN", "DQNCURL", "DQNReverser", "DQNController",
+                      "DQNRecurrent",
+                      "IQN", "IQNCURL", "IQNReverser", "IQNController",
                       "DQNAE"):
         return TrainPlotsDQN(title=title, **kw)
     if agent_type in ("DDPG", "DDPGDiscretized"):
@@ -30,8 +31,9 @@ def make_train_plots(agent_type, title=None, **kw):
 
 
 def make_test_episode_plots(agent_type, title=None, **kw):
-    if agent_type in ("DQN", "DQNCURL", "DQNReverser", "DQNReverserCURL",
-                      "IQN", "IQNCURL", "IQNReverser", "IQNReverserCURL",
+    if agent_type in ("DQN", "DQNCURL", "DQNReverser", "DQNController",
+                      "DQNRecurrent",
+                      "IQN", "IQNCURL", "IQNReverser", "IQNController",
                       "DQNAE"):
         return TestEpisodePlotsDQN(title=title, **kw)
     if agent_type in ("DDPG", "DDPGDiscretized"):
@@ -44,8 +46,9 @@ def make_test_episode_plots(agent_type, title=None, **kw):
 
 
 def make_test_history_plots(agent_type, title=None, **kw):
-    if agent_type in ("DQN", "DQNCURL", "DQNReverser", "DQNReverserCURL",
-                      "IQN", "IQNCURL", "IQNReverser", "IQNReverserCURL",
+    if agent_type in ("DQN", "DQNCURL", "DQNReverser", "DQNController",
+                      "DQNRecurrent",
+                      "IQN", "IQNCURL", "IQNReverser", "IQNController",
                       "DQNAE"):
         return TestHistoryPlotsDQN(title=title, **kw)
     if agent_type in ("DDPG", "DDPGDiscretized"):

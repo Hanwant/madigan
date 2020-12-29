@@ -11,7 +11,7 @@ from .base import Agent
 from ...environments import get_env_info
 from ...utils.replay_buffer import ReplayBuffer, EpisodeReplayBuffer
 # from ...utils.replay_buffer import ReplayBufferC as ReplayBuffer
-from ...utils.data import SARSD, State
+from ...utils.data import SARSD, State, SARSDR, StateRecurrent
 from ...utils.metrics import list_2_dict
 from ...utils import DiscreteRangeSpace
 
@@ -23,8 +23,8 @@ class OffPolicyQ(Agent):
     def __init__(self, env, preprocessor, input_shape, action_space, discount,
                  nstep_return, reward_shaper, replay_size, replay_min_size,
                  prioritized_replay, per_alpha, per_beta, per_beta_steps,
-                 noisy_net, eps, eps_decay, eps_min,
-                 batch_size, test_steps, unit_size, savepath):
+                 noisy_net, eps, eps_decay, eps_min, batch_size, test_steps,
+                 unit_size, savepath):
         super().__init__(env, preprocessor, input_shape, action_space,
                          discount, nstep_return, reward_shaper, savepath)
         self.noisy_net = noisy_net
@@ -66,7 +66,11 @@ class OffPolicyQ(Agent):
         pass
 
     @abstractmethod
-    def get_action(self, state, target=False):
+    def get_action(self,
+                   state: State = None,
+                   qvals: torch.Tensor = None,
+                   hidden=None,
+                   target=False):
         pass
 
     @abstractmethod
@@ -205,8 +209,10 @@ class OffPolicyQ(Agent):
         i = 0
         while i <= test_steps:
             _tst_metrics = {}
-            qvals = self.get_qvals(state, target=target)[0].cpu().numpy()
-            action = self.get_action(state, target=target).cpu().numpy()
+            qvals, hidden = self.get_qvals(state,
+                                           target=target)[0].cpu().numpy()
+            action = self.get_action(qvals=qvals, hidden=hidden,
+                                     target=target).cpu().numpy()
             transaction = self.action_to_transaction(action)
             state, reward, done, info = self._env.step(transaction)
             self._preprocessor.stream_state(state)
@@ -230,6 +236,8 @@ class OffPolicyQRecurrent(Agent):
     """
     def __init__(self, env, preprocessor, input_shape, action_space, discount,
                  nstep_return, reward_shaper, replay_size, replay_min_size,
+                 prioritized_replay, per_alpha, per_beta, per_beta_steps,
+                 episode_len, burn_in_steps, episode_overlap, store_hidden,
                  noisy_net, eps, eps_decay, eps_min, batch_size, test_steps,
                  unit_size, savepath):
         super().__init__(env, preprocessor, input_shape, action_space,
@@ -240,11 +248,19 @@ class OffPolicyQRecurrent(Agent):
                              eps_decay)  # to make sure we use 0.99999 not 1e-5
         self.eps_min = eps_min
         self.replay_size = replay_size
+        self.replay_min_size = replay_min_size
+        self.prioritized_replay = prioritized_replay
+        self.per_alpha = per_alpha
+        self.per_beta = per_beta
+        self.per_beta_steps = per_beta_steps
+        self.episode_len = episode_len
+        self.burn_in_steps = burn_in_steps
+        self.episode_overlap = episode_overlap
+        self.store_hidden = store_hidden
         self.nstep_return = nstep_return
         self.discount = discount
         self.buffer = EpisodeReplayBuffer.from_agent(self)
         self.bufferpath = self.savepath.parent / 'replay.pkl'
-        self.replay_min_size = replay_min_size
         self.batch_size = batch_size
         self.test_steps = test_steps
         self.unit_size = unit_size
@@ -264,48 +280,64 @@ class OffPolicyQRecurrent(Agent):
             with open(self.bufferpath, 'rb') as f:
                 self.buffer = pickle.load(f)
 
+    def initialize_buffer(self):
+        if self.bufferpath.is_file():
+            self.load_buffer()
+        if len(self.buffer) < self.replay_min_size:
+            steps = self.replay_min_size - len(self.buffer)
+            self.step(steps)
+
     @abstractmethod
-    def get_qvals(self,
-                  state: State,
-                  prev_action: torch.Tensor,
-                  prev_reward: float,
-                  target: bool = False):
+    def get_qvals(self, state: StateRecurrent, target: bool = False) -> Tuple:
         pass
 
     @abstractmethod
     def get_action(self,
-                   state: State,
-                   prev_action: torch.Tensor,
-                   prev_reward: float,
-                   target: bool = False):
+                   state: StateRecurrent = None,
+                   qvals: torch.Tensor = None,
+                   target: bool = False) -> Tuple:
         pass
 
-    def explore(self, state: State, prev_action: torch.Tensor,
-                prev_reward: float) -> Tuple[np.ndarray, np.ndarray]:
+    def explore(self, state: StateRecurrent) -> Tuple[np.ndarray, np.ndarray]:
         if self.noisy_net:
-            action = self.get_action(state,
-                                     prev_action,
-                                     prev_reward,
-                                     target=False).cpu().numpy()
+            action, hidden = self.get_action(state, target=False)
+            action = action.cpu().numpy()[0]
         else:
             if random() < self.eps:
-                action = self.get_action(state,
-                                         prev_action,
-                                         prev_reward,
-                                         target=False).cpu().numpy()
+                action, hidden = self.get_action(state, target=False)
+                action = action.cpu().numpy()[0]
             else:
+                _, hidden = self.get_qvals(state, target=False)
                 action = self.action_space.sample()
             self.eps = max(self.eps_min, self.eps * self.eps_decay)
-        return action, self.action_to_transaction(action)
+        return action, self.action_to_transaction(action), hidden
+
+    def make_recurrent_state(self, state, prev_action, prev_reward, hidden):
+        """
+        For converting the state received from the env to StateRecurrent
+        """
+        return StateRecurrent(state.price, state.portfolio, state.timestamp,
+                              prev_action, prev_reward, hidden)
+
+    def reset_state(self) -> State:
+        state = self._env.reset()
+        self._preprocessor.reset_state()
+        self._preprocessor.stream_state(state)
+        self._preprocessor.initialize_history(self._env)
+        self.reward_shaper.reset()
+        state = self._preprocessor.current_data()
+        action = torch.zeros_like(torch.from_numpy(self.action_space.sample()))
+        state = self.make_recurrent_state(state, action, 0., None)
+        return state
 
     def step(self, n, reset: bool = True, log_freq: int = None):
         """
         Performs n steps of interaction with the environment
-        Accumulates experiences inside self.buffer (replay buffer for offpolicy)
+        Accumulates experiences into memory (replay buffer for offpolicy)
         performs train_step when conditions are met (replay_min_size)
         @params:
             n: int = number of training steps
-            reset: bool = whether to reset environment before commencing training
+            reset: bool = whether to reset environment before starting training
             log_freq: int = frequency with which to yield results to caller.
         yields:
             train_metrics: dict
@@ -323,25 +355,31 @@ class OffPolicyQRecurrent(Agent):
         max_steps = self.training_steps + n
         reward = 0.
         action = torch.zeros_like(torch.from_numpy(self.action_space.sample()))
+        hidden = None
+        state = self.make_recurrent_state(state, action, reward, hidden)
         while True:
             self.model_b.sample_noise()
 
-            action, transaction = self.explore(state, action, reward)
+            action, transaction, hidden = self.explore(state)
             _next_state, reward, done, info = self._env.step(transaction)
             reward = self.reward_shaper.stream(reward)
             self._preprocessor.stream_state(_next_state)
             next_state = self._preprocessor.current_data()
+            next_state = self.make_recurrent_state(next_state, action, reward,
+                                                   hidden)
 
             running_cost += np.sum(info.brokerResponse.transactionCost)
             running_reward += reward
             if done:
                 reward = -.1
-            sarsd = SARSD(state, action, reward, next_state, done)
+            sarsd = SARSDR(state, action, reward, next_state, done)
             self.buffer.add(sarsd)
 
             if done:
                 self.reset_state()
                 state = self._preprocessor.current_data()
+                state = self.make_recurrent_state(state, action, reward,
+                                                  hidden)
                 running_reward = 0.
             else:
                 state = next_state
@@ -362,3 +400,42 @@ class OffPolicyQRecurrent(Agent):
                     break
 
             self.env_steps += 1
+
+    @torch.no_grad()
+    def test_episode(self, test_steps=None, reset=True, target=True) -> dict:
+        test_steps = test_steps or self.test_steps
+        if reset:
+            self.reset_state()
+        self._preprocessor.initialize_history(
+            self.env)  # probably already initialized
+        action = torch.zeros_like(torch.from_numpy(self.action_space.sample()))
+        reward = 0.
+        hidden = None
+        state = self._preprocessor.current_data()
+        state = self.make_recurrent_state(state, action, reward, hidden)
+        tst_metrics = []
+        i = 0
+        while i <= test_steps:
+            _tst_metrics = {}
+            qvals, hidden = self.get_qvals(state, target=target)
+            action, _ = self.get_action(qvals=qvals,
+                                        hidden=hidden,
+                                        target=target)
+            action = action.cpu().numpy()[0]
+            transaction = self.action_to_transaction(action)
+            state, reward, done, info = self._env.step(transaction)
+            self._preprocessor.stream_state(state)
+            state = self._preprocessor.current_data()
+            state = self.make_recurrent_state(state, action, reward, hidden)
+            _tst_metrics['qvals'] = qvals.cpu().numpy()
+            _tst_metrics['action'] = action
+            _tst_metrics['reward'] = reward
+            _tst_metrics['transaction'] = info.brokerResponse.transactionUnits
+            _tst_metrics[
+                'transaction_cost'] = info.brokerResponse.transactionCost
+            # _tst_metrics['info'] = info
+            tst_metrics.append({**_tst_metrics, **get_env_info(self._env)})
+            if done:
+                break
+            i += 1
+        return list_2_dict(tst_metrics)

@@ -190,7 +190,7 @@ def make_config(
         optim_wd=0,  # parameter for torch.optim
 ):
     assert experiment_id != "", "must specify experiment id"
-    assert assets is not None, "Must specify list of asset names/codes"
+    # assert assets is not None, "Must specify list of asset names/codes"
     model_config = {
         'model_class': model_class,
         'critic_model_class': critic_model_class,
@@ -277,7 +277,7 @@ def make_config(
         maintenance_margin=maintenance_margin,
         assets=assets,
         lot_unit_value=lot_unit_value,
-        n_assets=len(assets),
+        # n_assets=len(assets),
         discrete_actions=discrete_actions,
         discrete_action_atoms=discrete_action_atoms,
         data_source_type=data_source_type,

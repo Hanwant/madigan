@@ -4,6 +4,7 @@ from .conv_net_ddpg import ConvPolicyDeterministic as ConvPolicy_DDPG
 from .conv_net_sac import ConvPolicySACD, TwinQNetwork
 from .series_net import SeriesNetQ
 from .conv_net_iqn import ConvNetIQN
+from .lstm_net import LSTMNet
 
 def get_model_class(agent_type, model_type):
     """
@@ -19,12 +20,15 @@ def get_model_class(agent_type, model_type):
     """
     model_na = NotImplementedError(f"{model_type} not Implemented" +
                                    f"for agent {agent_type}")
-    if agent_type in ("DQN", "DQNReverser"):
+    if agent_type in ("DQN", "DQNReverser", "DQNController"):
         if model_type in ("ConvNet", "ConvNetQ"):
             return ConvNet
         if model_type in ("SeriesNet", "SeriesNetQ"):
             return SeriesNetQ
         raise model_na
+    if agent_type in ("DQNRecurrent", ):
+        if model_type in ("LSTM", "LSTMNet"):
+            return LSTMNet
     if agent_type in ("DQNAE", ):
         if model_type in ("ConvNet", "ConvNetQ", "ConvNetAE"):
             return ConvNetAE
@@ -32,7 +36,7 @@ def get_model_class(agent_type, model_type):
         if model_type in ("ConvNet", "ConvNetQ", "ConvNetCURL",
                           "ConvNetCurl"):
             return ConvNetCurl
-    if agent_type in ("IQN", "IQNReverser"):
+    if agent_type in ("IQN", "IQNReverser", "IQNController"):
         if model_type in ("ConvNet", "ConvNetIQN"):
             return ConvNetIQN
         raise model_na

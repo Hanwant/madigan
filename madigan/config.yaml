@@ -1,13 +1,17 @@
 agent_config:
   action_atoms: 3
   ae_temp: 0.5
-  batch_size: 34
+  batch_size: 2
+  controller_action_repeats: 64
   discount: 0.999
   discrete_action_atoms: 3
   double_dqn: true
   dueling: true
   entropy_temp: 0.2
-  episode_length: 1024
+  episode_length: 80
+  episode_overlap: 40
+  burn_in_steps: 40
+  store_hidden: true
   eps: 1.0
   eps_decay: 0.999999
   eps_min: 0.1
@@ -25,10 +29,10 @@ agent_config:
   per_alpha: 0.6
   per_beta: 0.4
   per_beta_steps: 100000
-  prioritized_replay: true
+  prioritized_replay: false
   proximal_portfolio_penalty: 0.5
-  replay_min_size: 20000
-  replay_size: 100000
+  replay_min_size: 100
+  replay_size: 5000
   reward_clip: &id001 !!python/tuple
   - -1.0
   - 1.0
@@ -38,26 +42,71 @@ agent_config:
   train_freq: 4
   transaction_thresh: 0.02
   unit_size_proportion_avM: 0.005
-agent_type: IQN
+agent_configs:
+  A: /home/hemu/madigan/experiments/IQN_OU_Triple_Decreasing_unit.005_Noisy_NoReShap_Replay300_NoPool_AdaptiveAvg/config.yaml
+  B: /home/hemu/madigan/experiments/IQN_OU_Triple_Decreasing_PER_Test/config.yaml
+agent_type: DQNRecurrent
 basepath: /media/hemu/Data/madigan/experiments/
 data_source_config:
-  mean:
-  - 10.0
-  - 5.0
-  - 1.0
-  phi:
-  - 0.04
-  - 0.02
-  - 0.01
-  theta:
-  - 0.15
-  - 0.15
-  - 0.15
-data_source_type: OU
+  OU: 
+    data_source_config:
+      mean:
+      - 10.0
+      - 5.0
+      phi:
+      - 0.04
+      - 0.02
+      theta:
+      - 0.15
+      - 0.15
+    data_source_type: OU
+  SineDynamicTrend:
+    data_source_config:
+      ampRange:
+      - - .02
+        - .1
+        - 0.001
+      - - .03
+        - .09
+        - .001
+      - - 0.2
+        - 0.8
+        - 0.01
+      dX: 0.01
+      freqRange:
+      - - 1
+        - 4
+        - .01
+      - - .01
+        - .02
+        - .001
+      - - .05
+        - .5
+        - .01
+      muRange:
+      - - .2
+        - 1.0
+        - .01
+      - - .4
+        - .8
+        - .01
+      - - .3
+        - .5
+        - .01
+      trendRange:
+      - - 200
+        - 800
+      trendIncr:
+      - .002
+      trendProb:
+      - .001
+      noise: .0
+    data_source_type: SineDynamicTrend
+data_source_type: Composite
 discrete_action_atoms: 3
 discrete_actions: true
 env_type: Synth
-experiment_id: IQN_OU_Triple_Decreasing_PER_Test
+experiment_id: DQNRecurrent_Comp_OU_SNDT
 init_cash: 1000000
 log_freq: 10000
 lot_unit_value: 10000
@@ -88,7 +137,7 @@ model_config:
   - 5
   lot_unit_value: 10000
   min_tf: 64
-  model_class: ConvNet
+  model_class: LSTM
   nTau1: 32
   nTau2: 8
   n_layers: 4

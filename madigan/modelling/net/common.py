@@ -18,7 +18,7 @@ class PortEmbed(nn.Module):
     def forward(self, raw_port):
         return self.embed(raw_port)
 
-class NormalHeadDQN(nn.Module):
+class NormalHead(nn.Module):
     def __init__(self, d_model, output_shape, noisy_net: bool = False,
                  noisy_net_sigma: float = 0.5):
         super().__init__()
@@ -33,7 +33,7 @@ class NormalHeadDQN(nn.Module):
                                          self.n_assets, self.action_atoms)
         return qvals
 
-class DuelingHeadDQN(nn.Module):
+class DuelingHead(nn.Module):
     def __init__(self, d_model, output_shape, noisy_net: bool = False,
                  noisy_net_sigma: float = 0.5):
         super().__init__()
@@ -55,6 +55,9 @@ class DuelingHeadDQN(nn.Module):
         adv = self.adv_net(state_emb)
         qvals = value + adv - adv.mean(-1, keepdim=True)
         return qvals.view(bs, self.n_assets, self.action_atoms)
+
+NormalHeadDQN = NormalHead
+DuelingHeadDQN = DuelingHead
 
 class NoisyLinear(nn.Module):
     """
