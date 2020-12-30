@@ -578,7 +578,7 @@ class EpisodeReplayBuffer:
         else:
             state_hidden = None
         state = StateRecurrent(state_price, state_port, state_time,
-                               state_action, state_reward, state_hidden)
+                            state_action, state_reward, state_hidden)
         next_state_price = np.stack(
             [self.buffer[idx].next_state.price for idx in idxs])
         next_state_port = np.stack(

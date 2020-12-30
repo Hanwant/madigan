@@ -124,6 +124,11 @@ class DQNRecurrent(OffPolicyQRecurrent):
         self.model_b.eval()
         self.model_t.eval()
 
+    def get_default_hidden(self, batch_size):
+        return tuple(
+            h.to(self.device)
+            for h in self.model_b.get_default_hidden(batch_size))
+
     @torch.no_grad()
     def get_qvals(self,
                   state: StateRecurrent,

@@ -298,6 +298,10 @@ class OffPolicyQRecurrent(Agent):
                    target: bool = False) -> Tuple:
         pass
 
+    @abstractmethod
+    def get_default_hidden(self, batch_size):
+        pass
+
     def explore(self, state: StateRecurrent) -> Tuple[np.ndarray, np.ndarray]:
         if self.noisy_net:
             action, hidden = self.get_action(state, target=False)
@@ -327,7 +331,8 @@ class OffPolicyQRecurrent(Agent):
         self.reward_shaper.reset()
         state = self._preprocessor.current_data()
         action = torch.zeros_like(torch.from_numpy(self.action_space.sample()))
-        state = self.make_recurrent_state(state, action, 0., None)
+        state = self.make_recurrent_state(state, action, 0.,
+                                          self.get_default_hidden(1))
         return state
 
     def step(self, n, reset: bool = True, log_freq: int = None):
@@ -355,7 +360,7 @@ class OffPolicyQRecurrent(Agent):
         max_steps = self.training_steps + n
         reward = 0.
         action = torch.zeros_like(torch.from_numpy(self.action_space.sample()))
-        hidden = None
+        hidden = self.get_default_hidden(1)
         state = self.make_recurrent_state(state, action, reward, hidden)
         while True:
             self.model_b.sample_noise()
@@ -410,7 +415,7 @@ class OffPolicyQRecurrent(Agent):
             self.env)  # probably already initialized
         action = torch.zeros_like(torch.from_numpy(self.action_space.sample()))
         reward = 0.
-        hidden = None
+        hidden = self.get_default_hidden(1)
         state = self._preprocessor.current_data()
         state = self.make_recurrent_state(state, action, reward, hidden)
         tst_metrics = []

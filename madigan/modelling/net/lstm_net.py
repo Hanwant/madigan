@@ -113,7 +113,7 @@ class LSTMStateEncoder(nn.Module):
         x = conv_emb * x
         x = self.act_fn(x)
         state_emb, (hn, cn) = self.layers(x, state.hidden)
-        return state_emb, (hn, cn)
+        return state_emb, (hn.detach(), cn.detach())
 
 
 class LSTMNet(QNetworkBase):
@@ -192,7 +192,8 @@ class LSTMNet(QNetworkBase):
                                           noisy_net_sigma)
 
     def get_default_hidden(self, batch_size):
-        return torch.zeros(batch_size, self.n_layers, self.d_model)
+        return tuple(torch.zeros(self.n_layers, batch_size, self.d_model)
+                     for _ in range(2))
 
     def get_state_emb(self, state: StateRecurrent) -> torch.Tensor:
         """

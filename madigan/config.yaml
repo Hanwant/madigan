@@ -1,7 +1,7 @@
 agent_config:
   action_atoms: 3
   ae_temp: 0.5
-  batch_size: 2
+  batch_size: 1
   controller_action_repeats: 64
   discount: 0.999
   discrete_action_atoms: 3
@@ -31,8 +31,8 @@ agent_config:
   per_beta_steps: 100000
   prioritized_replay: false
   proximal_portfolio_penalty: 0.5
-  replay_min_size: 100
-  replay_size: 5000
+  replay_min_size: 1000
+  replay_size: 50000
   reward_clip: &id001 !!python/tuple
   - -1.0
   - 1.0
@@ -106,7 +106,7 @@ data_source_type: Composite
 discrete_action_atoms: 3
 discrete_actions: true
 env_type: Synth
-experiment_id: DQNRecurrent_Comp_OU_SNDT
+experiment_id: DQNRecurrent_Comp_OU_SNDT_replay50k
 init_cash: 1000000
 log_freq: 10000
 lot_unit_value: 10000
