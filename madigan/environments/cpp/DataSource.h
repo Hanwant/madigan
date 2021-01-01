@@ -437,6 +437,34 @@ namespace madigan{
     PriceVector currentData_;
   };
 
+  class OUPair: public DataSourceTick{
+  public:
+    OUPair();
+    OUPair(double theta, double phi);
+    OUPair(Config config);
+    OUPair(pybind11::dict config);
+    ~OUPair(){}
+    const PriceVector& getData();
+    const pybind11::array_t<double> getData_np() ;
+    const PriceVector& currentData() const{ return currentData_;}
+    const PriceVector& currentPrices() const{ return currentData_;}
+    void reset();
+    std::size_t currentTime() const { return timestamp_; }
+
+  protected:
+    virtual void initParams(double theta, double phi);
+
+  protected:
+    const double dT{1.};
+    double theta;
+    double phi;
+    double mean;
+    std::size_t timestamp_;
+    std::default_random_engine generator;
+    std::normal_distribution<double> noiseDistribution;
+    PriceVector currentData_;
+  };
+
   class SimpleTrend: public DataSourceTick{
   public:
     SimpleTrend();

@@ -120,6 +120,14 @@ class DQN(OffPolicyQ):
         self.model_b.eval()
         self.model_t.eval()
 
+    @property
+    def action_space(self) -> np.ndarray:
+        """
+        Action space object which can be sampled from
+        outputs transaction units
+        """
+        return self._action_space
+
     @torch.no_grad()
     def get_qvals(self, state, target=False, device=None):
         """
@@ -133,16 +141,22 @@ class DQN(OffPolicyQ):
             return self.model_t(state)
         return self.model_b(state)
 
-    @property
-    def action_space(self) -> np.ndarray:
+    @torch.no_grad()
+    def get_action(self,
+                   state: State = None,
+                   qvals: torch.Tensor = None,
+                   target=False,
+                   device=None):
         """
-        Action space object which can be sampled from
-        outputs transaction units
+        External interface - for inference and env interaction
+        takes in numpy arrays and returns greedy actions
         """
-        # units = self.unit_size * self.env.availableMargin \
-        #     / self.env.currentPrices
-        # self._action_space.action_multiplier = units
-        return self._action_space
+        assert state is not None or qvals is not None
+        if qvals is None:
+            qvals = self.get_qvals(state, target=target, device=device)
+        actions = qvals.max(-1)[1].squeeze(0)  # (self.n_assets, )
+        return actions
+
 
     def action_to_transaction(
             self, actions: Union[torch.Tensor, np.ndarray]) -> np.ndarray:
@@ -164,22 +178,6 @@ class DQN(OffPolicyQ):
                 else:
                     transactions[i] = 0.
         return transactions
-
-    @torch.no_grad()
-    def get_action(self,
-                   state: State,
-                   qvals: torch.Tensor = None,
-                   target=False,
-                   device=None):
-        """
-        External interface - for inference and env interaction
-        takes in numpy arrays and returns greedy actions
-        """
-        assert state is not None or qvals is not None
-        if qvals is None:
-            qvals = self.get_qvals(state, target=target, device=device)
-        actions = qvals.max(-1)[1].squeeze(0)  # (self.n_assets, )
-        return actions
 
     def __call__(self,
                  state: State,

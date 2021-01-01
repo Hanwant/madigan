@@ -22,7 +22,7 @@ class IQN(DQN):
     The Agent instance can be called directly to get an action based on a state:
         action = dqn(state)
     or:
-        action = dqn.get_action(state)
+        action = agent.get_action(state)
     use dqn.step(n) to step through n environment interactions
     The method for training a single batch is self.train_step(sarsd) where sarsd is a class with ndarray members (I.e of shape (bs, time, feats))
     """

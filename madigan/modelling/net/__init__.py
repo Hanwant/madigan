@@ -18,7 +18,7 @@ def get_model_class(agent_type, model_type):
         model_type = ConvNet
     returns ConvNetIQN
     """
-    model_na = NotImplementedError(f"{model_type} not Implemented" +
+    model_na = NotImplementedError(f"{model_type} not Implemented " +
                                    f"for agent {agent_type}")
     if agent_type in ("DQN", "DQNReverser", "DQNController"):
         if model_type in ("ConvNet", "ConvNetQ"):

@@ -28,6 +28,7 @@ namespace madigan{
   Config makeSineDynamicTrendConfigFromPyDict(pybind11::dict datasource_pydict);
   Config makeGaussianConfigFromPyDict(pybind11::dict datasource_pydict);
   Config makeOUConfigFromPyDict(pybind11::dict datasource_pydict);
+  Config makeOUPairConfigFromPyDict(pybind11::dict datasource_pydict);
   Config makeSimpleTrendConfigFromPyDict(pybind11::dict datasource_pydict);
   Config makeTrendOUConfigFromPyDict(pybind11::dict datasource_pydict, string dataSourceType);
   Config makeHDFSourceConfigFromPyDict(pybind11::dict datasource_pydict);

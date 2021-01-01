@@ -78,6 +78,19 @@ namespace madigan {
           throw ConfigError("config for DataSource type OU needs data_source_config");
         }
       }
+      else if ( dataSourceType == "OUPair"){
+        auto datasource_pydictFound=std::find_if(dict.begin(), dict.end(),
+                                                 [](const std::pair<pybind11::handle, pybind11::handle>& pair){
+                                                   return string(pybind11::str(pair.first)) == "data_source_config";
+                                                 });
+        if (datasource_pydictFound != dict.end()){
+          pybind11::dict datasource_pydict = dict[pybind11::str("data_source_config")];
+          config = makeOUPairConfigFromPyDict(datasource_pydict);
+        }
+        else{
+          throw ConfigError("config for DataSource type OUPair needs data_source_config");
+        }
+      }
       else if ( dataSourceType == "SimpleTrend"){
         auto datasource_pydictFound=std::find_if(dict.begin(), dict.end(),
                                          [](const std::pair<pybind11::handle, pybind11::handle>& pair){
@@ -366,6 +379,36 @@ namespace madigan {
       {"data_source_type", "OU"},
       {"data_source_config", Config{{"mean", mean},
                                     {"theta", theta},
+                                    {"phi", phi}}
+      }
+    };
+    return config;
+  }
+
+   Config makeOUPairConfigFromPyDict(pybind11::dict datasource_pydict){
+    for (auto key: {"theta", "phi"}){
+      auto keyFound=std::find_if(datasource_pydict.begin(), datasource_pydict.end(),
+                                 [key](const std::pair<pybind11::handle, pybind11::handle>& pair){
+                                   return string(pybind11::str(pair.first)) == key;
+                                 });
+      if (keyFound == datasource_pydict.end()){
+        throw ConfigError(string(key)+" key not found in data_source_config in config");
+      }
+    }
+    double theta;
+    double phi;
+    for(auto& item: datasource_pydict){
+      string key = string(pybind11::str(item.first));
+      if(key == "theta"){
+        theta= item.second.cast<double>();
+      }
+      if(key == "phi"){
+        phi = item.second.cast<double>();
+      }
+    }
+    Config config{
+      {"data_source_type", "OUPair"},
+      {"data_source_config", Config{{"theta", theta},
                                     {"phi", phi}}
       }
     };

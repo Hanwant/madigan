@@ -209,15 +209,13 @@ class OffPolicyQ(Agent):
         i = 0
         while i <= test_steps:
             _tst_metrics = {}
-            qvals, hidden = self.get_qvals(state,
-                                           target=target)[0].cpu().numpy()
-            action = self.get_action(qvals=qvals, hidden=hidden,
-                                     target=target).cpu().numpy()
+            qvals = self.get_qvals(state, target=target)
+            action = self.get_action(qvals=qvals, target=target).cpu().numpy()
             transaction = self.action_to_transaction(action)
             state, reward, done, info = self._env.step(transaction)
             self._preprocessor.stream_state(state)
             state = self._preprocessor.current_data()
-            _tst_metrics['qvals'] = qvals
+            _tst_metrics['qvals'] = qvals.cpu().numpy()
             _tst_metrics['reward'] = reward
             _tst_metrics['transaction'] = info.brokerResponse.transactionUnits
             _tst_metrics[

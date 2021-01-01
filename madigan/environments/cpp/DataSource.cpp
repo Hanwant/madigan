@@ -32,6 +32,9 @@ namespace madigan{
     else if (dataSourceType == "OU"){
       return make_unique<OU>();
     }
+    else if (dataSourceType == "OUPair"){
+      return make_unique<OUPair>();
+    }
     else if (dataSourceType == "SimpleTrend"){
       return make_unique<SimpleTrend>();
     }
@@ -76,6 +79,9 @@ namespace madigan{
     }
     else if (dataSourceType == "OU"){
       return make_unique<OU>(config);
+    }
+    else if (dataSourceType == "OUPair"){
+      return make_unique<OUPair>(config);
     }
     else if (dataSourceType == "SimpleTrend"){
       return make_unique<SimpleTrend>(config);
@@ -360,7 +366,7 @@ namespace madigan{
     for (auto key: {"freq", "mu", "amp", "phase", "dX"}){
       if (params.find(key) == params.end()){
         allKeysPresent=false;
-        throw ConfigError("generator parameters don't have all required constructor arguments");
+        throw ConfigError("config doesn't don't have all required constructor arguments");
       }
     }
     if (allKeysPresent){
@@ -452,7 +458,7 @@ namespace madigan{
     for (auto key: {"freqRange", "muRange", "ampRange", "dX"}){
       if (params.find(key) == params.end()){
         allKeysPresent=false;
-        throw ConfigError("generator parameters don't have all required constructor arguments");
+        throw ConfigError("config doesn't don't have all required constructor arguments");
       }
     }
     if (allKeysPresent){
@@ -624,7 +630,7 @@ namespace madigan{
                     "trendProb", "dX", "noise"}){
       if (params.find(key) == params.end()){
         allKeysPresent=false;
-        throw ConfigError("generator parameters don't have all required constructor arguments");
+        throw ConfigError("config doesn't don't have all required constructor arguments");
       }
     }
     if (allKeysPresent){
@@ -821,7 +827,7 @@ namespace madigan{
     for (auto key: {"mean", "var"}){
       if (params.find(key) == params.end()){
         allKeysPresent=false;
-        throw ConfigError("generator parameters don't have all required constructor arguments");
+        throw ConfigError("config doesn't don't have all required constructor arguments");
       }
     }
     if (allKeysPresent){
@@ -884,7 +890,7 @@ namespace madigan{
     for (auto key: {"mean", "theta", "phi"}){
       if (params.find(key) == params.end()){
         allKeysPresent=false;
-        throw ConfigError("generator parameters don't have all required constructor arguments");
+        throw ConfigError("config doesn't don't have all required constructor arguments");
       }
     }
     if (allKeysPresent){
@@ -910,6 +916,67 @@ namespace madigan{
     }
     timestamp_ += 1;
     return currentData_;
+  }
+
+  // OU PAIR /////////////////////////////////////////////////////////////////////////
+  void OUPair::initParams(double theta, double phi){
+    this->theta=theta;
+    this->phi=phi;
+    noiseDistribution = std::normal_distribution<double>(0., phi);
+    currentData_.resize(2.);
+    for (int i=0; i < 2; i++){
+      std::string assetName = "OUPair_" + std::to_string(i);
+      this->assets_.push_back(Asset(assetName));
+      currentData_(i) = 10.;
+    }
+    mean = 10;
+    generator.seed(std::chrono::system_clock::now().time_since_epoch().count());
+  }
+
+  OUPair::OUPair(double theta, double phi){
+    initParams(theta, phi);
+  }
+  OUPair::OUPair(): OUPair(.15, .04){}
+
+  OUPair::OUPair(Config config){
+    bool allKeysPresent{true};
+    if (config.find("data_source_config") == config.end()){
+      throw ConfigError("config passed but doesn't contain generator params");
+      allKeysPresent = false;
+    }
+    Config params = std::any_cast<Config>(config["data_source_config"]);
+    for (auto key: {"theta", "phi"}){
+      if (params.find(key) == params.end()){
+        allKeysPresent=false;
+        throw ConfigError("config doesn't don't have all required constructor arguments");
+      }
+    }
+    if (allKeysPresent){
+      double theta = std::any_cast<double>(params["theta"]);
+      double phi = std::any_cast<double>(params["phi"]);
+      initParams(theta, phi);
+    }
+    else{
+      double theta = .15;
+      double phi = .04;
+      initParams(theta, phi);
+    }
+  }
+
+  OUPair::OUPair(pybind11::dict py_config): OUPair::OUPair(makeConfigFromPyDict(py_config)){}
+
+  const PriceVector& OUPair::getData() {
+    mean += noiseDistribution(generator);
+    currentData_(0) += (theta*(mean-currentData_(0))) + mean*noiseDistribution(generator);
+    currentData_(1) += (theta*(mean-currentData_(1))) + mean*noiseDistribution(generator);
+    // currentData_(0) = max(1., currentData_(0));
+    // currentData_(0) = max(1., currentData_(0));
+    timestamp_ += 1;
+    return currentData_;
+  } 
+  void OUPair::reset(){
+    currentData_(0) = 10.;
+    currentData_(1) = 10.;
   }
 
   // SIMPLE TREND //////////////////////////////////////////////////////////////////////
@@ -1191,7 +1258,7 @@ namespace madigan{
                                  (dYMin[i], dYMax[i]));
         ouMean.push_back(start[i]);
         ouComponent.push_back(0.);
-        trendComponent.push_back(0.);
+        trendComponent.push_back(start[i]);
         trending.push_back(false);
         std::string assetName = "TrendyOU_" + std::to_string(i);
         this->assets_.push_back(Asset(assetName));
@@ -1261,11 +1328,15 @@ namespace madigan{
       // OU
       // TREND
       // double trendNoise{0};
+      double ouNoise = (trendComponent[i])*ouNoiseDist[i](generator);
+      double ouRevertingComponent = theta[i] * (-ouComponent[i]); // centered at 0
+      ouComponent[i] += ouRevertingComponent + ouNoise;
       if(trending[i]){
         // double& x = currentData_(i);
         // trendNoise =  trendNoiseDist[i](generator);
-        trendComponent[i] = y * (dY[i] * currentDirection[i]) + trendNoiseDist[i](generator);
-        ouMean[i] = y;
+        trendComponent[i] += y * (dY[i] * currentDirection[i]) + trendNoiseDist[i](generator);
+        trendComponent[i] = std::max(0.01, trendComponent[i]);
+        // ouMean[i] = y;
         if (--currentTrendLen[i] == 0){
           trending[i] = false;
           // ouMean[i] = y;
@@ -1280,10 +1351,7 @@ namespace madigan{
           dY[i] = dYDist[i](generator);
         }
       }
-      double ouNoise = y*ouNoiseDist[i](generator);
-      double ouRevertingComponent = theta[i] * (-ouComponent[i]); // centered at 0
-      ouComponent[i] = ouRevertingComponent + ouNoise;
-      y += ouComponent[i] + trendComponent[i];
+      y = ouComponent[i] + trendComponent[i];
       // ema[i] = emaAlpha[i] * ema[i] + (1-emaAlpha[i]) * y;
       y = std::max(0.01, y);
       if (y <= .1){
