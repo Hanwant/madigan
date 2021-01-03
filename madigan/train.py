@@ -16,18 +16,16 @@ from madigan.utils.plotting import plot_test_metrics, plot_train_metrics
 from madigan.run.trainer import Trainer
 # from madigan.run.test import test
 
-
-
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 logger = logging.getLogger('root')
 logger.setLevel(logging.DEBUG)
 
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("config",
-                        help="config file for initializing experiment if manual testing",
-                        default="/")
+    parser.add_argument(
+        "config",
+        help="config file for initializing experiment if manual testing",
+        default="/")
     parser.add_argument("--nsteps",
                         help="number of training_steps",
                         default=None)
@@ -39,22 +37,27 @@ if __name__ == "__main__":
                         action="store_true")
     arg = parser.parse_args()
 
-    # import ipdb; ipdb.set_trace()
     config_path = Path(arg.config)
     config = load_config(config_path)
 
     if arg.wandb:
         import wandb
         wandb.login()
-        wandb.init(project="madigan", name=config.experiment_id,
-                id=config.experiment_id, config=config,
-                tags=[config.data_source_type, config.agent_type],
-                dir=config.basepath, allow_val_change=True, resume=True)
+        wandb.init(project="madigan",
+                   name=config.experiment_id,
+                   id=config.experiment_id,
+                   config=config,
+                   tags=[config.data_source_type, config.agent_type],
+                   dir=config.basepath,
+                   allow_val_change=True,
+                   resume=True)
 
     nsteps = int(arg.nsteps)
 
-    trainer = Trainer.from_config(config, print_progress=True,
-                                continue_exp=True, device=device)
+    trainer = Trainer.from_config(config,
+                                  print_progress=True,
+                                  continue_exp=True,
+                                  device=device)
     trainer.logger.setLevel(logging.INFO)
     agent, env = trainer.agent, trainer.env
 
@@ -62,11 +65,9 @@ if __name__ == "__main__":
 
     train_logs, test_logs = trainer.train(nsteps=nsteps)
 
-
     # print('Done')
     # print(f"Mean equity over 1000 steps: pre/post training  {np.mean(pre['equity'])}, {np.mean(test_logs['equity'])}")
     # print(f"End equity after 1000 steps: pre/post training  {pre['equity'].iloc[-1]}, {test_logs['equity'].iloc[-1]}")
-
 
     # fig1, ax1 = plot_test_metrics(pre, assets=config.assets)
     # fig2, ax2 = plot_test_metrics(test_logs, assets=config.assets)
@@ -77,15 +78,10 @@ if __name__ == "__main__":
     #     wandb.log({'post training test episode': fig1})
     #     wandb.log({'training': fig})
 
-
     # # fig1.show()
     # # fig2.show()
     # plt.show()
     # # sys.exit()
-
-
-
-
 
     # assets=["OU1"],
     # data_source_type="SineAdder",

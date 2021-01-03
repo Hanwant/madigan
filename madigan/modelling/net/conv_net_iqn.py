@@ -6,7 +6,7 @@ import torch.nn as nn
 
 from .common import NoisyLinear, Conv1DEncoder, ConvNetStateEncoder
 from .base import QNetworkBase
-from .utils import calc_pad_to_conserve, ACT_FN_DICT
+from .utils import ACT_FN_DICT
 from ...utils.data import State
 
 

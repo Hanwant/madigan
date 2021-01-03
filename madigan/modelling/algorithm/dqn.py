@@ -13,7 +13,7 @@ from .offpolicy_q import OffPolicyQ
 from .utils import discrete_action_to_transaction, abs_port_norm
 from ..utils import get_model_class
 from ...environments import make_env
-from ...environments.reward_shaping import RewardShaper, make_reward_shaper
+from ...environments.reward_shaping import RewardShaper
 from ...utils import DiscreteActionSpace, DiscreteRangeSpace
 from ...utils import ActionSpace
 from ...utils.preprocessor import make_preprocessor
@@ -34,11 +34,10 @@ class DQN(OffPolicyQ):
     """
     def __init__(self, env, preprocessor, input_shape: tuple,
                  action_space: ActionSpace, discount: float, nstep_return: int,
-                 reward_shaper: RewardShaper, replay_size: int,
-                 replay_min_size: int, prioritized_replay: bool,
-                 per_alpha: float, per_beta: float, per_beta_steps: int,
-                 noisy_net: bool, noisy_net_sigma: float, eps: float,
-                 eps_decay: float, eps_min: float, batch_size: int,
+                 reward_shaper: str, replay_size: int, replay_min_size: int,
+                 prioritized_replay: bool, per_alpha: float, per_beta: float,
+                 per_beta_steps: int, noisy_net: bool, noisy_net_sigma: float,
+                 eps: float, eps_decay: float, eps_min: float, batch_size: int,
                  test_steps: int, unit_size: float, savepath: Union[Path, str],
                  double_dqn: bool, tau_soft_update: float, model_class: str,
                  model_config: Union[dict, Config], lr: float):
@@ -79,7 +78,7 @@ class DQN(OffPolicyQ):
         input_shape = preprocessor.feature_output_shape
         atoms = config.discrete_action_atoms + 1
         action_space = DiscreteRangeSpace((0, atoms), env.nAssets)
-        reward_shaper = make_reward_shaper(config)
+        reward_shaper = config.reward_shaper_config.reward_shaper
         aconf = config.agent_config
         unit_size = aconf.unit_size_proportion_avM
         savepath = Path(config.basepath) / config.experiment_id / 'models'
@@ -156,7 +155,6 @@ class DQN(OffPolicyQ):
             qvals = self.get_qvals(state, target=target, device=device)
         actions = qvals.max(-1)[1].squeeze(0)  # (self.n_assets, )
         return actions
-
 
     def action_to_transaction(
             self, actions: Union[torch.Tensor, np.ndarray]) -> np.ndarray:

@@ -6,7 +6,6 @@ import numpy as np
 import torch
 
 from ...utils.data import SARSD, State
-from ...environments.reward_shaping import RewardShaper
 
 
 class Agent(ABC):
@@ -20,7 +19,6 @@ class Agent(ABC):
                  action_space,
                  discount: float,
                  nstep_return: int,
-                 reward_shaper: RewardShaper,
                  savepath=None):
         self._env = env
         self._preprocessor = preprocessor
@@ -28,7 +26,6 @@ class Agent(ABC):
         self._action_space = action_space
         self.discount = discount
         self.nstep_return = nstep_return
-        self.reward_shaper = reward_shaper
         self.savepath = Path(savepath)
         self.training_steps = 0
         self.env_steps = 0

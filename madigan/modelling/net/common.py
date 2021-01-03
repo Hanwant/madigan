@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 from torch.nn.functional import linear as linear_func
 
-from .utils import ACT_FN_DICT, calc_pad_to_conserve
+from .utils import ACT_FN_DICT, calc_pad_to_conserve1d
 from ...utils.data import State
 
 class PortEmbed(nn.Module):
@@ -122,9 +122,9 @@ class Conv1DLayer(nn.Module):
         self.preserve_window_len = preserve_window_len
         self.pad = None
         if self.preserve_window_len:
-            arb_input = (window_len, )
-            causal_pad = calc_pad_to_conserve(arb_input, self.conv,
-                                              causal_dim=causal_dim)
+            causal_pad = calc_pad_to_conserve1d((1, channels_in, window_len),
+                                                self.conv, causal=True,
+                                                causal_side='left')
             self.pad = nn.ReplicationPad1d(causal_pad)
         self.act = ACT_FN_DICT[act_fn]()
         # self.norm = nn.BatchNorm1d(channels_out)

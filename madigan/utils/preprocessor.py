@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from typing import List
 from collections import deque
 
 import numpy as np
@@ -43,6 +44,8 @@ def make_normalizer(norm_type):
         return lambda x: x / x[-1]
     if norm_type == 'lookback_log':
         return lambda x: np.log(x / x[-1])
+    if norm_type == 'log_standard_normal':
+        return log_standard_norm
     if norm_type == 'standard_normal':
         return standard_norm
     if norm_type == 'expanding':
@@ -52,14 +55,28 @@ def make_normalizer(norm_type):
                                   "choose from : 'lookback', 'lookback_log', "
                                   "'standard_normal', 'expanding'")
 
-
 def standard_norm(x):
     """
-    Nan safe version of standard normalization
-    otherwise a lambda is enough I.e lambda x: (x-x.mean()) / x.std()
+    Standard Normalization, generalized for multiple timeseries.
+    Assumes axis 0 is time, 1 is different timeseries which are
+    independetly normed.
+    Nan safe, otherwise lambda can be used-> lambda x: (x-x.mean(0)) / x.std(0)
     """
     mean = x.mean(0)
-    res = np.nan_to_num((x-mean) / x.std(0), 0.)
+    res = np.nan_to_num((x - mean) / x.std(0), 0.)
+    return res
+
+def log_standard_norm(x):
+    """
+    Log Standard Normalization, generalized for multiple timeseries.
+    Assumes axis 0 is time, 1 is different timeseries which are
+    independetly normed.
+    Nan safe, otherwise lambda can be used-> lambda x: (x-x.mean(0)) / x.std(0)
+    Assumes x > 0
+    """
+    x = np.log(x)
+    mean = x.mean(0)
+    res = np.nan_to_num((x - mean) / x.std(0), 0.)
     return res
 
 
@@ -83,9 +100,13 @@ class PreProcessor(ABC):
     def initialize_history(self):
         pass
 
+
 class StackerDiscrete(PreProcessor):
-    def __init__(self, window_len: int, n_assets: int,
-                 norm: bool = True, norm_type: str = 'standard_normal'):
+    def __init__(self,
+                 window_len: int,
+                 n_assets: int,
+                 norm: bool = True,
+                 norm_type: str = 'standard_normal'):
         self.k = window_len
         self.min_tf = self.k
         self.norm = norm
@@ -124,7 +145,6 @@ class StackerDiscrete(PreProcessor):
         timestamp = np.array(self.time_buffer, copy=True)
         return State(price, portfolio, timestamp)
 
-
     def initialize_history(self, env):
         while len(self) < self.k:
             _state, reward, done, info = env.step()
@@ -134,6 +154,93 @@ class StackerDiscrete(PreProcessor):
         self.price_buffer.clear()
         self.portfolio_buffer.clear()
         self.time_buffer.clear()
+
+
+class MultiStackerDiscrete(PreProcessor):
+    def __init__(self,
+                 window_len: int,
+                 dilations: List[int],
+                 n_assets: int,
+                 norm: bool = True,
+                 norm_type: str = 'standard_normal'):
+        self.k = window_len
+        self.dilations = dilations
+        self.dilation_counter = np.zeros(len(dilations), dtype=np.int)
+        self.min_tf = self.k
+        self.norm = norm
+        self.norm_fn = make_normalizer(norm_type)
+        self.max_dilation = max(dilations)
+        self.price_buffers = {}
+        self.portfolio_buffers = {}
+        self.time_buffers = {}
+        self.price_buffers = {}
+        for dilation in dilations:
+            self.price_buffers[dilation] = deque(maxlen=self.k)
+            self.portfolio_buffers[dilation] = deque(maxlen=self.k)
+            self.time_buffers[dilation] = deque(maxlen=self.k)
+        self._feature_output_shape = (self.k, n_assets*len(self.dilations))
+
+    @property
+    def feature_output_shape(self):
+        return self._feature_output_shape
+
+    @classmethod
+    def from_config(cls, config, n_assets):
+        pconf = config.preprocessor_config
+        norm = pconf.norm if 'norm' in pconf.keys() else False
+        norm_type = pconf.norm_type if 'norm_type' in pconf.keys() else None
+        return cls(pconf.window_length, n_assets, norm, norm_type)
+
+    def __len__(self):
+        return len(self.price_buffers[self.max_dilation])
+
+    def stream_state(self, state):
+        price = np.array(state.price, copy=True)
+        port = np.array(state.portfolio, copy=True)
+        time = np.array(state.timestamp, copy=True)
+        for i, dilation in self.dilations:
+            if self.dilation_counter[i] == 0:
+                self.price_buffers[dilation].append(price)
+                self.portfolio_buffers[dilation].append(port)
+                self.time_buffers[dilation].append(time)
+                self.dilation_counter[i] = dilation - 1
+            else:
+                self.dilation_counter[i] -= 1
+
+    def stream(self, data):
+        if isinstance(data, tuple):
+            self.stream_state(data[0])  # assume srdi
+        else:  # assume data is State
+            self.stream_state(data)
+
+    def current_data(self):
+        price = np.stack([
+            np.array(self.price_buffers[dilation], copy=True)
+            for dilation in self.dilations
+        ])
+        portfolio = np.stack([
+            np.array(self.portfolio_buffers[dilation], copy=True)
+            for dilation in self.dilations
+        ])
+        timestamp = np.stack([
+            np.array(self.time_buffers[dilation], copy=True)
+            for dilation in self.dilations
+        ])
+        if self.norm:
+            price = self.norm_fn(price)
+        return State(price, portfolio, timestamp)
+
+    def initialize_history(self, env):
+        while len(self) < self.k:
+            _state, reward, done, info = env.step()
+            self.stream_state(_state)
+
+    def reset_state(self):
+        for dilation in self.dilations:
+            for buffer_dict in (self.price_buffers, self.portfolio_buffers,
+                                self.time_buffers):
+                buffer_dict[dilation].clear()
+
 
 class StackerDiscreteReturns(StackerDiscrete):
     def current_data(self):
@@ -187,7 +294,8 @@ class RollerDiscrete(PreProcessor):
         self.feature_buffer = deque(maxlen=self.k)
         self.portfolio_buffer = deque(maxlen=self.k)
         self.time_buffer = deque(maxlen=self.k)
-        n_feats = 8*len(self.timeframes) + 1  # 8 from roller, 1 for close price
+        n_feats = 8 * len(
+            self.timeframes) + 1  # 8 from roller, 1 for close price
         self.feature_output_shape = (window_len, n_feats)
 
     @classmethod
@@ -225,8 +333,7 @@ class RollerDiscrete(PreProcessor):
         prices /= current_price
         feats = feats.reshape(current_len, -1)
         feats = np.concatenate([prices, feats], axis=1)
-        return State(feats,
-                     np.array(self.portfolio_buffer),
+        return State(feats, np.array(self.portfolio_buffer),
                      np.array(self.time_buffer))
 
     def initialize_history(self, env):
@@ -244,7 +351,7 @@ class RollerDiscrete(PreProcessor):
 class CustomA(StackerDiscrete):
     def __init__(self, *args, **kw):
         super().__init__(*args, **kw)
-        self.feature_output_shape = (self.k-1, 2)
+        self.feature_output_shape = (self.k - 1, 2)
 
     def current_data(self):
         price = np.array(self.price_buffer, copy=True).squeeze()
@@ -282,7 +389,8 @@ class AutoEncoder(PreProcessor):
 
 
 @numba.guvectorize([(numba.float64[:], numba.float64[:])],
-                   '(n)->(n)', nopython=True)
+                   '(n)->(n)',
+                   nopython=True)
 def _expanding_mean(arr, ma):
     """ expanding/running mean - equiv to pd.expanding().mean()"""
     n = arr.shape[0]

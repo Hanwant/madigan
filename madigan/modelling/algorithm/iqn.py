@@ -8,7 +8,6 @@ import torch.nn.functional as F
 
 from .dqn import DQN
 from ...environments import make_env
-from ...environments.reward_shaping import RewardShaper, make_reward_shaper
 from ..net.conv_net_iqn import ConvNetIQN
 from ...utils import default_device, DiscreteActionSpace, DiscreteRangeSpace
 from ...utils.preprocessor import make_preprocessor
@@ -34,7 +33,7 @@ class IQN(DQN):
             action_space: tuple,
             discount: float,
             nstep_return: int,
-            reward_shaper: RewardShaper,
+            reward_shaper: str,
             replay_size: int,
             replay_min_size: int,
             prioritized_replay: bool,
@@ -81,7 +80,7 @@ class IQN(DQN):
         input_shape = preprocessor.feature_output_shape
         atoms = config.discrete_action_atoms + 1
         action_space = DiscreteRangeSpace((0, atoms), env.nAssets)
-        reward_shaper = make_reward_shaper(config)
+        reward_shaper = config.reward_shaper_config.reward_shaper
         aconf = config.agent_config
         unit_size = aconf.unit_size_proportion_avM
         savepath = Path(config.basepath) / config.experiment_id / 'models'

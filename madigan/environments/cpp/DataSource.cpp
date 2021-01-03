@@ -1221,16 +1221,17 @@ namespace madigan{
       trending[i] = false;
       currentData_(i) = start[i];
       currentTrendLen[i] = 0;
+      ouMean[i] = start[i];
     }
   }
 
   // TRENDY OU //////////////////////////////////////////////////////////////////////
 
   void TrendyOU::initParams(vector<double> trendProb, vector<int> minPeriod,
-                           vector<int> maxPeriod, vector<double> dYMin,
-                           vector<double> dYMax, vector<double> start,
-                           vector<double> theta, vector<double> phi,
-                           vector<double> noiseTrend, vector<double> emaAlpha){
+                            vector<int> maxPeriod, vector<double> dYMin,
+                            vector<double> dYMax, vector<double> start,
+                            vector<double> theta, vector<double> phi,
+                            vector<double> noiseTrend, vector<double> emaAlpha){
     if ((trendProb.size() == minPeriod.size()) && (minPeriod.size() == maxPeriod.size())
         && (maxPeriod.size() == phi.size()) && (phi.size() == noiseTrend.size())
         && (start.size() == dYMin.size()) && (dYMin.size() == dYMax.size())

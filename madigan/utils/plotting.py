@@ -1,3 +1,7 @@
+"""
+Utils for making figures for inspection/debugging etc.
+Dashboard should be used for most use cases.
+"""
 import math
 from itertools import product
 

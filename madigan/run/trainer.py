@@ -17,7 +17,6 @@ import matplotlib.pyplot as plt
 import zmq
 
 from ..utils.data import SARSD, State
-from ..utils.replay_buffer import ReplayBuffer
 from ..utils.logging import save_to_hdf, load_from_hdf
 from ..utils.metrics import list_2_dict, reduce_train_metrics, test_summary
 from ..utils.config import save_config, Config

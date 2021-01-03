@@ -7,7 +7,7 @@ import torch
 
 from .base import Agent
 from ...environments import get_env_info
-from ...utils.replay_buffer import ReplayBuffer
+from ...utils.buffers import make_buffer_from_agent
 from ...utils.data import SARSD, State
 from ...utils.metrics import list_2_dict
 from ...utils import DiscreteRangeSpace
@@ -30,7 +30,7 @@ class OffPolicyActorCritic(Agent):
         self.replay_size = replay_size
         self.nstep_return = nstep_return
         self.discount = discount
-        self.buffer = ReplayBuffer.from_agent(self)
+        self.buffer = make_buffer_from_agent(self)
         self.bufferpath = self.savepath.parent / 'replay.pkl'
         self.replay_min_size = replay_min_size
         self.batch_size = batch_size

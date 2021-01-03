@@ -1,9 +1,9 @@
 agent_config:
   action_atoms: 3
   ae_temp: 0.5
-  batch_size: 1
+  batch_size: 32
   controller_action_repeats: 64
-  discount: 0.999
+  discount: 0.99
   discrete_action_atoms: 3
   double_dqn: true
   dueling: true
@@ -24,12 +24,12 @@ agent_config:
   nTau2: 8
   noisy_net: true
   noisy_net_sigma: 0.5
-  nstep_return: 5
+  nstep_return: 20
   nsteps: 1000000
   per_alpha: 0.6
   per_beta: 0.4
   per_beta_steps: 100000
-  prioritized_replay: false
+  prioritized_replay: true
   proximal_portfolio_penalty: 0.5
   replay_min_size: 20000
   replay_size: 300000
@@ -41,53 +41,120 @@ agent_config:
   tau_soft_update: 0.0001
   train_freq: 4
   transaction_thresh: 0.02
-  unit_size_proportion_avM: 0.02
+  unit_size_proportion_avM: 0.05
 agent_configs:
   A: /home/hemu/madigan/experiments/IQN_OU_Triple_Decreasing_unit.005_Noisy_NoReShap_Replay300_NoPool_AdaptiveAvg/config.yaml
   B: /home/hemu/madigan/experiments/IQN_OU_Triple_Decreasing_PER_Test/config.yaml
 agent_type: IQN
 basepath: /media/hemu/Data/madigan/experiments/
 data_source_config:
-  # OU: 
+  # OUPair: 
+    # data_source_config:
+    #   phi: 0.04
+    #   theta: 0.15
+    # data_source_type: OUPair
+  # SineAdder:
   #   data_source_config:
-  #     mean:
-  #     - 10.0
-  #     - 5.0
-  #     phi:
-  #     - 0.04
-  #     - 0.02
-  #     theta:
-  #     - 0.15
-  #     - 0.15
-  #   data_source_type: OU
-  TrendyOU:
+  #     freq:
+  #       - 2.2
+  #       - .1
+  #       - 4.7
+  #       - 3.3
+  #     mu:
+  #       - .6
+  #       - .3
+  #       - 2.
+  #       - 4.2
+  #     amp:
+  #       - .5
+  #       - .2
+  #       - .4
+  #       - 1.2
+  #     phase:
+  #       - .0
+  #       - .5
+  #       - .6
+  #       - .2
+  #     dX: .01
+  #     noise: .01
+  #   data_source_type: SineAdder
+  OU:
     data_source_config:
-      trend_prob:
-        - .01
-      noise_trend:
-        - .1
-      min_period:
-        - 200
-      max_period:
-        - 1000
-      start:
+      mean:
         - 5.
-      theta:
-        - .15
       phi:
         - .04
-      dYMin:
-        - .0001
-      dYMax:
-        - .0005
-      ema_alpha: # not used
-        - .99
-    data_source_type: TrendyOU
+      theta:
+        - .15
+    data_source_type: OU
+  # SimpleTrend:
+  #   data_source_config:
+  #     trend_prob:
+  #       - .01
+  #     noise:
+  #       - .001
+  #     min_period:
+  #       - 100
+  #     max_period:
+  #       - 500
+  #     start:
+  #       - 5.
+  #     dYMin:
+  #       - .0001
+  #     dYMax:
+  #       - .0005
+  #   data_source_type: SimpleTrend
+  # TrendOU:
+  #   data_source_config:
+  #     trend_prob:
+  #       - .001
+  #     noise_trend:
+  #       - .001
+  #     min_period:
+  #       - 100
+  #     max_period:
+  #       - 500
+  #     start:
+  #       - 5.
+  #     theta:
+  #       - .15
+  #     phi:
+  #       - .04
+  #     dYMin:
+  #       - .001
+  #     dYMax:
+  #       - .005
+  #     ema_alpha: # not used
+  #       - .99
+  #   data_source_type: TrendOU
+  # TrendyOU:
+  #   data_source_config:
+  #     trend_prob:
+  #       - .01
+  #     noise_trend:
+  #       - .1
+  #     min_period:
+  #       - 200
+  #     max_period:
+  #       - 1000
+  #     start:
+  #       - 5.
+  #     theta:
+  #       - .15
+  #     phi:
+  #       - .04
+  #     dYMin:
+  #       - .0001
+  #     dYMax:
+  #       - .0005
+  #     ema_alpha: # not used
+  #       - .99
+  #   data_source_type: TrendyOU
 data_source_type: Composite
 discrete_action_atoms: 3
 discrete_actions: true
 env_type: Synth
-experiment_id: IQN_TrendyOU_Proper2_avgpool
+experiment_id: IQN_TrendOU_discount.99_nstep_20_no_rew_shape
 init_cash: 1000000
 log_freq: 10000
 lot_unit_value: 10000
@@ -105,7 +172,7 @@ model_config:
   curl_latent_size: 64
   curl_lr: 0.001
   curl_momentum_update: 0.001
-  d_model: 1024
+  d_model: 256
   dilations:
   - 1
   - 1
@@ -146,7 +213,7 @@ optim_config:
 parent_id: ''
 preprocessor_config:
   norm: true
-  norm_type: standard_normal
+  norm_type: log_standard_normal
   preprocessor_type: StackerDiscrete
   timeframes:
   - 64

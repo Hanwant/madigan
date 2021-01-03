@@ -1,3 +1,6 @@
+"""
+Utils for making figures for publication or presentation
+"""
 import os
 from pathlib import Path
 
@@ -52,14 +55,15 @@ def make_train_figs(experiment_id, basepath, show=True, save=True,
                     savepath=None):
     df = load_train_data(experiment_id, basepath)
     savepath = savepath or Path(os.getcwd())/experiment_id
-    figs = {}
+    figs = []
     for label in df.columns:
         fig, ax = plt.subplot(1, 1, figsize=(15, 10))
         ax.plot(df[label], label=label)
         ax.legend()
-        figs[label] = fig
+        figs.append({'fig': fig, 'fname': label})
     return figs
 
+
 def save_figs(figs, savepath):
-    for label, fig in figs.items():
-        save_fig(fig, savepath/f'{label}.pdf')
+    for fig in figs:
+        save_fig(fig['fig'], savepath/f"{fig['fname']}.pdf")

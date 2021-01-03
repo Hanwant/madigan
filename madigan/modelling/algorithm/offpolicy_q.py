@@ -9,7 +9,7 @@ import torch
 
 from .base import Agent
 from ...environments import get_env_info
-from ...utils.replay_buffer import ReplayBuffer, EpisodeReplayBuffer
+from ...utils.buffers import make_buffer_from_agent
 # from ...utils.replay_buffer import ReplayBufferC as ReplayBuffer
 from ...utils.data import SARSD, State, SARSDR, StateRecurrent
 from ...utils.metrics import list_2_dict
@@ -26,7 +26,7 @@ class OffPolicyQ(Agent):
                  noisy_net, eps, eps_decay, eps_min, batch_size, test_steps,
                  unit_size, savepath):
         super().__init__(env, preprocessor, input_shape, action_space,
-                         discount, nstep_return, reward_shaper, savepath)
+                         discount, nstep_return, savepath)
         self.noisy_net = noisy_net
         self.eps = eps
         self.eps_decay = max(eps_decay, 1 -
@@ -34,13 +34,14 @@ class OffPolicyQ(Agent):
         self.eps_min = eps_min
         self.replay_size = replay_size
         self.nstep_return = nstep_return
+        self.reward_shaper = reward_shaper
         self.discount = discount
         self.replay_min_size = replay_min_size
         self.prioritized_replay = prioritized_replay
         self.per_alpha = per_alpha
         self.per_beta = per_beta
         self.per_beta_steps = per_beta_steps
-        self.buffer = ReplayBuffer.from_agent(self)
+        self.buffer = make_buffer_from_agent(self)
         self.bufferpath = self.savepath.parent / 'replay.pkl'
         self.batch_size = batch_size
         self.test_steps = test_steps
@@ -82,7 +83,6 @@ class OffPolicyQ(Agent):
         self._preprocessor.reset_state()
         self._preprocessor.stream_state(state)
         self._preprocessor.initialize_history(self._env)
-        self.reward_shaper.reset()
         return self._preprocessor.current_data()
 
     def initialize_buffer(self):
@@ -137,7 +137,7 @@ class OffPolicyQ(Agent):
                     'running_cost': running_cost,
                     **get_env_info(self._env)
                 }
-            reward = self.reward_shaper.stream(reward)
+            # reward = self.reward_shaper.stream(reward)
             running_reward += reward
             if DEBUG:
                 debug_metrics['reward_post_shape'] = reward

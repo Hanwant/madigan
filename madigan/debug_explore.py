@@ -1,3 +1,8 @@
+"""
+For debugging agent-env interaction during training.
+This data won't get saved unless DEBUG is hardcoded into the train_step
+loop of the agent. Only needed to be done for DQN so far - see dqn.py
+"""
 import os
 import signal
 import sys
@@ -12,8 +17,8 @@ from madigan.utils.config import load_config
 
 def exit():
     """
-    Useful for exiting interactive process properly.
-    Otherwise process is just 'Stopped' but stays alive
+    For exiting interactive process properly.
+    Otherwise process is just 'Stopped' but stays alive - eats memory
     """
     os.kill(os.getpid(), signal.SIGKILL)
 
@@ -41,7 +46,7 @@ def plot_a(m):
     fig, axes = plt.subplots(4, 4, sharex='all')
     for ax, label in zip(axes.flatten(),
         ('running_reward', 'reward_pre_shape', 'reward_post_shape', 'running_reward_pre_recon',
-        'running_reward_post_recon', 'running_reward_equity_recon', 'balance', 'equity', 
+        'running_reward_post_recon', 'running_reward_equity_recon', 'balance', 'equity',
         'pnl', 'transactionCost', 'transactionUnit', 'cash',
         'availableMargin', 'borrowedAssetValue', 'ledger', 'usedMargin')):
         ax.plot(m[label], label=label)
@@ -53,7 +58,7 @@ def plot_a(m):
                       colors='red', label='done')
     axes[0, 0].legend()
     return fig, axes
-    
+
 def plot_b(m):
     fig, axes = plt.subplots(3, 4, sharex='all')
     for ax, label in zip(axes.flatten(),
@@ -75,5 +80,4 @@ if __name__ == "__main__":
     m = load_logs(debug_path)
     fig1, _ = plot_a(m)
     fig2, _ = plot_b(m)
-    
 

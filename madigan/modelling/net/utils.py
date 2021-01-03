@@ -4,43 +4,14 @@ import math
 import torch
 import torch.nn as nn
 
-ACT_FN_DICT = {'relu': nn.ReLU, 'gelu': nn.GELU, 'silu': nn.SiLU,
-               'tanhshrink': nn.Tanhshrink, 'none': lambda: lambda x: x}
+ACT_FN_DICT = {
+    'relu': nn.ReLU,
+    'gelu': nn.GELU,
+    'silu': nn.SiLU,
+    'tanhshrink': nn.Tanhshrink,
+    'none': lambda: lambda x: x
+}
 
-def make_conv1d_layers(input_shape,
-                       kernels,
-                       channels,
-                       strides=None,
-                       preserve_window_len=False,
-                       act=nn.GELU,
-                       causal_dim=0):
-    """
-    DEPRECATED, USE Conv1DEncoder
-    For Vanilla Conv Layers used in conv_net - No dilation etc
-    """
-    if strides is None:
-        strides = [1 for i in range(len(kernels))]
-    assert len(kernels) == len(strides) == len(channels)
-    assert len(input_shape) == 2
-    window_len = input_shape[0]
-    input_feats = input_shape[1]
-    channels = [input_feats] + channels
-    conv_layers = []
-    for i, kernel in enumerate(kernels):
-        conv = nn.Conv1d(channels[i],
-                         channels[i + 1],
-                         kernel,
-                         stride=strides[i])
-        if preserve_window_len:
-            arb_input = (window_len, )
-            # CAUSAL_DIM=0 assumes 0 is time dimension for input to calc_pad
-            causal_pad = calc_pad_to_conserve(arb_input,
-                                              conv,
-                                              causal_dim=causal_dim)
-            conv_layers.append(nn.ReplicationPad1d(causal_pad))
-        conv_layers.append(conv)
-        conv_layers.append(act())
-    return nn.Sequential(*conv_layers)
 
 @torch.no_grad()
 def xavier_initialization(m, linear_range=(-3e-3, 3e-3)):
@@ -66,7 +37,66 @@ def orthogonal_initialization(m, gain=1.):
             nn.init.constant_(m.bias, 0)
 
 
+@torch.no_grad()
 def calc_conv_out_shape(in_shape: Union[tuple, int], layers: List[nn.Module]):
+    """
+    Returns the output shape of an input going through a given list
+    of convolution layers.
+    Named calc_conv but generalizes to any layer which changes input shape.
+    """
+    if isinstance(layers, nn.Module):
+        return calc_conv_out_shape(in_shape, [layers])
+    if not isinstance(layers, Iterable):
+        raise ValueError("layers must be an iterable, containing nn.Modules")
+
+    dummy = torch.randn(*in_shape)
+    for layer in layers:
+        dummy = layer(dummy)
+    return dummy.shape
+
+
+@torch.no_grad()
+def calc_pad_to_conserve1d(in_shape: tuple,
+                           layer: nn.Module,
+                           causal: bool = False,
+                           causal_side: str = 'left') -> tuple:
+    """
+    Designed for 1D padding assuming the last dim needs padding.
+    If causal, the returned tuple will be asymmetric, with the pads
+    at pos 0 or 1 for causal_sides 'left' or 'right.
+    If not causal and the total number of required pads is an odd number,
+    the left side (tuple pos 0) will be 1 larger than the right.
+
+    @params
+        in_shape: tuple =  Full shape of input - incl batch dim.
+        layer: nn.Module
+        causal: bool = whether to pad asymmetrically
+        causal_side: str = 'left' or 'right' - side of causal padding.
+
+    """
+    if not isinstance(in_shape, tuple):
+        raise ValueError("in_shape must be a tuple")
+    if causal_side not in ('left', 'right'):
+        raise ValueError("causal_side must be either 'left' or 'right")
+
+    dummy = torch.randn(*in_shape)
+    if layer(dummy).shape[-1] >= in_shape[-1]:
+        return (0, 0)
+
+    pads = 0
+    while layer(dummy).shape[-1] < in_shape[-1]:
+        pads += 1
+        dummy = torch.randn(*in_shape[:-1], in_shape[-1] + pads)
+
+    if causal:
+        return (pads, 0) if causal_side == 'left' else (0, pads)
+    if pads % 2 == 0:
+        return (pads // 2, pads // 2)
+
+    return (pads // 2 + 1, pads // 2)  # if total pad is asymmetric
+
+
+def _calc_conv_out_shape(in_shape: Union[tuple, int], layers: List[nn.Module]):
     """
     Calculates output shape of input_shape going through the given conv layers
     in_shape: (H, W)
@@ -111,10 +141,14 @@ def calc_conv_out_shape(in_shape: Union[tuple, int], layers: List[nn.Module]):
     return shape
 
 
-def calc_pad_to_conserve(in_shape: Union[int, tuple],
-                         layer: nn.Module,
-                         causal_dim=0) -> tuple:
+
+def _calc_pad_to_conserve(in_shape: Union[int, tuple],
+                          layer: nn.Module,
+                          causal_dim=0) -> tuple:
     """
+    DEPRECATED
+    TOO COMPLICATED TO ADD NEW LAYERS, DOING IT BY TRIAL AND ERROR IS MUCH EASIER.
+
     Outputs the required padding on the input to conserve its shape, after passing
     through the given convolutional layers.
     If in_shape is 2d and layers are Conv2D, output tuple is (H_up, H_down, W_left, W_right)
@@ -156,7 +190,9 @@ def calc_pad_to_conserve(in_shape: Union[int, tuple],
             layer,
         ])
     elif isinstance(in_shape, int):
-        return calc_pad_to_conserve((in_shape, ), layer, causal_dim=causal_dim)
+        return _calc_pad_to_conserve((in_shape, ),
+                                     layer,
+                                     causal_dim=causal_dim)
     else:
         raise ValueError("in_shape must be an iterable or int")
     # TEST HERE THAT THE PADS CONSERVE INPUT SHAPE
