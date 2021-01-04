@@ -33,7 +33,7 @@ class IQN(DQN):
             action_space: tuple,
             discount: float,
             nstep_return: int,
-            reward_shaper: str,
+            reward_shaper_config: Config,
             replay_size: int,
             replay_min_size: int,
             prioritized_replay: bool,
@@ -61,17 +61,18 @@ class IQN(DQN):
             nTau2: int,
             k_huber: float):
         super().__init__(env, preprocessor, input_shape, action_space,
-                         discount, nstep_return, reward_shaper, replay_size,
-                         replay_min_size, prioritized_replay, per_alpha,
-                         per_beta, per_beta_steps, noisy_net, noisy_net_sigma,
-                         eps, eps_decay, eps_min, batch_size, test_steps,
-                         unit_size, savepath, double_dqn, tau_soft_update,
-                         model_class, model_config, lr)
+                         discount, nstep_return, reward_shaper_config,
+                         replay_size, replay_min_size, prioritized_replay,
+                         per_alpha, per_beta, per_beta_steps, noisy_net,
+                         noisy_net_sigma, eps, eps_decay, eps_min, batch_size,
+                         test_steps, unit_size, savepath, double_dqn,
+                         tau_soft_update, model_class, model_config, lr)
 
         self.nTau1 = nTau1
         self.nTau2 = nTau2
         self.k_huber = k_huber
         self.risk_distortion = lambda x: x
+        self.desired_port = torch.tensor([1., 0.], device=self.device)[None, :]
 
     @classmethod
     def from_config(cls, config):
@@ -80,13 +81,12 @@ class IQN(DQN):
         input_shape = preprocessor.feature_output_shape
         atoms = config.discrete_action_atoms + 1
         action_space = DiscreteRangeSpace((0, atoms), env.nAssets)
-        reward_shaper = config.reward_shaper_config.reward_shaper
         aconf = config.agent_config
         unit_size = aconf.unit_size_proportion_avM
         savepath = Path(config.basepath) / config.experiment_id / 'models'
         return cls(
             env, preprocessor, input_shape, action_space, aconf.discount,
-            aconf.nstep_return, reward_shaper, aconf.replay_size,
+            aconf.nstep_return, config.reward_shaper_config, aconf.replay_size,
             aconf.replay_min_size, aconf.prioritized_replay, aconf.per_alpha,
             aconf.per_beta, aconf.per_beta_steps, aconf.noisy_net,
             aconf.noisy_net_sigma, aconf.eps, aconf.eps_decay, aconf.eps_min,

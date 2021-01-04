@@ -14,8 +14,42 @@ def sum_default(nstep_buffer, discounts):
     ])
 
 
-# global print_i
-# print_i = 0
+global print_i
+print_i = 0
+
+
+def cosine_similarity(p: np.ndarray, q: np.ndarray):
+    ppp = p
+    qqq = q
+    norm_p = np.sqrt((p**2).sum(-1))
+    norm_q = np.sqrt((q**2).sum(-1))
+    return ((p * q).sum(-1) / (norm_p * norm_q)).mean()
+
+
+def cosine_port_shaper(nstep_buffer, discounts, desired_portfolio,
+                       cosine_temp):
+    """
+    rewards next_state.portfolio depending on it's distance from
+    a desired portfolio, measured using cosine similarity.
+    must be tuned to prevent exploiting rewards by getting to target
+    port and staying there. - soft actor critic would help
+    """
+    rewards = sum([
+        (dat.reward * discount) + cosine_temp *
+        cosine_similarity(dat.next_state.portfolio[-1], desired_portfolio)
+        for dat, discount in zip(nstep_buffer, discounts)
+    ])
+    global print_i
+    if print_i > 100:
+        cosine_reward = sum([
+            cosine_similarity(dat.next_state.portfolio, desired_portfolio)
+            for dat in nstep_buffer
+        ])
+        normal_reward = sum([dat.reward for dat in nstep_buffer])
+        print(normal_reward, cosine_reward, cosine_reward * cosine_temp)
+        print_i = 0
+    print_i += 1
+    return rewards
 
 
 def sharpe_shaper(nstep_buffer, discounts, benchmark=0.):
@@ -124,23 +158,26 @@ class NStepBuffer:
     numbers of sampels in its buffer is > nstep. It is the containers
     responsibility to flush and add the processesd samples to a main buffer.
     """
-    def __init__(self,
-                 nstep,
-                 discount,
-                 reward_shaper_type: str = 'sum_default'):
+    def __init__(self, nstep, discount, reward_shaper_config):
         self.nstep = nstep
         self.discount = discount
         self.discounts = [math.pow(self.discount, i) for i in range(nstep)]
         self._buffer = []
         # self.aggregate_rewards = partial(sortino_aggregate, self._buffer,
         #                                  self.discounts)
-        self.aggregate_rewards = self.make_reward_shaper(reward_shaper_type)
+        self.aggregate_rewards = self.make_reward_shaper(reward_shaper_config)
 
-    def make_reward_shaper(self, shaper_type):
+    def make_reward_shaper(self, shaper_config):
         """
         Constructs rewards shapers by binding self._buffer and self.discount
         to the shaper function using partial - keeps reference to both.
         """
+        shaper_type = shaper_config['reward_shaper']
+        if shaper_type in ("cosine_similarity", ):
+            desired_portfolio = np.array(shaper_config['desired_portfolio'])
+            temp = shaper_config['cosine_temp']
+            return partial(cosine_port_shaper, self._buffer, self.discounts,
+                           desired_portfolio, temp)
         if shaper_type in globals():
             print('using ', shaper_type)
             return partial(globals()[shaper_type], self._buffer,

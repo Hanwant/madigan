@@ -34,18 +34,20 @@ class DQN(OffPolicyQ):
     """
     def __init__(self, env, preprocessor, input_shape: tuple,
                  action_space: ActionSpace, discount: float, nstep_return: int,
-                 reward_shaper: str, replay_size: int, replay_min_size: int,
-                 prioritized_replay: bool, per_alpha: float, per_beta: float,
-                 per_beta_steps: int, noisy_net: bool, noisy_net_sigma: float,
-                 eps: float, eps_decay: float, eps_min: float, batch_size: int,
+                 reward_shaper_config: Config, replay_size: int,
+                 replay_min_size: int, prioritized_replay: bool,
+                 per_alpha: float, per_beta: float, per_beta_steps: int,
+                 noisy_net: bool, noisy_net_sigma: float, eps: float,
+                 eps_decay: float, eps_min: float, batch_size: int,
                  test_steps: int, unit_size: float, savepath: Union[Path, str],
                  double_dqn: bool, tau_soft_update: float, model_class: str,
                  model_config: Union[dict, Config], lr: float):
         super().__init__(env, preprocessor, input_shape, action_space,
-                         discount, nstep_return, reward_shaper, replay_size,
-                         replay_min_size, prioritized_replay, per_alpha,
-                         per_beta, per_beta_steps, noisy_net, eps, eps_decay,
-                         eps_min, batch_size, test_steps, unit_size, savepath)
+                         discount, nstep_return, reward_shaper_config,
+                         replay_size, replay_min_size, prioritized_replay,
+                         per_alpha, per_beta, per_beta_steps, noisy_net, eps,
+                         eps_decay, eps_min, batch_size, test_steps, unit_size,
+                         savepath)
 
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self._action_space = action_space
@@ -78,18 +80,17 @@ class DQN(OffPolicyQ):
         input_shape = preprocessor.feature_output_shape
         atoms = config.discrete_action_atoms + 1
         action_space = DiscreteRangeSpace((0, atoms), env.nAssets)
-        reward_shaper = config.reward_shaper_config.reward_shaper
         aconf = config.agent_config
         unit_size = aconf.unit_size_proportion_avM
         savepath = Path(config.basepath) / config.experiment_id / 'models'
         return cls(env, preprocessor, input_shape, action_space,
-                   aconf.discount, aconf.nstep_return, reward_shaper,
-                   aconf.replay_size, aconf.replay_min_size,
-                   aconf.prioritized_replay, aconf.per_alpha, aconf.per_beta,
-                   aconf.per_beta_steps, aconf.noisy_net,
-                   aconf.noisy_net_sigma, aconf.eps, aconf.eps_decay,
-                   aconf.eps_min, aconf.batch_size, config.test_steps,
-                   unit_size, savepath, aconf.double_dqn,
+                   aconf.discount, aconf.nstep_return,
+                   config.reward_shaper_config, aconf.replay_size,
+                   aconf.replay_min_size, aconf.prioritized_replay,
+                   aconf.per_alpha, aconf.per_beta, aconf.per_beta_steps,
+                   aconf.noisy_net, aconf.noisy_net_sigma, aconf.eps,
+                   aconf.eps_decay, aconf.eps_min, aconf.batch_size,
+                   config.test_steps, unit_size, savepath, aconf.double_dqn,
                    aconf.tau_soft_update, config.model_config.model_class,
                    config.model_config, config.optim_config.lr)
 
@@ -264,6 +265,7 @@ class DQN(OffPolicyQ):
             self.buffer.update_priority(td_error.squeeze())
             weights = torch.from_numpy(weights).to(self.device)
         loss = self.loss_fn(Qt, Gt, weights)
+
         self.opt.zero_grad()
         loss.backward()
         nn.utils.clip_grad_norm_(self.model_b.parameters(),
@@ -369,7 +371,7 @@ class DQNAE(DQN):
         input_shape = preprocessor.feature_output_shape
         atoms = config.discrete_action_atoms + 1
         action_space = DiscreteRangeSpace((0, atoms), config.n_assets)
-        reward_shaper = make_reward_shaper(config)
+        reward_shaper = config.reward_shaper_config.reward_shaper
         aconf = config.agent_config
         unit_size = aconf.unit_size_proportion_avM
         savepath = Path(config.basepath) / config.experiment_id / 'models'

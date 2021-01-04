@@ -11,14 +11,14 @@ class PrioritizedReplayBuffer(ReplayBuffer):
                  size,
                  nstep_return,
                  discount,
-                 reward_shaper='sum_aggregate',
+                 reward_shaper_config={'reward_shaper': 'sum_default'},
                  alpha=0.6,
                  beta=0.4,
                  beta_steps=10**5,
                  min_pa=0.,
                  max_pa=1.,
                  eps=0.01):
-        super().__init__(size, nstep_return, discount, reward_shaper)
+        super().__init__(size, nstep_return, discount, reward_shaper_config)
         self.alpha = alpha
         self.beta = beta
         self.beta_diff = (1. - beta) / beta_steps
@@ -35,14 +35,14 @@ class PrioritizedReplayBuffer(ReplayBuffer):
     @classmethod
     def from_agent(cls, agent):
         return cls(agent.replay_size, agent.nstep_return, agent.discount,
-                   agent.reward_shaper, agent.per_alpha, agent.per_beta,
+                   agent.reward_shaper_config, agent.per_alpha, agent.per_beta,
                    agent.per_beta_steps)
 
     @classmethod
     def from_config(cls, config):
         aconf = config.agent_config
         return cls(aconf.replay_size, aconf.nstep_return, aconf.discount,
-                   config.reward_shaper_config.reward_shaper, aconf.per_alpha,
+                   config.reward_shaper_config, aconf.per_alpha,
                    aconf.per_beta, aconf.per_beta_steps)
 
     def _add_to_replay(self, nstep_sarsd: SARSD):

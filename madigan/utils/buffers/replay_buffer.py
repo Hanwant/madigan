@@ -23,26 +23,26 @@ class ReplayBuffer:
                  size,
                  nstep_return,
                  discount,
-                 reward_shaper='sum_aggregate'):
+                 reward_shaper_config={'reward_shaper': 'sum_default'}):
         self.size = size
         self.nstep_return = nstep_return
         self.discount = discount
         self._buffer = [None] * size
         self._nstep_buffer = NStepBuffer(self.nstep_return, self.discount,
-                                         reward_shaper)
+                                         reward_shaper_config)
         self.filled = 0
         self.current_idx = 0
 
     @classmethod
     def from_agent(cls, agent):
         return cls(agent.replay_size, agent.nstep_return, agent.discount,
-                   agent.reward_shaper)
+                   agent.reward_shaper_config)
 
     @classmethod
     def from_config(cls, config):
         aconf = config.agent_config
         return cls(aconf.replay_size, aconf.nstep_return, aconf.discount,
-                   config.reward_shaper_config.reward_shaper)
+                   config.reward_shaper_config)
 
     @property
     def buffer(self):

@@ -21,10 +21,10 @@ class OffPolicyQ(Agent):
     Base class for all off policy agents with experience replay buffers
     """
     def __init__(self, env, preprocessor, input_shape, action_space, discount,
-                 nstep_return, reward_shaper, replay_size, replay_min_size,
-                 prioritized_replay, per_alpha, per_beta, per_beta_steps,
-                 noisy_net, eps, eps_decay, eps_min, batch_size, test_steps,
-                 unit_size, savepath):
+                 nstep_return, reward_shaper_config, replay_size,
+                 replay_min_size, prioritized_replay, per_alpha, per_beta,
+                 per_beta_steps, noisy_net, eps, eps_decay, eps_min,
+                 batch_size, test_steps, unit_size, savepath):
         super().__init__(env, preprocessor, input_shape, action_space,
                          discount, nstep_return, savepath)
         self.noisy_net = noisy_net
@@ -34,7 +34,7 @@ class OffPolicyQ(Agent):
         self.eps_min = eps_min
         self.replay_size = replay_size
         self.nstep_return = nstep_return
-        self.reward_shaper = reward_shaper
+        self.reward_shaper_config = reward_shaper_config
         self.discount = discount
         self.replay_min_size = replay_min_size
         self.prioritized_replay = prioritized_replay
@@ -147,8 +147,8 @@ class OffPolicyQ(Agent):
             self._preprocessor.stream_state(_next_state)
             next_state = self._preprocessor.current_data()
 
-            if done:
-                reward = -.1
+            # if done:
+            #     reward = -.1
             sarsd = SARSD(state, action, reward, next_state, done)
             self.buffer.add(sarsd)
 

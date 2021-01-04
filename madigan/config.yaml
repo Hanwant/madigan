@@ -24,8 +24,7 @@ agent_config:
   nTau2: 8
   noisy_net: true
   noisy_net_sigma: 0.5
-  nstep_return: 20
-  nsteps: 1000000
+  nstep_return: 1
   per_alpha: 0.6
   per_beta: 0.4
   per_beta_steps: 100000
@@ -42,6 +41,10 @@ agent_config:
   train_freq: 4
   transaction_thresh: 0.02
   unit_size_proportion_avM: 0.05
+  cosine_portfolio: true
+  desired_portfolio:
+    - 1.0
+    - 0.0
 agent_configs:
   A: /home/hemu/madigan/experiments/IQN_OU_Triple_Decreasing_unit.005_Noisy_NoReShap_Replay300_NoPool_AdaptiveAvg/config.yaml
   B: /home/hemu/madigan/experiments/IQN_OU_Triple_Decreasing_PER_Test/config.yaml
@@ -154,7 +157,7 @@ data_source_type: Composite
 discrete_action_atoms: 3
 discrete_actions: true
 env_type: Synth
-experiment_id: IQN_TrendOU_discount.99_nstep_20_no_rew_shape
+experiment_id: IQN_OU_discount.99_nstep_1_cosine_sim_shaper_tem1.
 init_cash: 1000000
 log_freq: 10000
 lot_unit_value: 10000
@@ -222,7 +225,11 @@ preprocessor_type: StackerDiscrete
 required_margin: 1.0
 reward_clip: *id001
 reward_shaper_config:
-  reward_shaper: None
+  reward_shaper: cosine_similarity
+  desired_portfolio:
+    - 1.0
+    - 0.
+  cosine_temp: 1.
   window: 1000
 slippage_abs: 0.0
 slippage_rel: 0.0
