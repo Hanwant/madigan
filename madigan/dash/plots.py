@@ -10,6 +10,9 @@ from PyQt5 import QtCore
 from PyQt5.QtGui import QTableWidget, QTableWidgetItem, QGridLayout
 from PyQt5.QtGui import QListWidget, QLabel
 import pyqtgraph as pg
+import matplotlib.pyplot as plt
+
+from madigan.utils.plotting_pub import make_figs, save_fig
 
 
 ###############################################################################
@@ -17,9 +20,8 @@ import pyqtgraph as pg
 ###############################################################################
 def make_train_plots(agent_type, title=None, **kw):
     if agent_type in ("DQN", "DQNCURL", "DQNReverser", "DQNController",
-                      "DQNRecurrent",
-                      "IQN", "IQNCURL", "IQNReverser", "IQNController",
-                      "DQNAE"):
+                      "DQNRecurrent", "IQN", "IQNCURL", "IQNReverser",
+                      "IQNController", "DQNAE"):
         return TrainPlotsDQN(title=title, **kw)
     if agent_type in ("DDPG", "DDPGDiscretized"):
         return TrainDDPG(title=title, **kw)
@@ -32,9 +34,8 @@ def make_train_plots(agent_type, title=None, **kw):
 
 def make_test_episode_plots(agent_type, title=None, **kw):
     if agent_type in ("DQN", "DQNCURL", "DQNReverser", "DQNController",
-                      "DQNRecurrent",
-                      "IQN", "IQNCURL", "IQNReverser", "IQNController",
-                      "DQNAE"):
+                      "DQNRecurrent", "IQN", "IQNCURL", "IQNReverser",
+                      "IQNController", "DQNAE"):
         return TestEpisodePlotsDQN(title=title, **kw)
     if agent_type in ("DDPG", "DDPGDiscretized"):
         return TestEpisodeDDPG(title=title, **kw)
@@ -47,9 +48,8 @@ def make_test_episode_plots(agent_type, title=None, **kw):
 
 def make_test_history_plots(agent_type, title=None, **kw):
     if agent_type in ("DQN", "DQNCURL", "DQNReverser", "DQNController",
-                      "DQNRecurrent",
-                      "IQN", "IQNCURL", "IQNReverser", "IQNController",
-                      "DQNAE"):
+                      "DQNRecurrent", "IQN", "IQNCURL", "IQNReverser",
+                      "IQNController", "DQNAE"):
         return TestHistoryPlotsDQN(title=title, **kw)
     if agent_type in ("DDPG", "DDPGDiscretized"):
         return TestHistoryDDPG(title=title, **kw)
@@ -79,9 +79,13 @@ class TrainPlots(QGridLayout):
         }
         self.plots = {}
         self.lines = {}
-        self.plots['loss'] = self.graphs.addPlot(title='Loss',
-                                                 bottom='step',
-                                                 left='Loss')
+        # self.plots['loss'] = self.graphs.addPlot(title='Loss',
+        #                                          bottom='step',
+        #                                          left='Loss')
+        self.plots['loss'] = pg.PlotItem(title='loss',
+                                         bottom='step',
+                                         left='loss')
+        self.graphs.addItem(self.plots['loss'])
         self.plots['loss'].showGrid(1, 1)
         self.plots['loss'].addLegend()
         self.plots['running_reward'] = self.graphs.addPlot(
@@ -134,6 +138,18 @@ class TrainPlots(QGridLayout):
         if path is not None:
             data = pd.read_hdf(path, key='train')
             self.set_data(data)
+
+    def export_plots(self, export_path):
+        figs = make_figs(self.data)
+        for label, fig in figs.items():
+            ax = fig.axes[0]
+            xrange_label = self.plots['loss'].viewRange()[0][0]
+            if label in self.plots.keys():
+                x_range, y_range = self.plots[label].viewRange()
+                ax.set_xlim(x_range)
+                ax.set_ylim(y_range)
+            save_fig(fig, export_path / f'{label}_{xrange_label: .1f}.pdf')
+        plt.close('all')
 
 
 class TrainPlotsDQN(TrainPlots):
@@ -396,8 +412,7 @@ class TestEpisodePlots(QGridLayout):
         self.asset_picker = QListWidget()
         self.asset_picker.setWindowTitle('Episode Name')
         self.asset_picker.setStyleSheet("background-color:rgb(99, 102, 49) ")
-        self.asset_picker.setSelectionMode(
-            QListWidget.MultiSelection)
+        self.asset_picker.setSelectionMode(QListWidget.MultiSelection)
         self.asset_picker.itemSelectionChanged.connect(
             self._set_data_with_variable_assets)
         self.asset_picker.setStyleSheet("background-color:rgb(23, 46, 67) ")
@@ -433,7 +448,6 @@ class TestEpisodePlots(QGridLayout):
         self.link_x_axes()
         # self.unlink_x_axes()
 
-
     def log_adjust(self):
         for metric, plot in self.plots.items():
             if metric in self.data.keys():
@@ -457,7 +471,6 @@ class TestEpisodePlots(QGridLayout):
         self.datapath = Path(path)
         self.load_episode_list()
         self.load_from_hdf()
-
 
     def clear_plots(self):
         """ Clear data for all plots """
@@ -543,7 +556,10 @@ class TestEpisodePlots(QGridLayout):
         self.lines['availableMargin'].setData(y=data['availableMargin'],
                                               pen=self.colours['cash'])
         self.lines['ledgerNormed'].setImage(self.data['ledgerNormed'],
-                                            axes={'x': 0, 'y': 1})
+                                            axes={
+                                                'x': 0,
+                                                'y': 1
+                                            })
         self.current_pos_line.setValue(len(data['equity']) - 1)
         self.current_pos_line.setBounds((0, len(data['equity']) - 1))
         self.update_accounting_table()
@@ -613,6 +629,23 @@ class TestEpisodePlots(QGridLayout):
         except IndexError:
             import traceback
             traceback.print_exc()
+
+    def export_plots(self, export_path):
+        figs = make_figs(self.data, assets=self.assets)
+        ep_name = Path(self.episode_table.currentItem().text()).stem
+        if ep_name is None:
+            raise IndexError("Episode from table must be selected for export")
+        xrange_label = self.plots['prices'].viewRange()[0][0]
+        for label, fig in figs.items():
+            ax = fig.axes[0]
+            if label in self.plots.keys():
+                x_range, y_range = self.plots[label].viewRange()
+                ax.set_xlim(x_range)
+                ax.set_ylim(y_range)
+            save_fig(
+                fig,
+                export_path / f'{ep_name}_{xrange_label: .1f}/{label}.pdf')
+        plt.close('all')
 
 
 class TestEpisodePlotsDQN(TestEpisodePlots):
@@ -975,6 +1008,9 @@ class TestHistoryPlots(QGridLayout):
         if path is not None:
             data = pd.read_hdf(path / 'test.hdf5', key='run_history')
             self.set_data(data)
+
+    def export_plots(self, export_path):
+        pass
 
 
 class TestHistoryPlotsDQN(TestHistoryPlots):

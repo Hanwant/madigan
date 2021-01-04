@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'dash/dash.ui'
+# Form implementation generated from reading ui file 'dash.ui'
 #
 # Created by: PyQt5 UI code generator 5.15.0
 #
@@ -158,9 +158,12 @@ class Ui_MainWindow(object):
         self.gridLayout_4.addLayout(self.horizontalLayout_4, 5, 0, 1, 1)
         self.gridLayout_4.setColumnStretch(1, 1)
         self.gridLayout_5.addLayout(self.gridLayout_4, 0, 0, 1, 1)
+        self.horizontalLayout_3 = QtWidgets.QHBoxLayout()
+        self.horizontalLayout_3.setObjectName("horizontalLayout_3")
+        self.gridLayout_5.addLayout(self.horizontalLayout_3, 1, 0, 1, 1)
         MainWindow.setCentralWidget(self.centralwidget)
         self.menubar = QtWidgets.QMenuBar(MainWindow)
-        self.menubar.setGeometry(QtCore.QRect(0, 0, 1463, 22))
+        self.menubar.setGeometry(QtCore.QRect(0, 0, 1463, 20))
         self.menubar.setObjectName("menubar")
         self.menuDash_Synth = QtWidgets.QMenu(self.menubar)
         self.menuDash_Synth.setObjectName("menuDash_Synth")
@@ -168,6 +171,8 @@ class Ui_MainWindow(object):
         self.menuTraining.setObjectName("menuTraining")
         self.menuSettings = QtWidgets.QMenu(self.menubar)
         self.menuSettings.setObjectName("menuSettings")
+        self.menuExport = QtWidgets.QMenu(self.menubar)
+        self.menuExport.setObjectName("menuExport")
         MainWindow.setMenuBar(self.menubar)
         self.toolBar = QtWidgets.QToolBar(MainWindow)
         self.toolBar.setObjectName("toolBar")
@@ -180,14 +185,27 @@ class Ui_MainWindow(object):
         self.actionSet_Experiments_Folder.setObjectName("actionSet_Experiments_Folder")
         self.actionSet = QtWidgets.QAction(MainWindow)
         self.actionSet.setObjectName("actionSet")
+        self.actionExport_Train = QtWidgets.QAction(MainWindow)
+        self.actionExport_Train.setObjectName("actionExport_Train")
+        self.actionExport_Test_History = QtWidgets.QAction(MainWindow)
+        self.actionExport_Test_History.setObjectName("actionExport_Test_History")
+        self.actionExport_Test_Run = QtWidgets.QAction(MainWindow)
+        self.actionExport_Test_Run.setObjectName("actionExport_Test_Run")
+        self.actionExport_All = QtWidgets.QAction(MainWindow)
+        self.actionExport_All.setObjectName("actionExport_All")
         self.menuTraining.addSeparator()
         self.menuTraining.addSeparator()
         self.menuTraining.addSeparator()
         self.menuDash_Synth.addSeparator()
         self.menuDash_Synth.addAction(self.menuTraining.menuAction())
         self.menuSettings.addAction(self.actionSet_Experiments_Folder)
+        self.menuExport.addAction(self.actionExport_Train)
+        self.menuExport.addAction(self.actionExport_Test_History)
+        self.menuExport.addAction(self.actionExport_Test_Run)
+        self.menuExport.addAction(self.actionExport_All)
         self.menubar.addAction(self.menuDash_Synth.menuAction())
         self.menubar.addAction(self.menuSettings.menuAction())
+        self.menubar.addAction(self.menuExport.menuAction())
 
         self.retranslateUi(MainWindow)
         self.PlotTab.setCurrentIndex(0)
@@ -212,8 +230,8 @@ class Ui_MainWindow(object):
         self.ParamsEdit.setHtml(_translate("MainWindow", "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0//EN\" \"http://www.w3.org/TR/REC-html40/strict.dtd\">\n"
 "<html><head><meta name=\"qrichtext\" content=\"1\" /><style type=\"text/css\">\n"
 "p, li { white-space: pre-wrap; }\n"
-"</style></head><body style=\" font-family:\'Ubuntu\'; font-size:11pt; font-weight:400; font-style:normal;\">\n"
-"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\">{\'name\': \'run0\', \'discrete_actions\': true, \'action_atoms\':11, \'nsteps\':100}</p></body></html>"))
+"</style></head><body style=\" font-family:\'Sans Serif\'; font-size:9pt; font-weight:400; font-style:normal;\">\n"
+"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><span style=\" font-family:\'Ubuntu\'; font-size:11pt;\">{\'name\': \'run0\', \'discrete_actions\': true, \'action_atoms\':11, \'nsteps\':100}</span></p></body></html>"))
         self.ExpTab.setTabText(self.ExpTab.indexOf(self.tab), _translate("MainWindow", "Config"))
         self.ExpTab.setTabText(self.ExpTab.indexOf(self.checkPoints_tab), _translate("MainWindow", "Checkpoints"))
         self.BranchButton.setText(_translate("MainWindow", "Branch"))
@@ -221,6 +239,11 @@ class Ui_MainWindow(object):
         self.menuDash_Synth.setTitle(_translate("MainWindow", "Dash-Synth"))
         self.menuTraining.setTitle(_translate("MainWindow", "Training"))
         self.menuSettings.setTitle(_translate("MainWindow", "Settings"))
+        self.menuExport.setTitle(_translate("MainWindow", "Export"))
         self.toolBar.setWindowTitle(_translate("MainWindow", "toolBar"))
         self.actionSet_Experiments_Folder.setText(_translate("MainWindow", "Set Experiments Folder"))
         self.actionSet.setText(_translate("MainWindow", "Set"))
+        self.actionExport_Train.setText(_translate("MainWindow", "Export Train"))
+        self.actionExport_Test_History.setText(_translate("MainWindow", "Export Test History"))
+        self.actionExport_Test_Run.setText(_translate("MainWindow", "Export Test Run"))
+        self.actionExport_All.setText(_translate("MainWindow", "Export All Plots"))

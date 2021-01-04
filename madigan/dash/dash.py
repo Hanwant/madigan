@@ -9,6 +9,7 @@ import pandas as pd
 from PyQt5 import QtCore, QtGui, QtWidgets
 from PyQt5.QtGui import QPen, QColor
 from PyQt5.QtWidgets import QApplication, QLabel, QWidget, QPushButton, QVBoxLayout
+from PyQt5.QtWidgets import QAction
 import pyqtgraph as pg
 from .dash_ui import Ui_MainWindow
 from .trainer_thread import TrainerWorker
@@ -19,29 +20,31 @@ from ..run.trainer import Trainer
 from ..utils.config import make_config, Config, load_config, save_config
 
 
-class MainWindow( Ui_MainWindow, QtWidgets.QMainWindow):
+class MainWindow(Ui_MainWindow, QtWidgets.QMainWindow):
     def __init__(self):
         super().__init__()
         self.setupUi(self)
         # VARIABLES ##########################################################
-        self.exp_config = make_config(experiment_id="TestDash",
-                                      # overwrite_exp=True,
-                                      data_source_type="OU",
-                                      agent_type="DQN",
-                                      assets=["ou1"])
+        self.exp_config = make_config(
+            experiment_id="TestDash",
+            # overwrite_exp=True,
+            data_source_type="OU",
+            agent_type="DQN",
+            assets=["ou1"])
         self.trainer = None
         self.compSource = "Local"
-        self.cache_filepath = Path(os.getcwd())/'.cache.dash'
+        self.cache_filepath = Path(os.getcwd()) / '.cache.dash'
 
         # SERVER COMMUINICATION ###############################################
-        default_server = {'name': 'local',
-                          'address': 'self',
-                          'port': None,
-                          'pid': str(os.getpid()),
-                          'status': 'Live',
-                          'keyPath': None,
-                          'pass': None,
-                          }
+        default_server = {
+            'name': 'local',
+            'address': 'self',
+            'port': None,
+            'pid': str(os.getpid()),
+            'status': 'Live',
+            'keyPath': None,
+            'pass': None,
+        }
         self.servers = [default_server]
         self.ServerInfo.setColumnCount(4)
         self.ServerInfo.setRowCount(len(self.servers))
@@ -53,7 +56,8 @@ class MainWindow( Ui_MainWindow, QtWidgets.QMainWindow):
         for row, server in enumerate(self.servers):
             for col, name in enumerate(self.serverInfoCols):
                 if name == 'location':
-                    item = QtGui.QTableWidgetItem(f"{server['address']}:{server['port']}")
+                    item = QtGui.QTableWidgetItem(
+                        f"{server['address']}:{server['port']}")
                 else:
                     item = QtGui.QTableWidgetItem(server[name])
                 self.ServerInfo.setItem(row, col, item)
@@ -62,12 +66,16 @@ class MainWindow( Ui_MainWindow, QtWidgets.QMainWindow):
         # HOUSE KEEPING
         self.config_path = None
         self.experiments_path = None
-        self.load_user_cache()  # loads saved config_path and experiments_path
+        self.export_path = None
+        self.load_user_cache()  # loads previous 3 variables if saved
 
         # Experiment CONTROL SIGNALS/SLOTS #########################################
-        # MENU BAR
+        # MENU BAR  export actions are connected in self.make_plots()
         self.actionSet_Experiments_Folder.triggered.connect(
             self.choose_experiments_path)
+        self.export_folder_action = QAction("Set Export Folder")
+        self.menuSettings.addAction(self.export_folder_action)
+        self.export_folder_action.triggered.connect(self.choose_export_path)
         # CONFIG TAB
         # self.FilenameLabel.setText('/'.join(self.config_path.parts[-1:]))
         self.LoadConfigButton.clicked.connect(self.load_experiment)
@@ -80,11 +88,8 @@ class MainWindow( Ui_MainWindow, QtWidgets.QMainWindow):
         # EXP TAB
         self.ExperimentsList.currentRowChanged.connect(
             lambda: self.load_experiment(
-                self.experiments_path/
-                self.ExperimentsList.item(
-                    self.ExperimentsList.currentRow()).text()/
-                'config.yaml')
-            )
+                self.experiments_path / self.ExperimentsList.item(
+                    self.ExperimentsList.currentRow()).text() / 'config.yaml'))
         if self.experiments_path is None:
             self.choose_experiments_path()
         else:
@@ -96,11 +101,13 @@ class MainWindow( Ui_MainWindow, QtWidgets.QMainWindow):
         self.StopCommand.clicked.connect(self.stop_job)
         # Branching into new experiments
         self.BranchButton.clicked.connect(self.new_branch)
-        self.BranchCheckpointButton.clicked.connect(
-            self.new_branch_checkpoint)
+        self.BranchCheckpointButton.clicked.connect(self.new_branch_checkpoint)
 
-        self.plots = {'train': None, 'test_episodes': None,
-                      'test_history': None}  # custom plots
+        self.plots = {
+            'train': None,
+            'test_episodes': None,
+            'test_history': None
+        }  # custom plots
         self.make_plots()
         self.worker = None
         self.threadpool = QtCore.QThreadPool()
@@ -114,10 +121,16 @@ class MainWindow( Ui_MainWindow, QtWidgets.QMainWindow):
 
     def choose_experiments_path(self):
         path = QtWidgets.QFileDialog.getExistingDirectory(
-            self, 'Choose Folder containing experiments',
-            os.getcwd())
+            self, 'Choose Folder containing experiments', os.getcwd())
         self.experiments_path = Path(path) if path != '' else None
         self.load_experiments_list()
+
+    def choose_export_path(self):
+        msg = "Choose base folder for exporting plots, where a folder " + \
+            "will be created (if doesn't exist) with the experiments name"
+        path = QtWidgets.QFileDialog.getExistingDirectory(
+            self, msg, os.getcwd())
+        self.export_path = Path(path) if path != '' else None
 
     def new_branch(self):
         if self.worker is None:
@@ -136,8 +149,7 @@ class MainWindow( Ui_MainWindow, QtWidgets.QMainWindow):
                 self.worker.trainer.branch_experiment(branch)
                 self.load_experiment(
                     Path(self.worker.trainer.config.basepath) /
-                    self.worker.trainer.config.experiment_id /
-                    'config.yaml')
+                    self.worker.trainer.config.experiment_id / 'config.yaml')
 
     def new_branch_checkpoint(self):
         if self.worker is None:
@@ -157,15 +169,16 @@ class MainWindow( Ui_MainWindow, QtWidgets.QMainWindow):
                 self.worker.trainer.branch_from_checkpoint(checkpoint)
                 self.load_experiment(
                     Path(self.worker.trainer.config.basepath) /
-                    self.worker.trainer.config.experiment_id /
-                    'config.yaml')
+                    self.worker.trainer.config.experiment_id / 'config.yaml')
 
     def load_experiments_list(self):
-        experiments = [p.name for p in Path(self.experiments_path).iterdir()
-                       if p.is_dir()]
+        experiments = [
+            p.name for p in Path(self.experiments_path).iterdir()
+            if p.is_dir()
+        ]
         experiments = sorted(experiments,
                              key=lambda x:
-                             (self.experiments_path/x).stat().st_mtime,
+                             (self.experiments_path / x).stat().st_mtime,
                              reverse=True)
         self.ExperimentsList.clear()
         for exp in experiments:
@@ -193,22 +206,45 @@ class MainWindow( Ui_MainWindow, QtWidgets.QMainWindow):
         self.PlotsWidgetTrain.setLayout(self.plots['train'])
         self.PlotsWidgetTestEpisodes.setLayout(self.plots['test_episode'])
         self.PlotsWidgetTest.setLayout(self.plots['test_history'])
+        # export menu
+        self.actionExport_Train.triggered.connect(
+            lambda: self.export_plots('train'))
+        self.actionExport_Test_History.triggered.connect(
+            lambda: self.export_plots('test_history'))
+        self.actionExport_Test_Run.triggered.connect(
+            lambda: self.export_plots('test_episode'))
+        self.actionExport_All.triggered.connect(self.export_plots)
 
     def remove_plots(self):
         for plot in self.plots.values():
             if plot is not None:
                 delete_layout(plot)
                 QtCore.QObjectCleanupHandler().add(plot)
+        self.actionExport_Train.triggered.disconnect()
+        self.actionExport_Test_History.triggered.disconnect()
+        self.actionExport_Test_Run.triggered.disconnect()
+        self.actionExport_All.triggered.disconnect()
+
+    def export_plots(self, plot_name: str = None):
+        if self.export_path is None:
+            self.choose_export_path()
+        export_path = self.export_path / self.exp_config.experiment_id
+        plot_names = ('train', 'test_history',
+                      'test_episode') if plot_name is None else (plot_name, )
+        for name in plot_names:
+            self.plots[name].export_plots(export_path)
 
     def update_server_status(self):
         for row in range(self.ServerInfo.rowCount()):
             status = self.ServerInfo.item(row, 3).text()
             if status == 'Live':
                 for col in range(self.ServerInfo.columnCount()):
-                    self.ServerInfo.item(row, col).setBackground(QColor('#0a290a'))
+                    self.ServerInfo.item(row,
+                                         col).setBackground(QColor('#0a290a'))
             elif status == "Not Responding":
                 for col in range(self.ServerInfo.columnCount()):
-                    self.ServerInfo.item(row, col).setBackground(QColor('#999999'))
+                    self.ServerInfo.item(row,
+                                         col).setBackground(QColor('#999999'))
 
     def make_worker(self, action: str):
         if action not in TrainerWorker.action_types:
@@ -237,17 +273,18 @@ class MainWindow( Ui_MainWindow, QtWidgets.QMainWindow):
                 self.threadpool.start(worker)
             elif self.compSource == "Server":
                 # if action == 'test':
-                    # self.socket.send_pyobj({'signal': 'job', 'action': 'test',
-                    #                         'config': self.exp_config})
+                # self.socket.send_pyobj({'signal': 'job', 'action': 'test',
+                #                         'config': self.exp_config})
                 # elif action == 'train':
-                    # self.socket.send_pyobj({'signal': 'job', 'action': 'train',
-                    #                         'config': self.exp_config})
+                # self.socket.send_pyobj({'signal': 'job', 'action': 'train',
+                #                         'config': self.exp_config})
                 raise NotImplementedError(
                     f"comp source {self.compSource} has not been impl")
         except KeyboardInterrupt:
             pass
         except Exception as E:
-            import traceback; traceback.print_exc()
+            import traceback
+            traceback.print_exc()
         finally:
             pass
 
@@ -287,7 +324,8 @@ class MainWindow( Ui_MainWindow, QtWidgets.QMainWindow):
                     self.exp_config.experiment_id/'logs'
                 if self.exp_config.agent_type != old_agent_type:
                     self.make_plots()
-                self.FilenameLabel.setText('/'.join(self.config_path.parts[-2:]))
+                self.FilenameLabel.setText('/'.join(
+                    self.config_path.parts[-2:]))
                 # set new datapath and let plots load new data
                 self.set_datapath(path)
             self.load_checkpoints_list()
@@ -314,19 +352,24 @@ class MainWindow( Ui_MainWindow, QtWidgets.QMainWindow):
         if load:
             # fname = QtGui.QFileDialog.getOpenFileName(self, 'Choose config file',
             #                                           Path(os.getcwd()))[0]
-            fname = QtGui.QFileDialog.getOpenFileName(self, 'Choose config file',
+            fname = QtGui.QFileDialog.getOpenFileName(self,
+                                                      'Choose config file',
                                                       os.getcwd())[0]
         if save:
             # fname = QtGui.QFileDialog.getSaveFileName(self, 'Choose config file',
             #                                           Path(os.getcwd()))[0]
-            fname = QtGui.QFileDialog.getSaveFileName(self, 'Choose config file',
+            fname = QtGui.QFileDialog.getSaveFileName(self,
+                                                      'Choose config file',
                                                       os.getcwd())[0]
         return fname
 
     def save_user_cache(self):
         if self.config_path is not None:
-            settings = {'config_path': self.config_path,
-                        'experiments_path': self.experiments_path}
+            settings = {
+                'config_path': self.config_path,
+                'experiments_path': self.experiments_path,
+                'export_path': self.export_path
+            }
             with open(self.cache_filepath, 'wb') as f:
                 pickle.dump(settings, f)
                 print('saving user cache')
@@ -338,12 +381,14 @@ class MainWindow( Ui_MainWindow, QtWidgets.QMainWindow):
                 settings = pickle.load(f)
             self.config_path = settings['config_path']
             self.experiments_path = settings['experiments_path']
+            self.export_path = settings['export_path']
             # print('setting config_path: ', self.config_path)
 
     def closeEvent(self, event):
         """ Save local settings to pkl here """
         self.save_user_cache()
         super(QtWidgets.QMainWindow, self).closeEvent(event)
+
 
 def run_dash():
 
@@ -356,4 +401,3 @@ def run_dash():
     main.show()
 
     app.exec_()
-
