@@ -212,6 +212,7 @@ class OffPolicyQ(Agent):
             qvals = self.get_qvals(state, target=target)
             action = self.get_action(qvals=qvals, target=target).cpu().numpy()
             transaction = self.action_to_transaction(action)
+            _tst_metrics['timestamp'] = state.timestamp[-1]
             state, reward, done, info = self._env.step(transaction)
             self._preprocessor.stream_state(state)
             state = self._preprocessor.current_data()

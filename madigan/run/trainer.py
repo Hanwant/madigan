@@ -76,6 +76,19 @@ class Trainer:
         self.server_port = 9000
         # self.init_server()
         self.terminate_early = False
+        if self.agent.env.isDateTime:
+            self.test_summary_timeframes = [
+                (tf, pd.Timedelta(tf)) for tf in ('1min', '10min', '30min',
+                                                  '1h', '2h', '4h', '8h', '1d')
+            ]
+        else:
+            max_tf = int(np.log2(self.test_steps // 10))
+            self.test_summary_timeframes = [(str(2**i), 2**i)
+                                            for i in range(max_tf)]
+
+    @property
+    def assets(self):
+        return [asset.code for asset in self.agent.env.assets]
 
     @property
     def env(self):
@@ -110,13 +123,8 @@ class Trainer:
             train_metrics = reduce_train_metrics(
                 train_metrics, ['Gt', 'Qt', 'rewards', 'entropy'])
             train_df = pd.DataFrame(train_metrics)
-            # save_to_hdf(self.logdir/'train.hdf5', 'train', train_df,
-            #             append_if_exists=append)
             train_df.to_hdf(self.logdir / 'train.hdf5', 'train', append=append)
         if len(test_metrics):
-            # if self.test_metrics_cols is not None:
-            #     test_metrics = dict(filter(lambda x: x[0] in self.test_metrics_cols,
-            #                                list_2_dict(test_metrics).items()))
             self.logger.info(f'logging {len(test_metrics)} test runs')
             for (env_step, test_run) in test_metrics:
                 test_df = pd.DataFrame(test_run)
@@ -125,11 +133,12 @@ class Trainer:
                     f'_episode_steps_{len(test_df)}.hdf5')
                 test_df.to_hdf(test_filename, 'full_run', append=False)
                 with h5py.File(test_filename, 'a') as f:
-                    f.attrs['asset_names'] = [
-                        asset.code for asset in self.agent.env.assets
-                    ]
-                summary = test_summary(test_df)
-                summary['env_steps'] = [self.agent.env_steps]
+                    f.attrs['asset_names'] = self.assets
+                summary = test_summary(test_df,
+                                       self.test_summary_timeframes,
+                                       self.assets,
+                                       is_datetime=self.agent.env.isDateTime)
+                summary['env_steps'] = [env_step]
                 summary['training_steps'] = [self.agent.training_steps]
                 # save_to_hdf(self.logdir/'test.hdf5', 'run_history',
                 #             summary, append_if_exists=True)
@@ -229,8 +238,11 @@ class Trainer:
         Tests the agent on a test environment instead of its internal
         env which it is using to train.
         """
-        return test_episode(self.agent, self.test_env, self.test_preprocessor,
-                            self.agent.test_steps, reset=True)
+        return test_episode(self.agent,
+                            self.test_env,
+                            self.test_preprocessor,
+                            self.agent.test_steps,
+                            reset=True)
 
     def train(self, nsteps=None):
         """
@@ -335,5 +347,3 @@ class Trainer:
     def run_server(self, port: int = None):
         while True:
             msg = self.socket.recv_json()
-
-

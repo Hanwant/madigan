@@ -149,7 +149,7 @@ namespace madigan{
     if (allKeysPresent){
       filepath = std::any_cast<string>(params["filepath"]);
       mainKey = std::any_cast<string>(params["main_key"]);
-      timestampKey= std::any_cast<string>(params["timestamp_key"]);
+      timestampKey = std::any_cast<string>(params["timestamp_key"]);
       priceKey= std::any_cast<string>(params["price_key"]);
       assets_ = Assets({mainKey});
       loadData();

@@ -56,6 +56,7 @@ namespace madigan{
     virtual const PriceVector& currentPrices() const=0;
     virtual void reset()=0;
     virtual std::size_t currentTime() const =0;
+    virtual bool isDateTime() const { return false; }
   protected:
     Assets assets_;
   };
@@ -103,6 +104,7 @@ namespace madigan{
     void reset(){}
     int size(){ return prices_.size();}
     std::size_t currentTime() const{return timestamp_;}
+    bool isDateTime() const override { return true; }
 
   private:
     PriceVector prices_;

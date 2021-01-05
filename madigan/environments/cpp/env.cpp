@@ -817,6 +817,9 @@ PYBIND11_MODULE(env, m){
     .def_property_readonly("dataSource", &Env::dataSource,
                            "returns reference to current buffer for prices"
                            ", use reference with care as constness is cast away on python side")
+    .def_property_readonly("isDateTime", &Env::isDateTime,
+                           "indicates whether the timestamps from the dataSource"
+                           "are in datetime units (sec past epoch) or a normal index")
     .def_property_readonly("requiredMargin", &Env::requiredMargin,
                            "required margin level")
     .def_property_readonly("maintenanceMargin", &Env::maintenanceMargin,

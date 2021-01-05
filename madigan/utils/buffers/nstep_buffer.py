@@ -173,7 +173,7 @@ class NStepBuffer:
         to the shaper function using partial - keeps reference to both.
         """
         shaper_type = shaper_config['reward_shaper']
-        if shaper_type in ("cosine_similarity", ):
+        if shaper_type in ("cosine_similarity", "cosine_port_shaper"):
             desired_portfolio = np.array(shaper_config['desired_portfolio'])
             temp = shaper_config['cosine_temp']
             return partial(cosine_port_shaper, self._buffer, self.discounts,
