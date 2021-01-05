@@ -417,6 +417,8 @@ class TestEpisodePlots(QGridLayout):
             self._set_data_with_variable_assets)
         self.asset_picker.setStyleSheet("background-color:rgb(23, 46, 67) ")
 
+        self.tear_sheet = pg.TableWidget(editable=False, sortable=False)
+
         # self.episode_table.horizontalHeader().setStretchLastSection(True)
         self.accounting_table.horizontalHeader().setStretchLastSection(True)
         self.positions_table.horizontalHeader().setStretchLastSection(True)
@@ -424,13 +426,35 @@ class TestEpisodePlots(QGridLayout):
         self.episode_table_label = QLabel("Test Episodes")
         self.asset_picker_label = QLabel("Assets")
 
-        self.addWidget(self.graphs, 0, 0, -1, 8)
-        self.addWidget(self.episode_table_label, 0, 10, 1, 1)
-        self.addWidget(self.episode_table, 1, 10, 1, 1)
-        self.addWidget(self.accounting_table, 2, 10, 1, 1)
-        self.addWidget(self.positions_table, 3, 10, 1, 1)
-        self.addWidget(self.asset_picker_label, 4, 10, 1, 1)
-        self.addWidget(self.asset_picker, 5, 10, 1, 1)
+        self.tables = QtGui.QVBoxLayout()
+        self.tables.addWidget(self.episode_table_label)
+        self.tables.addWidget(self.episode_table)
+        self.tables.addWidget(self.accounting_table)
+        self.tables.addWidget(self.positions_table)
+        self.tables.addWidget(self.asset_picker_label)
+        self.tables.addWidget(self.asset_picker)
+
+        self.splitter = QtGui.QSplitter(QtCore.Qt.Horizontal)
+        self.splitter.addWidget(self.graphs)
+        # self.splitter.addWidget(self.episode_table_label)
+        # self.splitter.addWidget(self.episode_table)
+        # self.splitter.addWidget(self.accounting_table)
+        # self.splitter.addWidget(self.positions_table)
+        # self.splitter.addWidget(self.asset_picker_label)
+        # self.splitter.addWidget(self.asset_picker)
+        self.tables_widget = QtGui.QWidget()
+        self.tables_widget.setLayout(self.tables)
+        self.splitter.addWidget(self.tables_widget)
+        self.splitter.addWidget(self.tear_sheet)
+        self.addWidget(self.splitter, 0, 0, -1, -1)
+
+        # self.addWidget(self.graphs, 0, 0, -1, 8)
+        # self.addLayout(self.tables, 0, 10, -1, 1)
+        # self.addWidget(self.tear_sheet, 0, 12, -1, -1)
+        # self.splitter.addWidget(self.tear_sheet)
+        # self.splitter.addWidget(self.tables_widget)
+        # self.addWidget(self.splitter, 0, 11, -1, 1)
+
         for i in range(8):
             self.setColumnStretch(i, 4)
 
@@ -534,6 +558,7 @@ class TestEpisodePlots(QGridLayout):
                     "assets provided by dataset attribute is not"
                     "the same length as assets indicated by  data")
         if self.assets != assets:
+            self.asset_picker.clear()
             self.assets = assets
             # self.asset_picker.addItems(self.assets)
             for i, asset in enumerate(self.assets):
@@ -602,7 +627,23 @@ class TestEpisodePlots(QGridLayout):
         with h5py.File(latest_episode, 'r') as f:
             if 'asset_names' in f.attrs.keys():
                 assets = f.attrs['asset_names']
+        self.load_tearsheet(path)
         self.set_data(data, assets=assets)
+
+    def load_tearsheet(self, path):
+        if path is not None:
+            ep_name = path.stem
+            env_steps = int(ep_name.split('_')[3])
+            data = pd.read_hdf(path.parent/'test.hdf5', key='run_history')
+            run_summary = data[data['env_steps'] == env_steps]
+            if len(run_summary) == 0:
+                run_summary = data[data['env_steps'] == env_steps-1]
+                if len(run_summary) == 0:
+                    run_summary = data[data['env_steps'] == env_steps+1]
+            print('len run summ: ', len(run_summary))
+            if len(run_summary) > 0:
+                run_summary = run_summary.to_dict()
+                self.tear_sheet.setData(run_summary)
 
     def update_accounting_table(self):
         current_timepoint = int(self.current_pos_line.value())
@@ -987,11 +1028,15 @@ class TestHistoryPlots(QGridLayout):
         if data is None or len(data) == 0:
             print("test data is empty")
             data = {k: [] for k in self.lines.keys()}
-        self.lines['mean_equity'].setData(y=data['mean_equity'],
+        x = data['training_steps']
+        self.lines['mean_equity'].setData(x=x,
+                                          y=data['mean_equity'],
                                           pen=self.colours['mean_equity'])
-        self.lines['final_equity'].setData(y=data['final_equity'],
+        self.lines['final_equity'].setData(x=x,
+                                           y=data['final_equity'],
                                            pen=self.colours['final_equity'])
-        self.lines['mean_reward'].setData(y=data['mean_reward'],
+        self.lines['mean_reward'].setData(x=x,
+                                          y=data['mean_reward'],
                                           pen=self.colours['mean_reward'])
         # self.lines['mean_transaction_cost'].setData(
         # y=data['mean_transaction_cost'],
