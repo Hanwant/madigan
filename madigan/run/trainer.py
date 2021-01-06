@@ -276,6 +276,9 @@ class Trainer:
         self.agent.initialize_buffer()
         test_metrics.append((i, self.agent.test_episode()))
 
+        summary = test_summary(pd.DataFrame(test_metrics[-1][1]),
+                               self.test_summary_timeframes, self.assets,)
+
         self.logger.info("Starting Training")
         train_loop = self.agent.step(nsteps, log_freq=5000)
 

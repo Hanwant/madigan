@@ -157,7 +157,7 @@ data_source_type: Composite
 discrete_action_atoms: 3
 discrete_actions: true
 env_type: Synth
-experiment_id: IQN_OU_discount.99_nstep_1_no_shaper_cosine_penalty_.1
+experiment_id: IQN_OU_discount.99_nstep_1_no_shaper
 init_cash: 1000000
 log_freq: 10000
 lot_unit_value: 10000
@@ -225,11 +225,11 @@ preprocessor_type: StackerDiscrete
 required_margin: 1.0
 reward_clip: *id001
 reward_shaper_config:
-  reward_shaper: cosine_port_shaper
+  reward_shaper: None
   desired_portfolio:
     - 1.0
     - 0.
-  cosine_temp: .1
+  cosine_temp: .01
   window: 1000
 slippage_abs: 0.0
 slippage_rel: 0.0

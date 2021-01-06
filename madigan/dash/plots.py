@@ -436,24 +436,11 @@ class TestEpisodePlots(QGridLayout):
 
         self.splitter = QtGui.QSplitter(QtCore.Qt.Horizontal)
         self.splitter.addWidget(self.graphs)
-        # self.splitter.addWidget(self.episode_table_label)
-        # self.splitter.addWidget(self.episode_table)
-        # self.splitter.addWidget(self.accounting_table)
-        # self.splitter.addWidget(self.positions_table)
-        # self.splitter.addWidget(self.asset_picker_label)
-        # self.splitter.addWidget(self.asset_picker)
         self.tables_widget = QtGui.QWidget()
         self.tables_widget.setLayout(self.tables)
         self.splitter.addWidget(self.tables_widget)
         self.splitter.addWidget(self.tear_sheet)
         self.addWidget(self.splitter, 0, 0, -1, -1)
-
-        # self.addWidget(self.graphs, 0, 0, -1, 8)
-        # self.addLayout(self.tables, 0, 10, -1, 1)
-        # self.addWidget(self.tear_sheet, 0, 12, -1, -1)
-        # self.splitter.addWidget(self.tear_sheet)
-        # self.splitter.addWidget(self.tables_widget)
-        # self.addWidget(self.splitter, 0, 11, -1, 1)
 
         for i in range(8):
             self.setColumnStretch(i, 4)
