@@ -294,7 +294,7 @@ def beta_coeff_of_series(series_a,
 
 def _covariance_of_returns(ret_1: np.ndarray, ret_2: np.ndarray, ddof=1):
     """ Computes standard covariance of two returns arrays """
-    cov = (ret_1 - np.nanmean(ret_1)) * (ret_2 - np.nanmean(ret_2))
+    cov = np.abs(ret_1 - np.nanmean(ret_1)) * np.abs(ret_2 - np.nanmean(ret_2))
     return np.nansum(cov) / (len(cov) - ddof)
 
 

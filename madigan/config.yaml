@@ -81,32 +81,32 @@ data_source_config:
   #     dX: .01
   #     noise: .01
   #   data_source_type: SineAdder
-  OU:
-    data_source_config:
-      mean:
-        - 5.
-      phi:
-        - .04
-      theta:
-        - .15
-    data_source_type: OU
-  # SimpleTrend:
+  # OU:
   #   data_source_config:
-  #     trend_prob:
-  #       - .01
-  #     noise:
-  #       - .001
-  #     min_period:
-  #       - 100
-  #     max_period:
-  #       - 500
-  #     start:
+  #     mean:
   #       - 5.
-  #     dYMin:
-  #       - .0001
-  #     dYMax:
-  #       - .0005
-  #   data_source_type: SimpleTrend
+  #     phi:
+  #       - .04
+  #     theta:
+  #       - .15
+  #   data_source_type: OU
+  SimpleTrend:
+    data_source_config:
+      trend_prob:
+        - .01
+      noise:
+        - .001
+      min_period:
+        - 100
+      max_period:
+        - 500
+      start:
+        - 5.
+      dYMin:
+        - .0001
+      dYMax:
+        - .0005
+    data_source_type: SimpleTrend
   # TrendOU:
   #   data_source_config:
   #     trend_prob:
@@ -157,7 +157,7 @@ data_source_type: Composite
 discrete_action_atoms: 3
 discrete_actions: true
 env_type: Synth
-experiment_id: IQN_OU_discount.99_nstep_1_no_shaper
+experiment_id: IQN_Trend_p.01_n.001_discount.99_nstep_1
 init_cash: 1000000
 log_freq: 10000
 lot_unit_value: 10000
@@ -229,7 +229,7 @@ reward_shaper_config:
   desired_portfolio:
     - 1.0
     - 0.
-  cosine_temp: .01
+  cosine_temp: .02
   window: 1000
 slippage_abs: 0.0
 slippage_rel: 0.0
