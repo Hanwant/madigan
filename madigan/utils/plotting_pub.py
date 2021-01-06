@@ -74,32 +74,37 @@ def make_train_figs(experiment_id, basepath):
     return figs
 
 
-def make_multi_line_plot(dat, ax, assets=None):
-    n_assets = dat.shape[1]
+def make_multi_asset_plot(ax, x, ys, assets=None):
+    n_assets = ys.shape[1]
     assets = assets if assets is not None else [
         f"asset_{i}" for i in range(n_assets)
     ]
     if n_assets != len(assets):
         raise ValueError("data shape does not match number of assets provided")
     for i, asset in enumerate(assets):
-        ax.plot(dat[:, i], label=asset)
+        ax.plot(x, ys[:, i], label=asset)
     ax.legend(loc='upper left')
     return ax
 
 
-
-def make_figs(data: Union[dict, pd.DataFrame], assets=None):
+def make_figs(data: Union[dict, pd.DataFrame], assets=None, x_key=None):
+    if x_key is None:
+        x = None
+    else:
+        x = data[x_key]
     figs = {}
     for label in data.keys():
+        if x is None or len(x) != len(data[label]):
+            x = range(len(data[label]))
         try:
             # dat = data[label].squeeze()
             dat = data[label]
             fig, ax = plt.subplots(1, 1, figsize=(15, 10))
             if len(dat.shape) == 1:
-                ax.plot(dat, label=label)
+                ax.plot(x, dat, label=label)
                 ax.legend(loc='upper left')
             elif len(dat.shape) == 2:
-                ax = make_multi_line_plot(dat, ax, assets=assets)
+                ax = make_multi_asset_plot(ax, x, dat, assets=assets, )
             else:
                 ax.imshow(dat.squeeze())  # vmin=0., vmax=1.) #, cmap='gray'
             ax.set_ylabel(label)
