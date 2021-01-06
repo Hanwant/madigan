@@ -360,7 +360,7 @@ def _sortino_of_returns(returns, benchmark=None, ddof=1):
             return 10.  # heuristic for no downside
         else:
             return 0.  # heuristic for no down or upside
-    return np.clip(diff / downside, None, 10.)
+    return np.clip(diff_mean / downside, None, 10.)
 
 
 @nb.njit((nb.float64[:], nb.int64[:], nb.int64, nb.boolean, nb.boolean))

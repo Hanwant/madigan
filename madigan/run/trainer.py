@@ -143,8 +143,7 @@ class Trainer:
                 # save_to_hdf(self.logdir/'test.hdf5', 'run_history',
                 #             summary, append_if_exists=True)
                 summary.to_hdf(self.logdir / 'test.hdf5',
-                               'run_history',
-                               append=True)
+                               'run_history', append=True)
 
     def load_logs(self):
         train_logs = pd.read_hdf(self.logdir / 'train.hdf5', 'train')
@@ -276,8 +275,8 @@ class Trainer:
         self.agent.initialize_buffer()
         test_metrics.append((i, self.agent.test_episode()))
 
-        summary = test_summary(pd.DataFrame(test_metrics[-1][1]),
-                               self.test_summary_timeframes, self.assets,)
+        # summary = test_summary(pd.DataFrame(test_metrics[-1][1]),
+        #                        self.test_summary_timeframes, self.assets,)
 
         self.logger.info("Starting Training")
         train_loop = self.agent.step(nsteps, log_freq=5000)
