@@ -338,7 +338,11 @@ def _sharpe_of_returns(returns, benchmark=None, ddof=1):
     else:
         benchmark = 0.
     diff = returns - benchmark
-    return np.nanmean(diff) / np.nanstd(diff, ddof=ddof)
+    diff_mean = np.nanmean(diff)
+    diff_std = np.nanstd(diff, ddof=ddof)
+    if diff_std == 0.:
+        return 0.
+    return diff_mean / diff_std
 
 
 def _sortino_of_returns(returns, benchmark=None, ddof=1):
@@ -350,9 +354,13 @@ def _sortino_of_returns(returns, benchmark=None, ddof=1):
         benchmark = 0.
     diff = returns - benchmark
     downside = (diff[np.where(diff < 0.)[0]]**2).sum() / (len(diff) - ddof)
+    diff_mean = np.nanmean(diff)
     if downside == 0.:
-        return 10.  # heuristic
-    return np.clip(np.nanmean(diff) / downside, None, 10.)
+        if diff_mean > 0.:
+            return 10.  # heuristic for no downside
+        else:
+            return 0.  # heuristic for no down or upside
+    return np.clip(diff / downside, None, 10.)
 
 
 @nb.njit((nb.float64[:], nb.int64[:], nb.int64, nb.boolean, nb.boolean))
