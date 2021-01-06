@@ -119,7 +119,6 @@ def test_summary(test_metrics: Union[dict, pd.DataFrame],
         else:
             betas[f'beta_{asset}_offset_{tf_name}'] = np.nan
 
-
     # TIME SPENT IN POSITIONS
     time_spent_in_pos = {}
     positions = np.array(df['ledger'].tolist())
@@ -138,7 +137,8 @@ def test_summary(test_metrics: Union[dict, pd.DataFrame],
                                    tf,
                                    closed_left=False,
                                    log_returns=True)
-            returns[f'equity_returns_offset_{tf_name}'] = log_returns.mean()
+            returns[f'equity_returns_offset_{tf_name}'] = np.nanmean(
+                log_returns)
             returns[f'equity_sharpe_offset_{tf_name}'] = _sharpe_of_returns(
                 log_returns)
             returns[f'equity_sortino_offset_{tf_name}'] = _sortino_of_returns(
@@ -294,12 +294,12 @@ def beta_coeff_of_series(series_a,
 
 def _covariance_of_returns(ret_1: np.ndarray, ret_2: np.ndarray, ddof=1):
     """ Computes standard covariance of two returns arrays """
-    cov = (ret_1 - ret_1.mean()) * (ret_2 - ret_2.mean())
-    return cov.sum() / (len(cov) - ddof)
+    cov = (ret_1 - np.nanmean(ret_1)) * (ret_2 - np.nanmean(ret_2))
+    return np.nansum(cov) / (len(cov) - ddof)
 
 
-@nb.njit((nb.float64[:], nb.float64[:]))
-def _expanding_covariance_of_returns(ret1, ret2):
+@nb.njit((nb.float64[:], nb.float64[:], nb.int64))
+def _expanding_covariance_of_returns(ret1, ret2, ddof=1):
     """
     Uses an expanding mean instead of a full sample mean
     to calculate covariances. May be considered a stylistic choice
@@ -312,15 +312,20 @@ def _expanding_covariance_of_returns(ret1, ret2):
     for i in range(N):
         v1 = ret1[i]
         v2 = ret2[i]
-        mean1 += (v1 - mean1) / i
-        mean2 += (v2 - mean2) / i
-        out[i] = (v1 - mean1) * (v2 - mean2)
-    return out
+        if v1 != np.nan:
+            mean1 += (v1 - mean1) / i
+        if v2 != np.nan:
+            mean2 += (v2 - mean2) / i
+        if (v1 != np.nan) and (v2 != np.nan):
+            out[i] = ((v1 - mean1) * (v2 - mean2))
+        else:
+            out[i] = np.nan
+    return np.nansum(out) / (len(out) - ddof)
 
 
 def _beta_coeff_of_returns(ret_1, ret_2, ddof=1):
     """ Treats ret_2 as market returns with which to normalize"""
-    cov = _covariance_of_returns(ret_1, ret_2)
+    cov = _covariance_of_returns(ret_1, ret_2, ddof=ddof)
     var = np.nanvar(ret_2, ddof=ddof)
     return cov / var
 
@@ -333,7 +338,7 @@ def _sharpe_of_returns(returns, benchmark=None, ddof=1):
     else:
         benchmark = 0.
     diff = returns - benchmark
-    return diff.mean() / diff.std(ddof=ddof)
+    return np.nanmean(diff) / np.nanstd(diff, ddof=ddof)
 
 
 def _sortino_of_returns(returns, benchmark=None, ddof=1):
@@ -345,7 +350,9 @@ def _sortino_of_returns(returns, benchmark=None, ddof=1):
         benchmark = 0.
     diff = returns - benchmark
     downside = (diff[np.where(diff < 0.)[0]]**2).sum() / (len(diff) - ddof)
-    return diff.mean() / downside
+    if downside == 0.:
+        return 10.  # heuristic
+    return np.clip(np.nanmean(diff) / downside, None, 10.)
 
 
 @nb.njit((nb.float64[:], nb.int64[:], nb.int64, nb.boolean, nb.boolean))
@@ -401,5 +408,5 @@ def _drawdowns(arr: pd.Series):
     Row 0 will contain the biggest drawdown as well the index when it occurred.
     """
     peaks = arr.expanding().max()
-    df = pd.DataFrame({'peaks': peaks, 'valleys': peaks / arr})
+    df = pd.DataFrame({'peaks': peaks, 'valleys': arr / peaks})
     return df.reset_index().groupby('peaks').min().sort_values(by='valleys')
