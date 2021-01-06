@@ -513,6 +513,7 @@ class TestEpisodePlots(QGridLayout):
 
     def _set_data_with_variable_assets(self):
         """ For plots with multiple lines corresponding to assets """
+        idxs = [idx.row() for idx in self.asset_picker.selectedIndexes()]
         for i, asset in enumerate(self.assets):
             if i not in self.lines['prices']:  # initialize plots
                 self.lines['prices'][i] = self.plots['prices'].plot(
@@ -520,7 +521,6 @@ class TestEpisodePlots(QGridLayout):
                 self.lines['transactions'][i] =\
                     self.plots['transactions'].plot(
                         y=[], pen=(i, self.data['transactions'].shape[1]))
-            idxs = [idx.row() for idx in self.asset_picker.selectedIndexes()]
             if i in idxs:
                 self.lines['prices'][i].setData(y=self.data['prices'][:, i])
                 self.lines['transactions'][i].setData(
@@ -621,12 +621,12 @@ class TestEpisodePlots(QGridLayout):
         if path is not None:
             ep_name = path.stem
             env_steps = int(ep_name.split('_')[3])
-            data = pd.read_hdf(path.parent/'test.hdf5', key='run_history')
+            data = pd.read_hdf(path.parent / 'test.hdf5', key='run_history')
             run_summary = data[data['env_steps'] == env_steps]
             if len(run_summary) == 0:
-                run_summary = data[data['env_steps'] == env_steps-1]
+                run_summary = data[data['env_steps'] == env_steps - 1]
                 if len(run_summary) == 0:
-                    run_summary = data[data['env_steps'] == env_steps+1]
+                    run_summary = data[data['env_steps'] == env_steps + 1]
             print('len run summ: ', len(run_summary))
             if len(run_summary) > 0:
                 run_summary = run_summary.to_dict()
@@ -769,7 +769,6 @@ class TestEpisodeDDPG(TestEpisodePlots):
             # data = np.array([actions, transactions],
             #                 dtype=[('model_output', float),
             #                        ('transactions', float)])
-            # import ipdb; ipdb.set_trace()
             self.transaction_table.setData(data)
             self.transaction_table.setHorizontalHeaderLabels(
                 ['Model Outputs', 'Transactions'])
@@ -790,26 +789,6 @@ class TestEpisodeDDPG(TestEpisodePlots):
     #     ppos = self.lines['qvals'].mapToParent(pos)
     #     x, y = ppos.x(), ppos.y()
     #     self.plots['qvals'].setTitle(f"qval ({i}, {j}) ({x}, {y}): {val}")
-
-    def make_matplotlib_image(self, data, metric=''):
-        import matplotlib.pyplot as plt
-        fig, ax = plt.subplots(1, 1)
-        if isinstance(data[metric], (pd.Series, pd.DataFrame)):
-            data_2d = np.stack(data[metric].tolist()).T
-        else:
-            data_2d = np.stack(data[metric]).T
-        assetIdx = 0
-        if len(data_2d.shape) == 3:
-            print("plotting only first asset - need to implement multi-asset")
-            data_2d = data_2d[:, assetIdx, :]
-        im = ax.imshow(data_2d)  #vmin=0., vmax=1.) #, cmap='gray'
-        ax.set_aspect(data_2d.shape[1] / data_2d.shape[0])
-        ax.set_title(metric)
-        ax.set_yticks(range(data_2d.shape[0]))
-        ax.set_yticklabels(
-            labels=[f'action_{i}' for i in range(data_2d.shape[0])])
-        fig.colorbar(im, ax=ax)
-        return fig, ax
 
     def process_data(self, data):
         super().process_data(data)
@@ -970,8 +949,10 @@ class TestEpisodePlotsSACD(TestEpisodePlots):
 class TestHistoryPlots(QGridLayout):
     def __init__(self, title=None):
         super().__init__()
-        self.graphs = pg.GraphicsLayoutWidget(show=True, title=title)
-        self.addWidget(self.graphs)
+
+        self.timeframes = None
+        self.assets = None
+        self.data = None
         self.colours = {
             'mean_equity': (0, 255, 0),
             'final_equity': (255, 0, 0),
@@ -979,57 +960,224 @@ class TestHistoryPlots(QGridLayout):
             'cash': (0, 255, 255),
             'margin': (255, 86, 0)
         }
-        self.data = None
+
+        self.graphs = pg.GraphicsLayoutWidget(show=True, title=title)
+        # self.graphs_widget = pg.GraphicsLayoutWidget()
+        # self.graphs = self.graphs_widget.addLayout()
         self.plots = {}
+
         self.plots['equity'] = self.graphs.addPlot(
-            title='Equity Over Episodes',
-            bottom='training_steps',
-            left='Denomination currency')
-        self.plots['reward'] = self.graphs.addPlot(
-            title='Mean Returns over Episodes',
-            bottom='training_steps',
-            left='returns (proportion)')
-        self.plots['margin'] = self.graphs.addPlot(
-            title='Mean Cash over Episodes',
+            title='Equity',
             bottom='training steps',
-            left='returns (proportion)')
-        self.plots['equity'].addLegend()
+            left='Denomination currency',
+            row=0,
+            col=0,
+            colspan=1)
+        self.plots['reward'] = self.graphs.addPlot(
+            title='Rewards',
+            bottom='training steps',
+            left='rewards',
+            row=0,
+            col=1,
+            colspan=1)
+        self.plots['returns'] = self.graphs.addPlot(
+            title='Log Returns',
+            bottom='training steps',
+            left='log returns',
+            row=0,
+            col=2,
+            colspan=1)
+        self.plots['sharpe'] = self.graphs.addPlot(
+            title='Sharpe Ratios',
+            bottom='training steps',
+            left='sharpe ratio',
+            row=0,
+            col=3,
+            colspan=1)
+        self.plots['sortino'] = self.graphs.addPlot(
+            title='Sortino Ratios',
+            bottom='training steps',
+            left='sortino ratio',
+            row=1,
+            col=0,
+            colspan=1)
+        self.plots['max_drawdown'] = self.graphs.addPlot(
+            title='Max Drawdown',
+            bottom='training steps',
+            left='peak / valley ratio',
+            row=1,
+            col=1,
+            colspan=1)
+        self.plots['time_spent'] = self.graphs.addPlot(
+            title='Time Spent in Positions',
+            bottom='training steps',
+            left='peak / valley ratio',
+            row=1,
+            col=2,
+            colspan=1)
+
         self.plots['equity'].showGrid(1, 1)
+        self.plots['returns'].showGrid(1, 1)
         self.plots['reward'].showGrid(1, 1)
-        self.plots['margin'].showGrid(1, 1)
-        self.plots['margin'].setLabels()
+        self.plots['time_spent'].showGrid(1, 1)
+        self.plots['max_drawdown'].showGrid(1, 1)
+        self.plots['sharpe'].showGrid(1, 1)
+        self.plots['sortino'].showGrid(1, 1)
+
+        self.plots['equity'].addLegend()
+        self.plots['returns'].addLegend()
+        self.plots['sharpe'].addLegend()
+        self.plots['sortino'].addLegend()
+        self.plots['max_drawdown'].addLegend()
+        self.plots['time_spent'].addLegend()
+
+        self.plots['equity'].setLabels()
+        self.plots['returns'].setLabels()
+        self.plots['sharpe'].setLabels()
+        self.plots['sortino'].setLabels()
+
         self.lines = {}
         self.lines['mean_equity'] = self.plots['equity'].plot(
             y=[], name='mean_equity')
         self.lines['final_equity'] = self.plots['equity'].plot(
             y=[], name='final_equity')
         self.lines['mean_reward'] = self.plots['reward'].plot(y=[])
-        self.plots['equity'].setLabels()
-        # self.lines['mean_available_margin']= self.plots['margin'].plot(y=[])
+        # Following lines have timeframes as keys
+        self.lines['returns'] = {}
+        self.lines['sharpe'] = {}
+        self.lines['sortino'] = {}
+        self.lines['time_spent'] = {}
+        self.lines['max_drawdown'] = self.plots['max_drawdown'].plot(
+            y=[], name='drawdown')
+
+        self.assets_table_label = QLabel("Assets")
+        self.assets_table = QListWidget()
+        self.assets_table.setSelectionMode(QListWidget.MultiSelection)
+
+        self.timeframes_table_label = QLabel("Aggregation TimeFrames")
+        self.timeframes_table = QListWidget()
+        self.timeframes_table.setSelectionMode(QListWidget.MultiSelection)
+
+        self.assets_table.itemSelectionChanged.connect(
+            self._set_data_for_variable_assets)
+        self.timeframes_table.itemSelectionChanged.connect(
+            self._set_data_for_variable_timeframes)
+
+        self.tables = QtGui.QVBoxLayout()
+        self.tables.addWidget(self.assets_table_label)
+        self.tables.addWidget(self.assets_table)
+        self.tables.addWidget(self.timeframes_table_label)
+        self.tables.addWidget(self.timeframes_table)
+        self.tables_widget = QtGui.QWidget()
+        self.tables_widget.setLayout(self.tables)
+
+        self.addWidget(self.graphs, 0, 0, -1, 8)
+        self.addWidget(self.tables_widget, 0, 8, -1, 1)
+
+        for i in range(8):
+            self.setColumnStretch(i, 4)
+        self.setColumnStretch(8, 1)
+
+        self.link_x_axes()
+
+    def link_x_axes(self):
+        for name, plot in self.plots.items():
+            plot.setXLink(self.plots['equity'])
 
     def clear_data(self):
         for _, line in self.lines.items():
             line.setData(y=[])
 
-    def set_data(self, data):
-        if data is None or len(data) == 0:
-            print("test data is empty")
-            data = {k: [] for k in self.lines.keys()}
-        x = data['training_steps']
-        self.lines['mean_equity'].setData(x=x,
-                                          y=data['mean_equity'],
-                                          pen=self.colours['mean_equity'])
-        self.lines['final_equity'].setData(x=x,
-                                           y=data['final_equity'],
-                                           pen=self.colours['final_equity'])
-        self.lines['mean_reward'].setData(x=x,
-                                          y=data['mean_reward'],
-                                          pen=self.colours['mean_reward'])
         # self.lines['mean_transaction_cost'].setData(
         # y=data['mean_transaction_cost'],
         # pen=self.colours['mean_transaction_cost'])
         # self.lines['margin'].setData(y=data['cash'],
         # pen=self.colours['margin'])
+
+    def update_timeframes_table(self, data):
+        sharpes = [col for col in data.keys() if 'sharpe' in col]
+        self.timeframes = [col[21:] for col in sharpes]
+        self.timeframes_table.clear()
+        for i, tf in enumerate(self.timeframes):
+            self.timeframes_table.addItem(tf)
+            self.timeframes_table.itemAt(i, 0).setSelected(1)
+
+    def update_assets_table(self, data):
+        times_spent = [col for col in data.keys() if 'time_spent' in col]
+        self.assets = [col[18:] for col in times_spent]
+        self.assets_table.clear()
+        for i, asset in enumerate(self.assets):
+            self.assets_table.addItem(asset)
+            self.assets_table.itemAt(i, 0).setSelected(1)
+
+    def _set_data_for_variable_assets(self):
+        idxs = [idx.row() for idx in self.assets_table.selectedIndexes()]
+        x = self.data['training_steps']
+        if self.assets is None:
+            return
+        for i, asset in enumerate(self.assets):
+            if asset not in self.lines['time_spent']:
+                self.lines['time_spent'][asset] = self.plots[
+                    'time_spent'].plot(y=[],
+                                       pen=(i, len(self.assets)),
+                                       name=asset)
+            if i in idxs:
+                self.lines['time_spent'][asset].setData(
+                    x=x, y=self.data[f'time_spent_in_pos_{asset}'])
+            else:
+                self.lines['time_spent'][asset].clear()
+
+    def _set_data_for_variable_timeframes(self):
+        idxs = [idx.row() for idx in self.timeframes_table.selectedIndexes()]
+        x = self.data['training_steps']
+        if self.timeframes is None:
+            return
+        for i, tf in enumerate(self.timeframes):
+            if tf not in self.lines['returns']:  # assume not in others either
+                self.lines['returns'][tf] = self.plots['returns'].plot(
+                    y=[], pen=(i, len(self.timeframes)), name=tf)
+                self.lines['sharpe'][tf] = self.plots['sharpe'].plot(
+                    y=[], pen=(i, len(self.timeframes)), name=tf)
+                self.lines['sortino'][tf] = self.plots['sortino'].plot(
+                    y=[], pen=(i, len(self.timeframes)), name=tf)
+            if i in idxs:
+                self.lines['returns'][tf].setData(
+                    x=x, y=self.data[f'equity_returns_offset_{tf}'])
+                self.lines['sharpe'][tf].setData(
+                    x=x, y=self.data[f'equity_sharpe_offset_{tf}'])
+                self.lines['sortino'][tf].setData(
+                    x=x, y=self.data[f'equity_sortino_offset_{tf}'])
+            else:
+                self.lines['returns'][tf].clear()
+                self.lines['sharpe'][tf].clear()
+                self.lines['sortino'][tf].clear()
+
+    def _set_data(self):
+        if self.data is None or len(self.data) == 0:
+            print("test self.data is empty")
+            self.data = {k: [] for k in self.lines.keys()}
+        x = self.data['training_steps']
+        self.lines['mean_equity'].setData(x=x,
+                                          y=self.data['mean_equity'],
+                                          pen=self.colours['mean_equity'])
+        self.lines['final_equity'].setData(x=x,
+                                           y=self.data['final_equity'],
+                                           pen=self.colours['final_equity'])
+        self.lines['mean_reward'].setData(x=x,
+                                          y=self.data['mean_reward'],
+                                          pen=self.colours['mean_reward'])
+        self.lines['max_drawdown'].setData(x=x, y=self.data['max_drawdown'])
+
+    def process_data(self, data):
+        self.data = data
+        self.update_assets_table(data)
+        self.update_timeframes_table(data)
+
+    def set_data(self, data):
+        self.process_data(data)
+        self._set_data()
+        self._set_data_for_variable_timeframes()
+        self._set_data_for_variable_assets()
 
     def set_datapath(self, path):
         self.datapath = path
@@ -1042,7 +1190,14 @@ class TestHistoryPlots(QGridLayout):
             self.set_data(data)
 
     def export_plots(self, export_path):
-        pass
+        figs = make_figs(self.data, assets=self.assets, x_key='training_steps')
+        x_range, y_range = self.plots['equity'].viewRange()
+        for label, fig in figs.items():
+            ax = fig.axes[0]
+            ax.set_xlim(x_range)
+            # ax.set_ylim(y_range)
+            save_fig(fig, export_path / f'{label}_{x_range[0]: .2f}.pdf')
+        plt.close('all')
 
 
 class TestHistoryPlotsDQN(TestHistoryPlots):
@@ -1052,7 +1207,15 @@ class TestHistoryPlotsDQN(TestHistoryPlots):
         self.plots['qvals'] = self.graphs.addPlot(
             title='Mean Qvals over Episodes',
             bottom='training_steps',
-            left='Value')
+            left='Value',
+            row=1,
+            col=3,
+            colspan=1)
+        # self.plots['qvals'] = pg.PlotWidget(
+        #     title='Mean Qvals over Episodes',
+        #     bottom='training_steps',
+        #     left='Value')
+        # self.addWidget(self.plots['qvals'], 1, 3, 1, 1)
         self.lines['mean_qvals'] = self.plots['qvals'].plot(y=[])
         self.plots['qvals'].showGrid(1, 1)
         self.plots['qvals'].setLabels()
@@ -1076,7 +1239,7 @@ class TestHistoryPlotsSACD(TestHistoryPlots):
             'mean_qvals2': (86, 255, 0)
         })
         self.plots['qvals'] = self.graphs.addPlot(
-            title='Mean Qvals over Episodes',
+            title='Mean Qvals',
             bottom='training_steps',
             left='Value')
         self.lines['mean_qvals1'] = self.plots['qvals'].plot(y=[])
