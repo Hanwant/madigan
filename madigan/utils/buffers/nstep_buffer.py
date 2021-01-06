@@ -35,8 +35,9 @@ def cosine_port_shaper(nstep_buffer, discounts, desired_portfolio,
     port and staying there. - soft actor critic would help
     """
     rewards = sum([
-        (dat.reward * discount) + cosine_temp *
-        cosine_similarity(dat.next_state.portfolio[-1], desired_portfolio)
+        discount *
+        (dat.reward + cosine_temp *
+         cosine_similarity(dat.next_state.portfolio[-1], desired_portfolio))
         for dat, discount in zip(nstep_buffer, discounts)
     ])
     global print_i
