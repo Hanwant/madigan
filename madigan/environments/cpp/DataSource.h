@@ -385,7 +385,7 @@ namespace madigan{
     const pybind11::array_t<double> getData_np() ;
     const PriceVector& currentData() const{ return currentData_;}
     const PriceVector& currentPrices() const{ return currentData_;}
-    void reset(){}
+    void reset(){}  // doesn't need to do anything
     std::size_t currentTime() const { return timestamp_; }
 
   protected:
@@ -416,7 +416,7 @@ namespace madigan{
     const pybind11::array_t<double> getData_np() ;
     const PriceVector& currentData() const{ return currentData_;}
     const PriceVector& currentPrices() const{ return currentData_;}
-    void reset(){}
+    void reset();
     std::size_t currentTime() const { return timestamp_; }
 
   protected:
@@ -482,7 +482,7 @@ namespace madigan{
     const PriceVector& getData();
     const PriceVector& currentData() const{ return currentData_;}
     const PriceVector& currentPrices() const{ return currentData_;}
-    void reset(){}
+    void reset();
     std::size_t currentTime() const { return timestamp_; }
 
   protected:
@@ -500,6 +500,7 @@ namespace madigan{
     vector<double> dY;
     vector<double> dYMin;
     vector<double> dYMax;
+    vector<double> start;
     std::size_t timestamp_;
     std::default_random_engine generator;
     vector<std::normal_distribution<double>> noiseDist;

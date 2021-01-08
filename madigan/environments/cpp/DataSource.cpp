@@ -521,6 +521,14 @@ namespace madigan{
       // x.emplace_back(0.);
       for (int i=0; i<nComponents; i++){
         // Init Starting values by uniformly sampling from low-high range
+        if (freqRange[i][1] * 2 > sampleRate){
+          std::stringstream msg;
+          msg << "Sampling Rate as determined by 1 / dX must be at least the ";
+          msg << "nyquist sampling rate relative to the largest frequency. ";
+          msg << "freqRange entry #" << i << " with range of " << freqRange[i][0];
+          msg << " - " << freqRange[i][1] << " doesn't satisfy this constraint.\n";
+          throw std::logic_error(msg.str());
+        }
         freqDist.push_back(std::uniform_real_distribution<double>(freqRange[i][0], freqRange[i][1]));
         muDist.push_back(std::uniform_real_distribution<double>(muRange[i][0], muRange[i][1]));
         ampDist.push_back(std::uniform_real_distribution<double>(ampRange[i][0], ampRange[i][1]));
@@ -710,6 +718,14 @@ namespace madigan{
       // x.emplace_back(0.);
       for (int i=0; i<nComponents; i++){
         // Init Starting values by uniformly sampling from low-high range
+        if (freqRange[i][1] * 2 > sampleRate){
+          std::stringstream msg;
+          msg << "Sampling Rate as determined by 1 / dX must be at least the ";
+          msg << "nyquist sampling rate relative to the largest frequency. ";
+          msg << "freqRange entry #" << i << " with range of " << freqRange[i][0];
+          msg << " - " << freqRange[i][1] << " doesn't satisfy this constraint.\n";
+          throw std::logic_error(msg.str());
+        }
         freqDist.push_back(std::uniform_real_distribution<double>(freqRange[i][0], freqRange[i][1]));
         muDist.push_back(std::uniform_real_distribution<double>(muRange[i][0], muRange[i][1]));
         ampDist.push_back(std::uniform_real_distribution<double>(ampRange[i][0], ampRange[i][1]));
@@ -993,6 +1009,7 @@ namespace madigan{
       this->noise=noise;
       this->dYMin=dYMin;
       this->dYMax=dYMax;
+      this->start = start;
       currentData_.resize(trendProb.size());
       for (int i=0; i<trendProb.size(); i++){
         noiseDist.push_back(std::normal_distribution<double>(0., noise[i]));
@@ -1003,7 +1020,7 @@ namespace madigan{
         trending.push_back(false);
         std::string assetName = "SimpleTrend_" + std::to_string(i);
         this->assets_.push_back(Asset(assetName));
-        currentData_ << start[i]; // default starting val
+        currentData_[i] = start[i]; // default starting val
         currentDirection.push_back(1);
         currentTrendLen.push_back(0);
         dY.push_back(0.);
@@ -1080,6 +1097,15 @@ namespace madigan{
     }
     timestamp_ += 1;
     return currentData_;
+  }
+
+  void SimpleTrend::reset(){
+    for (int i=0; i<nAssets(); i++){
+      currentData_[i] = start[i];
+      trending[i] = false;
+      currentDirection[i] = 1;
+      currentTrendLen[i] = 0;
+    }
   }
 
 
