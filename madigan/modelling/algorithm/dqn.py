@@ -212,8 +212,15 @@ class DQN(OffPolicyQ):
                                device=self.device)
         return state, action, reward, next_state, done
 
-    def loss_fn(self, Q_t, G_t, weights: torch.Tensor = None):
+    def loss_fn_huber(self, Q_t, G_t, weights: torch.Tensor = None):
         loss = F.smooth_l1_loss(Q_t, G_t, reduce=False)
+        assert loss.shape == (Q_t.shape[0], )
+        if weights is None:
+            return loss.mean()
+        return (loss * weights).mean()
+
+    def loss_fn(self, Q_t, G_t, weights: torch.Tensor = None):
+        loss = F.mse_loss(Q_t, G_t, reduce=False)
         assert loss.shape == (Q_t.shape[0], )
         if weights is None:
             return loss.mean()
