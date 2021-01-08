@@ -41,14 +41,10 @@ agent_config:
   train_freq: 4
   transaction_thresh: 0.02
   unit_size_proportion_avM: 0.05
-  cosine_portfolio: true
-  desired_portfolio:
-    - 1.0
-    - 0.0
 agent_configs:
   A: /home/hemu/madigan/experiments/IQN_OU_Triple_Decreasing_unit.005_Noisy_NoReShap_Replay300_NoPool_AdaptiveAvg/config.yaml
   B: /home/hemu/madigan/experiments/IQN_OU_Triple_Decreasing_PER_Test/config.yaml
-agent_type: IQN
+agent_type: DQN
 basepath: /media/hemu/Data/madigan/experiments/
 data_source_config:
   # OUPair: 
@@ -90,23 +86,23 @@ data_source_config:
   #     theta:
   #       - .15
   #   data_source_type: OU
-  SimpleTrend:
-    data_source_config:
-      trend_prob:
-        - .01
-      noise:
-        - .001
-      min_period:
-        - 100
-      max_period:
-        - 500
-      start:
-        - 5.
-      dYMin:
-        - .0001
-      dYMax:
-        - .0005
-    data_source_type: SimpleTrend
+  # SimpleTrend:
+  #   data_source_config:
+  #     trend_prob:
+  #       - .01
+  #     noise:
+  #       - .001
+  #     min_period:
+  #       - 100
+  #     max_period:
+  #       - 500
+  #     start:
+  #       - 5.
+  #     dYMin:
+  #       - .0005
+  #     dYMax:
+  #       - .001
+  #   data_source_type: SimpleTrend
   # TrendOU:
   #   data_source_config:
   #     trend_prob:
@@ -137,9 +133,9 @@ data_source_config:
   #     noise_trend:
   #       - .1
   #     min_period:
-  #       - 200
+  #       - 100
   #     max_period:
-  #       - 1000
+  #       - 500
   #     start:
   #       - 5.
   #     theta:
@@ -147,17 +143,65 @@ data_source_config:
   #     phi:
   #       - .04
   #     dYMin:
-  #       - .0001
-  #     dYMax:
   #       - .0005
+  #     dYMax:
+  #       - .001
   #     ema_alpha: # not used
   #       - .99
   #   data_source_type: TrendyOU
+  # SineDynamic:
+  #   data_source_config:
+  #     freqRange:
+  #       -
+  #         - 1
+  #         - 4
+  #         - .01
+  #       -
+  #         - .01
+  #         - .02
+  #         - .001
+  #       -
+  #         - .05
+  #         - .5
+  #         - .01
+  #     ampRange:
+  #       -
+  #         - .02
+  #         - .1
+  #         - .001
+  #       -
+  #         - .03
+  #         - .09
+  #         - .001
+  #       -
+  #         - .2
+  #         - .8
+  #         - .01
+  #     muRange:
+  #       -
+  #         - .2
+  #         - 1.
+  #         - .01
+  #       -
+  #         - .4
+  #         - .8
+  #         - .01
+  #       -
+  #         -.3
+  #         - .5
+  #         - .01
+  #     phase:
+  #       - 0.
+  #       - 0.
+  #       - 0.
+  #     dX: .01
+  #     noise: .0
+  #   data_source_type: SineDynamic
 data_source_type: Composite
 discrete_action_atoms: 3
 discrete_actions: true
 env_type: Synth
-experiment_id: IQN_Trend_p.01_n.001_discount.99_nstep_1
+experiment_id: IQN_TrendyOU_MultiStack_p.01_dy.0005-10_discount.99_nstep1_trans.02_window128
 init_cash: 1000000
 log_freq: 10000
 lot_unit_value: 10000
@@ -175,7 +219,7 @@ model_config:
   curl_latent_size: 64
   curl_lr: 0.001
   curl_momentum_update: 0.001
-  d_model: 256
+  d_model: 512
   dilations:
   - 1
   - 1
@@ -184,8 +228,8 @@ model_config:
   dueling: true
   iqn: true
   kernels:
-  - 5
-  - 5
+  - 7
+  - 7
   lot_unit_value: 10000
   min_tf: 64
   model_class: ConvNet
@@ -219,9 +263,12 @@ preprocessor_config:
   norm_type: log_standard_normal
   preprocessor_type: StackerDiscrete
   timeframes:
-  - 64
-  window_length: 64
-preprocessor_type: StackerDiscrete
+    - 64
+  dilations:
+    - 1
+    - 3
+  window_length: 128
+preprocessor_type: MultiStackerDiscrete
 required_margin: 1.0
 reward_clip: *id001
 reward_shaper_config:
@@ -229,7 +276,7 @@ reward_shaper_config:
   desired_portfolio:
     - 1.0
     - 0.
-  cosine_temp: .02
+  cosine_temp: .05
   window: 1000
 slippage_abs: 0.0
 slippage_rel: 0.0

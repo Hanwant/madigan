@@ -105,7 +105,7 @@ def test_summary(test_metrics: Union[dict, pd.DataFrame],
     if is_datetime:
         timestamps = pd.to_datetime(df.index).values.astype(np.int64)
     else:
-        timestamps = df.index.values
+        timestamps = df.index.values.astype(np.int64)
 
     max_tf = (timestamps[-1] - timestamps[0]) // 10
 
@@ -192,7 +192,7 @@ def variance(timeseries: Union[np.ndarray, pd.Series],
             if isinstance(timeseries.index, pd.DatetimeIndex):
                 timestamps = timeseries.index.values.view(np.int64)
             else:
-                timestamps = timeseries.index.values
+                timestamps = timeseries.index.values.astype(np.int64)
         else:
             timestamps = np.arange(len(timeseries))
 
@@ -230,7 +230,7 @@ def covariance_of_series(series_a: Union[np.ndarray, pd.Series],
             if isinstance(series_a.index, pd.DatetimeIndex):
                 timestamps = series_a.index.values.view(np.int64)
             else:
-                timestamps = series_a.index.values
+                timestamps = series_a.index.values.astype(np.int64)
         else:
             timestamps = np.arange(len(series_a))
 
@@ -270,7 +270,7 @@ def beta_coeff_of_series(series_a,
             if isinstance(series_a.index, pd.DatetimeIndex):
                 timestamps = series_a.index.values.view(np.int64)
             else:
-                timestamps = series_a.index.values
+                timestamps = series_a.index.values.astype(np.int64)
         else:
             timestamps = np.arange(len(series_a))
 
@@ -357,10 +357,10 @@ def _sortino_of_returns(returns, benchmark=None, ddof=1):
     diff_mean = np.nanmean(diff)
     if downside == 0.:
         if diff_mean > 0.:
-            return 10.  # heuristic for no downside
+            return 20.  # heuristic for no downside
         else:
             return 0.  # heuristic for no down or upside
-    return np.clip(diff_mean / downside, None, 10.)
+    return np.clip(diff_mean / downside, None, 20.)
 
 
 @nb.njit((nb.float64[:], nb.int64[:], nb.int64, nb.boolean, nb.boolean))

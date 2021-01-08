@@ -232,6 +232,33 @@ class IQN(DQN):
         assert loss.shape == (Qt.shape[0], )
         return loss.mean(), td_error.abs().mean(-1).mean(-1).detach()
 
+    def loss_fn_mse(self, Qt, Gt, tau, weights: torch.Tensor = None):
+        """
+        Quantile MSE Loss
+        returns:  (loss, td_error)
+            loss: scalar
+            td_error: scalar
+        """
+        assert Qt.shape[1:] == (self.nTau1, )
+        assert Gt.shape[1:] == (self.nTau2, )
+        td_error = Gt.unsqueeze(1) - Qt.unsqueeze(2)
+        assert td_error.shape[1:] == (
+            self.nTau1,
+            self.nTau2,
+        )
+        mse_loss = 0.5 * td_error.pow(2)
+        assert mse_loss.shape == td_error.shape
+        quantile_loss = (torch.abs(tau[:, :, None] -
+                                   (td_error.detach() < 0.).float()) *
+                         mse_loss)
+        assert quantile_loss.shape == mse_loss.shape
+        if weights is None:
+            loss = quantile_loss.mean(-1).sum(-1)
+        else:
+            loss = quantile_loss.mean(-1).sum(-1) * weights
+        assert loss.shape == (Qt.shape[0], )
+        return loss.mean(), td_error.abs().mean(-1).mean(-1).detach()
+
 
 class IQNCURL(IQN):
     """

@@ -148,7 +148,7 @@ class TrainPlots(QGridLayout):
                 x_range, y_range = self.plots[label].viewRange()
                 ax.set_xlim(x_range)
                 ax.set_ylim(y_range)
-            save_fig(fig, export_path / f'{label}_{xrange_label: .1f}.pdf')
+            save_fig(fig, export_path / f'{label}_{int(xrange_label)}.pdf')
         plt.close('all')
 
 
@@ -371,14 +371,14 @@ class TestEpisodePlots(QGridLayout):
                                                  colspan=2)
         self.plots['availableMargin'] = self.graphs.addPlot(
             title="available margin", row=1, col=2, colspan=2)
-        self.plots['transactions'] = self.graphs.addPlot(title="transactions",
+        self.plots['transaction'] = self.graphs.addPlot(title="transaction",
                                                          row=1,
                                                          col=4,
                                                          colspan=2)
         self.lines['cash'] = self.plots['cash'].plot(y=[])
         self.lines['availableMargin'] = self.plots['availableMargin'].plot(
             y=[])
-        self.lines['transactions'] = {}
+        self.lines['transaction'] = {}
 
         self.plots['prices'].showGrid(1, 1)
         self.plots['equity'].showGrid(1, 1)
@@ -386,9 +386,9 @@ class TestEpisodePlots(QGridLayout):
         self.plots['prices'].showGrid(1, 1)
         self.plots['cash'].showGrid(1, 1)
         self.plots['availableMargin'].showGrid(1, 1)
-        self.plots['transactions'].showGrid(1, 1)
+        self.plots['transaction'].showGrid(1, 1)
         limits = np.finfo('float64')
-        # self.plots['transactions'].setYRange(limits.min, limits.max)
+        # self.plots['transaction'].setYRange(limits.min, limits.max)
         self.plots['ledgerNormed'].showGrid(1, 1)
 
         self.episode_table = QListWidget()
@@ -497,17 +497,17 @@ class TestEpisodePlots(QGridLayout):
         self.data = dict(data.items())
         if isinstance(data['prices'], (pd.Series, pd.DataFrame)):
             self.data['prices'] = np.array(data['prices'].tolist())
-            self.data['transactions'] =\
+            self.data['transaction'] =\
                 np.array(data['transaction'].tolist()) # assuming this is also pd
             self.data['ledgerNormed'] = np.array(data['ledgerNormed'].tolist())
         else:
             self.data['prices'] = np.array(data['prices'])
-            self.data['transactions'] = np.array(data['transaction'])
+            self.data['transaction'] = np.array(data['transaction'])
             self.data['ledgerNormed'] = np.array(data['ledgerNormed'])
             assert len(self.data['prices'].shape) == \
-                len(self.data['transactions'].shape) ==\
+                len(self.data['transaction'].shape) ==\
                 len(self.data['ledgerNormed'].shape) == 2,\
-                "number of assets dims in prices, transactions and ledger" + \
+                "number of assets dims in prices, transaction and ledger" + \
                 "must match"
         # self.data = {k: np.nan_to_num(v, 0.) for k, v in self.data.items()}
 
@@ -518,16 +518,16 @@ class TestEpisodePlots(QGridLayout):
             if i not in self.lines['prices']:  # initialize plots
                 self.lines['prices'][i] = self.plots['prices'].plot(
                     y=[], pen=(i, self.data['prices'].shape[1]))
-                self.lines['transactions'][i] =\
-                    self.plots['transactions'].plot(
-                        y=[], pen=(i, self.data['transactions'].shape[1]))
+                self.lines['transaction'][i] =\
+                    self.plots['transaction'].plot(
+                        y=[], pen=(i, self.data['transaction'].shape[1]))
             if i in idxs:
                 self.lines['prices'][i].setData(y=self.data['prices'][:, i])
-                self.lines['transactions'][i].setData(
-                    y=self.data['transactions'][:, i])
+                self.lines['transaction'][i].setData(
+                    y=self.data['transaction'][:, i])
             else:
                 self.lines['prices'][i].clear()
-                self.lines['transactions'][i].clear()
+                self.lines['transaction'][i].clear()
 
     def _set_assets(self, assets):
         """
@@ -672,7 +672,7 @@ class TestEpisodePlots(QGridLayout):
                 ax.set_ylim(y_range)
             save_fig(
                 fig,
-                export_path / f'{ep_name}_{xrange_label: .1f}/{label}.pdf')
+                export_path / f'{ep_name}_{int(xrange_label)}/{label}.pdf')
         plt.close('all')
 
 
@@ -763,15 +763,15 @@ class TestEpisodeDDPG(TestEpisodePlots):
         current_timepoint = int(self.current_pos_line.value())
         try:
             actions = self.data['action'][current_timepoint]
-            transactions = self.data['transaction'][current_timepoint]
-            transactions = np.concatenate([[0], transactions], axis=0)
-            data = np.stack([actions, transactions], axis=1)
-            # data = np.array([actions, transactions],
+            transaction = self.data['transaction'][current_timepoint]
+            transaction = np.concatenate([[0], transaction], axis=0)
+            data = np.stack([actions, transaction], axis=1)
+            # data = np.array([actions, transaction],
             #                 dtype=[('model_output', float),
-            #                        ('transactions', float)])
+            #                        ('transaction', float)])
             self.transaction_table.setData(data)
             self.transaction_table.setHorizontalHeaderLabels(
-                ['Model Outputs', 'Transactions'])
+                ['Model Outputs', 'Transaction'])
             self.transaction_table.resizeColumnsToContents()
         except IndexError:
             import traceback
@@ -883,15 +883,15 @@ class TestEpisodePlotsSACD(TestEpisodePlots):
         current_timepoint = int(self.current_pos_line.value())
         try:
             actions = self.data['action'][current_timepoint]
-            transactions = self.data['transaction'][current_timepoint]
-            transactions = np.concatenate([[0], transactions], axis=0)
-            data = np.stack([actions, transactions], axis=1)
-            # data = np.array([actions, transactions],
+            transaction = self.data['transaction'][current_timepoint]
+            transaction = np.concatenate([[0], transaction], axis=0)
+            data = np.stack([actions, transaction], axis=1)
+            # data = np.array([actions, transaction],
             #                 dtype=[('model_output', float),
-            #                        ('transactions', float)])
+            #                        ('transaction', float)])
             self.transaction_table.setData(data)
             self.transaction_table.setHorizontalHeaderLabels(
-                ['Model Outputs', 'Transactions'])
+                ['Model Outputs', 'Transaction'])
             self.transaction_table.resizeColumnsToContents()
         except IndexError:
             import traceback
@@ -1196,7 +1196,7 @@ class TestHistoryPlots(QGridLayout):
             ax = fig.axes[0]
             ax.set_xlim(x_range)
             # ax.set_ylim(y_range)
-            save_fig(fig, export_path / f'{label}_{x_range[0]: .2f}.pdf')
+            save_fig(fig, export_path / f'{label}_{int(x_range[0])}.pdf')
         plt.close('all')
 
 

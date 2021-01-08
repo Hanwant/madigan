@@ -147,8 +147,6 @@ class OffPolicyQ(Agent):
             self._preprocessor.stream_state(_next_state)
             next_state = self._preprocessor.current_data()
 
-            # if done:
-            #     reward = -.1
             sarsd = SARSD(state, action, reward, next_state, done)
             self.buffer.add(sarsd)
 

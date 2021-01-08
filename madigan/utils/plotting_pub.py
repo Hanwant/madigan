@@ -5,12 +5,18 @@ import os
 from pathlib import Path
 from typing import Union
 
+import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-sns.set()
-sns.set_context("paper", font_scale=1.5)
+rc_params = {
+    'text.usetex': False,
+    'lines.linewidth': 2,
+    'axes.labelsize': 'large'
+}
+
+sns.set_theme(context="paper", font_scale=3, rc=rc_params)
 
 
 def save_fig(fig, savepath):
@@ -83,7 +89,8 @@ def make_multi_asset_plot(ax, x, ys, assets=None):
         raise ValueError("data shape does not match number of assets provided")
     for i, asset in enumerate(assets):
         ax.plot(x, ys[:, i], label=asset)
-    ax.legend(loc='upper left')
+    if n_assets > 1:
+        ax.legend(loc='upper left')
     return ax
 
 
@@ -102,7 +109,10 @@ def make_figs(data: Union[dict, pd.DataFrame], assets=None, x_key=None):
             fig, ax = plt.subplots(1, 1, figsize=(15, 10))
             if len(dat.shape) == 1:
                 ax.plot(x, dat, label=label)
-                ax.legend(loc='upper left')
+                # legend only for multi asset plots
+                # ax.legend(loc='upper left')
+                if ((np.nanmax(dat) - np.nanmin(dat)) / np.nanmin(dat)) > 1e7:
+                    ax.set_yscale('log')
             elif len(dat.shape) == 2:
                 ax = make_multi_asset_plot(ax, x, dat, assets=assets, )
             else:

@@ -231,6 +231,8 @@ class MainWindow(Ui_MainWindow, QtWidgets.QMainWindow):
         export_path = self.export_path / self.exp_config.experiment_id
         plot_names = ('train', 'test_history',
                       'test_episode') if plot_name is None else (plot_name, )
+        if len(plot_names) > 1:
+            import ipdb; ipdb.set_trace()
         for name in plot_names:
             self.plots[name].export_plots(export_path)
 
