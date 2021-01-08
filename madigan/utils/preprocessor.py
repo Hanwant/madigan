@@ -21,6 +21,8 @@ def make_preprocessor(config, n_assets):
     if config.preprocessor_type in ("WindowedStacker", "StackerDiscrete",
                                     "StackerDiscreteReturns"):
         return StackerDiscrete.from_config(config, n_assets)
+    if config.preprocessor_type in ("MultiStackerDiscrete"):
+        return MultiStackerDiscrete.from_config(config, n_assets)
     if config.preprocessor_type in ("StackerContinuous"):
         return StackerContinuous.from_config(config, n_assets)
     if config.preprocessor_type in ("RollerDiscrete"):
@@ -55,6 +57,7 @@ def make_normalizer(norm_type):
                                   "choose from : 'lookback', 'lookback_log', "
                                   "'standard_normal', 'expanding'")
 
+
 def standard_norm(x):
     """
     Standard Normalization, generalized for multiple timeseries.
@@ -65,6 +68,7 @@ def standard_norm(x):
     mean = x.mean(0)
     res = np.nan_to_num((x - mean) / x.std(0), 0.)
     return res
+
 
 def log_standard_norm(x):
     """
@@ -178,7 +182,7 @@ class MultiStackerDiscrete(PreProcessor):
             self.price_buffers[dilation] = deque(maxlen=self.k)
             self.portfolio_buffers[dilation] = deque(maxlen=self.k)
             self.time_buffers[dilation] = deque(maxlen=self.k)
-        self._feature_output_shape = (self.k, n_assets*len(self.dilations))
+        self._feature_output_shape = (self.k, n_assets * len(self.dilations))
 
     @property
     def feature_output_shape(self):
@@ -189,7 +193,8 @@ class MultiStackerDiscrete(PreProcessor):
         pconf = config.preprocessor_config
         norm = pconf.norm if 'norm' in pconf.keys() else False
         norm_type = pconf.norm_type if 'norm_type' in pconf.keys() else None
-        return cls(pconf.window_length, n_assets, norm, norm_type)
+        return cls(pconf.window_length, pconf.dilations, n_assets, norm,
+                   norm_type)
 
     def __len__(self):
         return len(self.price_buffers[self.max_dilation])
@@ -198,7 +203,7 @@ class MultiStackerDiscrete(PreProcessor):
         price = np.array(state.price, copy=True)
         port = np.array(state.portfolio, copy=True)
         time = np.array(state.timestamp, copy=True)
-        for i, dilation in self.dilations:
+        for i, dilation in enumerate(self.dilations):
             if self.dilation_counter[i] == 0:
                 self.price_buffers[dilation].append(price)
                 self.portfolio_buffers[dilation].append(port)
@@ -214,18 +219,20 @@ class MultiStackerDiscrete(PreProcessor):
             self.stream_state(data)
 
     def current_data(self):
-        price = np.stack([
+        price = np.concatenate([
             np.array(self.price_buffers[dilation], copy=True)
             for dilation in self.dilations
-        ])
-        portfolio = np.stack([
-            np.array(self.portfolio_buffers[dilation], copy=True)
-            for dilation in self.dilations
-        ])
-        timestamp = np.stack([
-            np.array(self.time_buffers[dilation], copy=True)
-            for dilation in self.dilations
-        ])
+        ], axis=-1)
+        # portfolio = np.concatenate([
+        #     np.array(self.portfolio_buffers[dilation], copy=True)
+        #     for dilation in self.dilations
+        # ], axis=-1)
+        # timestamp = np.concatenate([
+        #     np.array(self.time_buffers[dilation], copy=True)
+        #     for dilation in self.dilations
+        # ], axis=-1)
+        portfolio = np.array(self.portfolio_buffers[1], copy=True)
+        timestamp = np.array(self.time_buffers[1], copy=True)
         if self.norm:
             price = self.norm_fn(price)
         return State(price, portfolio, timestamp)
