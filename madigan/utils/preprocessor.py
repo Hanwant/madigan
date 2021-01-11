@@ -21,6 +21,8 @@ def make_preprocessor(config, n_assets):
     if config.preprocessor_type in ("WindowedStacker", "StackerDiscrete",
                                     "StackerDiscreteReturns"):
         return StackerDiscrete.from_config(config, n_assets)
+    if config.preprocessor_type in ("StackerDiscretePairs"):
+        return StackerDiscretePairs.from_config(config, n_assets)
     if config.preprocessor_type in ("MultiStackerDiscrete"):
         return MultiStackerDiscrete.from_config(config, n_assets)
     if config.preprocessor_type in ("StackerContinuous"):
@@ -118,7 +120,11 @@ class StackerDiscrete(PreProcessor):
         self.price_buffer = deque(maxlen=self.k)
         self.portfolio_buffer = deque(maxlen=self.k)
         self.time_buffer = deque(maxlen=self.k)
-        self.feature_output_shape = (self.k, n_assets)
+        self._feature_output_shape = (self.k, n_assets)
+
+    @property
+    def feature_output_shape(self):
+        return self._feature_output_shape
 
     @classmethod
     def from_config(cls, config, n_assets):
@@ -231,8 +237,8 @@ class MultiStackerDiscrete(PreProcessor):
         #     np.array(self.time_buffers[dilation], copy=True)
         #     for dilation in self.dilations
         # ], axis=-1)
-        portfolio = np.array(self.portfolio_buffers[1], copy=True)
-        timestamp = np.array(self.time_buffers[1], copy=True)
+        portfolio = np.array(self.portfolio_buffers[self.dilations[0]], copy=True)
+        timestamp = np.array(self.time_buffers[self.dilations[0]], copy=True)
         if self.norm:
             price = self.norm_fn(price)
         return State(price, portfolio, timestamp)
@@ -247,6 +253,34 @@ class MultiStackerDiscrete(PreProcessor):
             for buffer_dict in (self.price_buffers, self.portfolio_buffers,
                                 self.time_buffers):
                 buffer_dict[dilation].clear()
+
+
+class StackerDiscretePairs(StackerDiscrete):
+    def __init__(self,
+                 window_len: int,
+                 n_assets: int,
+                 norm: bool = True,
+                 norm_type: str = 'standard_normal'):
+        assert n_assets == 2
+        super().__init__(window_len, n_assets, norm, norm_type)
+
+        self._feature_output_shape = (self.k, 1)
+        # self._feature_output_shape = (self.k, 2)
+
+    def current_data(self):
+        """ Computes ratio between pair instead of raw prices """
+        price = np.array(self.price_buffer, copy=True)
+        price = (price[:, 0] / price[:, 1])[:, None]
+        # ratio = price[:, 0] / price[:, 1]
+        # price[:, 0] = ratio
+        # price[:, 1] = 1 / ratio
+        # mean = price.mean(-1)[..., None]
+        # price = price / mean
+        if self.norm:
+            price = self.norm_fn(price)
+        portfolio = np.array(self.portfolio_buffer, copy=True)
+        timestamp = np.array(self.time_buffer, copy=True)
+        return State(price, portfolio, timestamp)
 
 
 class StackerDiscreteReturns(StackerDiscrete):
@@ -368,7 +402,6 @@ class CustomA(StackerDiscrete):
         pct_up = np.empty_like(returns)
         _expanding_mean(returns > 0., pct_up)
         price = np.stack([price[1:], pct_up], axis=-1)
-        # import ipdb; ipdb.set_trace()
         portfolio = np.array(self.portfolio_buffer, copy=True)
         timestamp = np.array(self.time_buffer, copy=True)
         return State(price, portfolio, timestamp)
