@@ -1,10 +1,12 @@
 import os
 from typing import Union
 from pathlib import Path
+from functools import partial
 
 import numpy as np
 import torch
 import torch.nn.functional as F
+from torch.distributions import Uniform
 
 from .dqn import DQN
 from ...environments import make_env
@@ -13,6 +15,51 @@ from ...utils import default_device, DiscreteActionSpace, DiscreteRangeSpace
 from ...utils.preprocessor import make_preprocessor
 from ...utils.config import Config
 from ...utils.data import State, SARSD
+
+std_normal_dist = torch.distributions.Normal(0, 1)
+cliiped_uniform_dist = Uniform(1e-7, 1 - 1e-7)
+
+
+def make_risk_distortion(risk_distortion_type: str,
+                         risk_distortion_param: float):
+    if risk_distortion_type in ('None', 'none', 'neutral',  None):
+        return lambda x: x
+    if risk_distortion_type in globals():
+        return partial(globals()[risk_distortion_type], risk_distortion_param)
+    raise NotImplementedError(
+        f"risk distortion function {risk_distortion_type} not implemented")
+
+
+def cpw_distortion(n: float, tau: torch.Tensor):
+    """
+    Risk distortion based on cumulative probability weighting
+    Referened in IQN paper, based on cumulative prospect theory.
+    """
+    num = tau**n
+    denom = (tau**n + (1 - tau)**n)**1 / n
+    return num / denom
+
+
+def wang_distortion(n: float, tau: torch.Tensor):
+    """
+    Risk Distortion as per Wang 2002 (referenced in iqn paper).
+    Inputs are clipped to prevent numerical instability in the icdf func
+    """
+    tau = torch.clip(tau, 1e-7, 1. - 1e-7)
+    inv = std_normal_dist.icdf(tau) + n
+    return std_normal_dist.cdf(inv)
+
+
+def pow_distortion(n: float, tau: torch.Tensor):
+    """ Power formula as in the IQN paper """
+    if n < 0:
+        return 1 - (1 - tau)**(1 / (1 + abs(n)))
+    return tau**(1 / (1 + abs(n)))
+
+
+def cvar_distortion(n: float, tau: torch.Tensor):
+    """ Conditional Value at Risk"""
+    return n * tau
 
 
 class IQN(DQN):
@@ -55,11 +102,13 @@ class IQN(DQN):
             model_config: Union[dict, Config],
             lr: float,
             ##############
-            # Extra 3 Args
+            # Extra 4 Args specific to IQN
             ##############
             nTau1: int,
             nTau2: int,
-            k_huber: float):
+            k_huber: float,
+            risk_distortion: str,
+            risk_distortion_param: float):
         super().__init__(env, preprocessor, input_shape, action_space,
                          discount, nstep_return, reward_shaper_config,
                          replay_size, replay_min_size, prioritized_replay,
@@ -71,7 +120,9 @@ class IQN(DQN):
         self.nTau1 = nTau1
         self.nTau2 = nTau2
         self.k_huber = k_huber
-        self.risk_distortion = lambda x: x
+        self.risk_distortion = make_risk_distortion(risk_distortion,
+                                                    risk_distortion_param)
+
         self.desired_port = torch.tensor([1., 0.], device=self.device)[None, :]
 
     @classmethod
@@ -93,8 +144,8 @@ class IQN(DQN):
             aconf.batch_size, config.test_steps, unit_size, savepath,
             aconf.double_dqn, aconf.tau_soft_update,
             config.model_config.model_class, config.model_config,
-            config.optim_config.lr, config.agent_config.nTau1,
-            config.agent_config.nTau2, config.agent_config.k_huber)
+            config.optim_config.lr, aconf.nTau1, aconf.nTau2, aconf.k_huber,
+            aconf.risk_distortion, aconf.risk_distortion_param)
 
     @torch.no_grad()
     def get_quantiles(self, state, target=False, device=None):
@@ -102,7 +153,13 @@ class IQN(DQN):
         state = self.prep_state_tensors(state, device=device)
         if target:
             return self.model_t(state)
-        return self.model_b(state)
+        tau = torch.rand(1,
+                         self.nTau1,
+                         dtype=torch.float32,
+                         device=self.device,
+                         requires_grad=False)
+        tau = self.risk_distortion(tau)
+        return self.model_b(state, tau=tau)
 
     @torch.no_grad()
     def get_qvals(self, state, target=False, device=None):
@@ -203,7 +260,10 @@ class IQN(DQN):
             'Gt': Gt.detach().mean().item()
         }
 
-    def loss_fn(self, Qt, Gt, tau, weights: torch.Tensor = None):
+    def loss_fn(self, *args, **kwargs):
+        return self.loss_fn_huber(*args, **kwargs)
+
+    def loss_fn_huber(self, Qt, Gt, tau, weights: torch.Tensor = None):
         """
         Quantile Huber Loss
         returns:  (loss, td_error)

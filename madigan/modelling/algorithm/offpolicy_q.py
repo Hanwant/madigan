@@ -115,34 +115,35 @@ class OffPolicyQ(Agent):
         running_cost = 0.  # for logging
         # i = 0
         max_steps = self.training_steps + n
-        DEBUG = False
-        if DEBUG:
-            print("DEBUGGING")
-            debug_logs = []
+        # DEBUG = False
+        # if DEBUG:
+        #     print("DEBUGGING")
+        #     debug_logs = []
         while True:
             self.model_b.sample_noise()
 
             action, transaction = self.explore(state)
             _next_state, reward, done, info = self._env.step(transaction)
             running_cost += np.sum(info.brokerResponse.transactionCost)
-            if DEBUG:
-                debug_metrics = {
-                    'action': action,
-                    'transaction': transaction,
-                    'reward_pre_shape': reward,
-                    'done': done,
-                    # 'info': info,
-                    'transactionCost': info.brokerResponse.transactionCost,
-                    'transactionUnit': info.brokerResponse.transactionUnits,
-                    'running_cost': running_cost,
-                    **get_env_info(self._env)
-                }
-            # reward = self.reward_shaper.stream(reward)
+            # if DEBUG:
+            #     debug_metrics = {
+            #         'action': action,
+            #         'transaction': transaction,
+            #         'reward_pre_shape': reward,
+            #         'done': done,
+            #         # 'info': info,
+            #         'transactionCost': info.brokerResponse.transactionCost,
+            #         'transactionUnit': info.brokerResponse.transactionUnits,
+            #         'running_cost': running_cost,
+            #         **get_env_info(self._env)
+            #     }
+            if done:
+                reward = -0.1
             running_reward += reward
-            if DEBUG:
-                debug_metrics['reward_post_shape'] = reward
-                debug_metrics['running_reward'] = running_reward
-                debug_logs.append(debug_metrics)
+            # if DEBUG:
+            #     debug_metrics['reward_post_shape'] = reward
+            #     debug_metrics['running_reward'] = running_reward
+            #     debug_logs.append(debug_metrics)
 
             self._preprocessor.stream_state(_next_state)
             next_state = self._preprocessor.current_data()
@@ -167,16 +168,16 @@ class OffPolicyQ(Agent):
                 if self.training_steps % log_freq == 0:
                     yield trn_metrics
                     trn_metrics.clear()
-                    if DEBUG:
-                        print("Saving debug logs")
-                        df = pd.DataFrame(list_2_dict(debug_logs))
-                        if not self.debug_savepath.is_file():
-                            df.to_csv(self.debug_savepath, mode='w')
-                        else:
-                            df.to_csv(self.debug_savepath,
-                                      mode='a',
-                                      header=False)
-                        debug_logs = []
+                    # if DEBUG:
+                    #     print("Saving debug logs")
+                    #     df = pd.DataFrame(list_2_dict(debug_logs))
+                    #     if not self.debug_savepath.is_file():
+                    #         df.to_csv(self.debug_savepath, mode='w')
+                    #     else:
+                    #         df.to_csv(self.debug_savepath,
+                    #                   mode='a',
+                    #                   header=False)
+                    #     debug_logs = []
 
                 if self.training_steps > max_steps:
                     yield trn_metrics
@@ -197,6 +198,7 @@ class OffPolicyQ(Agent):
 
     @torch.no_grad()
     def test_episode(self, test_steps=None, reset=True, target=True) -> dict:
+        self.test_mode()
         test_steps = test_steps or self.test_steps
         if reset:
             self.reset_state()

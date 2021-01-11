@@ -73,12 +73,12 @@ def sharpe_shaper(nstep_buffer, discounts, benchmark=0.):
     denom = math.sqrt((diffs**2).sum() / (len(diffs) - 1))
     if denom == 0.:  # prevent div by 0.
         return 0.
-    # global print_i
-    # print_i += 1
-    # if print_i > 100:
-    #     print(num, denom, num / denom, .1 * (num / denom))
-    #     print_i = 0
-    return np.clip(.1 * (num / denom), -1., 1.)
+    global print_i
+    print_i += 1
+    if print_i > 100:
+        print(num, denom, num / denom)#, .1 * (num / denom))  # *.1 for scaling
+        print_i = 0
+    return np.clip((num / denom), -1., 1.)
 
 
 def sortino_shaperA(nstep_buffer, discounts, benchmark=0.):
@@ -107,17 +107,17 @@ def sortino_shaperA(nstep_buffer, discounts, benchmark=0.):
         # print('all upside')
         return 1.
     denom = math.sqrt((downside**2).sum() / (len(diffs) - 1))
-    # global print_i
-    # print_i += 1
-    # if print_i > 100:
-    #     print(num, denom, num / denom, .1 * (num / denom))
-    #     print_i = 0
+    global print_i
+    print_i += 1
+    if print_i > 100:
+        print(num, denom, num / denom, .1 * (num / denom))
+        print_i = 0
     return np.clip(.1 * (num / denom), -1., 1.)
 
 
 def sortino_shaperB(nstep_buffer, discounts, benchmark=0.):
     """
-    Another version - kinda sortino style. Instead of adjusting for negative
+    Another version - kinda sortino style. Instead of adjusting for downside
     volatility, returns are squared in magnitude if they are negative.
 
     """
@@ -143,11 +143,11 @@ def sortino_shaperB(nstep_buffer, discounts, benchmark=0.):
     diffs = np.where(diffs < -1., -1., diffs)
     downside_idx = np.where(diffs < 0.)[0]
     diffs[downside_idx] = -((-diffs[downside_idx])**(2 / 3))
-    # global print_i
-    # print_i += 1
-    # if print_i > 100:
-    #     print(raw_sum, diffs.sum())
-    #     print_i = 0
+    global print_i
+    print_i += 1
+    if print_i > 100:
+        print(raw_sum, diffs.sum())
+        print_i = 0
     return diffs.sum()
 
 

@@ -24,7 +24,7 @@ agent_config:
   nTau2: 8
   noisy_net: true
   noisy_net_sigma: 0.5
-  nstep_return: 1
+  nstep_return: 5
   per_alpha: 0.6
   per_beta: 0.4
   per_beta_steps: 100000
@@ -35,23 +35,26 @@ agent_config:
   reward_clip: &id001 !!python/tuple
   - -1.0
   - 1.0
+  risk_distortion: None
+  risk_distortion_param: -0.75
   target_entropy_ratio: 0.98
   tau_embed_size: 64
   tau_soft_update: 0.0001
   train_freq: 4
   transaction_thresh: 0.02
-  unit_size_proportion_avM: 0.05
+  unit_size_proportion_avM: 0.02
 agent_configs:
   A: /home/hemu/madigan/experiments/IQN_OU_Triple_Decreasing_unit.005_Noisy_NoReShap_Replay300_NoPool_AdaptiveAvg/config.yaml
   B: /home/hemu/madigan/experiments/IQN_OU_Triple_Decreasing_PER_Test/config.yaml
-agent_type: DQN
+agent_type: IQN
 basepath: /media/hemu/Data/madigan/experiments/
 data_source_config:
-  # OUPair: 
-    # data_source_config:
-    #   phi: 0.04
-    #   theta: 0.15
-    # data_source_type: OUPair
+  OUPair: 
+    data_source_config:
+      phi: 0.04
+      theta: 0.15
+      noise: .03
+    data_source_type: OUPair
   # SineAdder:
   #   data_source_config:
   #     freq:
@@ -201,7 +204,7 @@ data_source_type: Composite
 discrete_action_atoms: 3
 discrete_actions: true
 env_type: Synth
-experiment_id: IQN_TrendyOU_MultiStack_p.01_dy.0005-10_discount.99_nstep1_trans.02_window128
+experiment_id: IQN_OUPair_nstep5_unit.02_stacker_ratio_std_norm
 init_cash: 1000000
 log_freq: 10000
 lot_unit_value: 10000
@@ -260,23 +263,23 @@ optim_config:
 parent_id: ''
 preprocessor_config:
   norm: true
-  norm_type: log_standard_normal
-  preprocessor_type: StackerDiscrete
+  norm_type: standard_normal
+  preprocessor_type: StackerDiscretePairs
   timeframes:
     - 64
   dilations:
     - 1
-    - 3
-  window_length: 128
-preprocessor_type: MultiStackerDiscrete
+    - 5
+  window_length: 64
+preprocessor_type: StackerDiscretePairs
 required_margin: 1.0
 reward_clip: *id001
 reward_shaper_config:
-  reward_shaper: None
+  reward_shaper: none
   desired_portfolio:
     - 1.0
     - 0.
-  cosine_temp: .05
+  cosine_temp: .01
   window: 1000
 slippage_abs: 0.0
 slippage_rel: 0.0

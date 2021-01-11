@@ -372,9 +372,9 @@ class TestEpisodePlots(QGridLayout):
         self.plots['availableMargin'] = self.graphs.addPlot(
             title="available margin", row=1, col=2, colspan=2)
         self.plots['transaction'] = self.graphs.addPlot(title="transaction",
-                                                         row=1,
-                                                         col=4,
-                                                         colspan=2)
+                                                        row=1,
+                                                        col=4,
+                                                        colspan=2)
         self.lines['cash'] = self.plots['cash'].plot(y=[])
         self.lines['availableMargin'] = self.plots['availableMargin'].plot(
             y=[])
@@ -973,34 +973,30 @@ class TestHistoryPlots(QGridLayout):
             row=0,
             col=0,
             colspan=1)
-        self.plots['reward'] = self.graphs.addPlot(
-            title='Rewards',
-            bottom='training steps',
-            left='rewards',
-            row=0,
-            col=1,
-            colspan=1)
-        self.plots['returns'] = self.graphs.addPlot(
-            title='Log Returns',
-            bottom='training steps',
-            left='log returns',
-            row=0,
-            col=2,
-            colspan=1)
-        self.plots['sharpe'] = self.graphs.addPlot(
-            title='Sharpe Ratios',
-            bottom='training steps',
-            left='sharpe ratio',
-            row=0,
-            col=3,
-            colspan=1)
-        self.plots['sortino'] = self.graphs.addPlot(
-            title='Sortino Ratios',
-            bottom='training steps',
-            left='sortino ratio',
-            row=1,
-            col=0,
-            colspan=1)
+        self.plots['reward'] = self.graphs.addPlot(title='Rewards',
+                                                   bottom='training steps',
+                                                   left='rewards',
+                                                   row=0,
+                                                   col=1,
+                                                   colspan=1)
+        self.plots['returns'] = self.graphs.addPlot(title='Log Returns',
+                                                    bottom='training steps',
+                                                    left='log returns',
+                                                    row=0,
+                                                    col=2,
+                                                    colspan=1)
+        self.plots['sharpe'] = self.graphs.addPlot(title='Sharpe Ratios',
+                                                   bottom='training steps',
+                                                   left='sharpe ratio',
+                                                   row=0,
+                                                   col=3,
+                                                   colspan=1)
+        self.plots['sortino'] = self.graphs.addPlot(title='Sortino Ratios',
+                                                    bottom='training steps',
+                                                    left='sortino ratio',
+                                                    row=1,
+                                                    col=0,
+                                                    colspan=1)
         self.plots['max_drawdown'] = self.graphs.addPlot(
             title='Max Drawdown',
             bottom='training steps',
@@ -1220,11 +1216,13 @@ class TestHistoryPlotsDQN(TestHistoryPlots):
         self.plots['qvals'].showGrid(1, 1)
         self.plots['qvals'].setLabels()
 
-    def set_data(self, data):
-        super().set_data(data)
-        if data is None or len(data) == 0:
-            data = {k: [] for k in self.lines.keys()}
-        self.lines['mean_qvals'].setData(y=data['mean_qvals'],
+    def _set_data(self):
+        super()._set_data()
+        if self.data is None or len(self.data) == 0:
+            self.data = {k: [] for k in self.lines.keys()}
+        x = self.data['training_steps']
+        self.lines['mean_qvals'].setData(x=x,
+                                         y=self.data['mean_qvals'],
                                          pen=self.colours['mean_qvals'])
 
 
@@ -1238,10 +1236,9 @@ class TestHistoryPlotsSACD(TestHistoryPlots):
             'mean_qvals1': (255, 86, 0),
             'mean_qvals2': (86, 255, 0)
         })
-        self.plots['qvals'] = self.graphs.addPlot(
-            title='Mean Qvals',
-            bottom='training_steps',
-            left='Value')
+        self.plots['qvals'] = self.graphs.addPlot(title='Mean Qvals',
+                                                  bottom='training_steps',
+                                                  left='Value')
         self.lines['mean_qvals1'] = self.plots['qvals'].plot(y=[])
         self.lines['mean_qvals2'] = self.plots['qvals'].plot(y=[])
         self.plots['qvals'].showGrid(1, 1)
