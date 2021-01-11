@@ -935,10 +935,11 @@ namespace madigan{
   }
 
   // OU PAIR /////////////////////////////////////////////////////////////////////////
-  void OUPair::initParams(double theta, double phi){
+  void OUPair::initParams(double theta, double phi, double noise){
     this->theta=theta;
     this->phi=phi;
-    noiseDistribution = std::normal_distribution<double>(0., phi);
+    ouNoiseDistribution = std::normal_distribution<double>(0., phi);
+    randomWalkDistribution = std::normal_distribution<double>(0., noise);
     currentData_.resize(2.);
     for (int i=0; i < 2; i++){
       std::string assetName = "OUPair_" + std::to_string(i);
@@ -949,10 +950,10 @@ namespace madigan{
     generator.seed(std::chrono::system_clock::now().time_since_epoch().count());
   }
 
-  OUPair::OUPair(double theta, double phi){
-    initParams(theta, phi);
+  OUPair::OUPair(double theta, double phi, double noise){
+    initParams(theta, phi, noise);
   }
-  OUPair::OUPair(): OUPair(.15, .04){}
+  OUPair::OUPair(): OUPair(.015, .01, .03){}
 
   OUPair::OUPair(Config config){
     bool allKeysPresent{true};
@@ -961,38 +962,42 @@ namespace madigan{
       allKeysPresent = false;
     }
     Config params = std::any_cast<Config>(config["data_source_config"]);
-    for (auto key: {"theta", "phi"}){
+    for (auto key: {"theta", "phi", "noise"}){
       if (params.find(key) == params.end()){
         allKeysPresent=false;
-        throw ConfigError("config doesn't don't have all required constructor arguments");
+        throw ConfigError("config for OUPair doesn't have all required constructor arguments");
       }
     }
     if (allKeysPresent){
       double theta = std::any_cast<double>(params["theta"]);
       double phi = std::any_cast<double>(params["phi"]);
-      initParams(theta, phi);
+      double noise = std::any_cast<double>(params["noise"]);
+      initParams(theta, phi, noise);
     }
     else{
-      double theta = .15;
-      double phi = .04;
-      initParams(theta, phi);
+      double theta = .015;
+      double phi = .01;
+      double noise = .03;
+      initParams(theta, phi, noise);
     }
   }
 
   OUPair::OUPair(pybind11::dict py_config): OUPair::OUPair(makeConfigFromPyDict(py_config)){}
 
   const PriceVector& OUPair::getData() {
-    mean += noiseDistribution(generator);
-    currentData_(0) += (theta*(mean-currentData_(0))) + mean*noiseDistribution(generator);
-    currentData_(1) += (theta*(mean-currentData_(1))) + mean*noiseDistribution(generator);
+    mean += mean*randomWalkDistribution(generator);
+    currentData_(0) += (theta*(mean-currentData_(0))) + mean*ouNoiseDistribution(generator);
+    currentData_(1) += (theta*(mean-currentData_(1))) + mean*ouNoiseDistribution(generator);
     // currentData_(0) = max(1., currentData_(0));
     // currentData_(0) = max(1., currentData_(0));
     timestamp_ += 1;
     return currentData_;
-  } 
+  }
+
   void OUPair::reset(){
     currentData_(0) = 10.;
     currentData_(1) = 10.;
+    mean = 10;
   }
 
   // SIMPLE TREND //////////////////////////////////////////////////////////////////////
@@ -1380,8 +1385,8 @@ namespace madigan{
       }
       y = ouComponent[i] + trendComponent[i];
       // ema[i] = emaAlpha[i] * ema[i] + (1-emaAlpha[i]) * y;
-      y = std::max(0.01, y);
-      if (y <= .1){
+      y = std::max(0.001, y);
+      if (y <= .001){
         currentDirection[i] = 1;
       }
     }
@@ -1395,6 +1400,7 @@ namespace madigan{
     // this->ouMean=start;
     for (int i=0; i<trendProb.size(); i++){
       ouComponent[i] = 0;
+      trendComponent[i] = start[i];
       trending[i] = false;
       currentData_(i) = start[i];
       currentTrendLen[i] = 0;

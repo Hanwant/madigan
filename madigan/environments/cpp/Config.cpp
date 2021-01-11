@@ -386,7 +386,7 @@ namespace madigan {
   }
 
    Config makeOUPairConfigFromPyDict(pybind11::dict datasource_pydict){
-    for (auto key: {"theta", "phi"}){
+     for (auto key: {"theta", "phi", "noise"}){
       auto keyFound=std::find_if(datasource_pydict.begin(), datasource_pydict.end(),
                                  [key](const std::pair<pybind11::handle, pybind11::handle>& pair){
                                    return string(pybind11::str(pair.first)) == key;
@@ -397,6 +397,7 @@ namespace madigan {
     }
     double theta;
     double phi;
+    double noise;
     for(auto& item: datasource_pydict){
       string key = string(pybind11::str(item.first));
       if(key == "theta"){
@@ -405,11 +406,15 @@ namespace madigan {
       if(key == "phi"){
         phi = item.second.cast<double>();
       }
+      if(key == "noise"){
+        noise = item.second.cast<double>();
+      }
     }
     Config config{
       {"data_source_type", "OUPair"},
       {"data_source_config", Config{{"theta", theta},
-                                    {"phi", phi}}
+                                    {"phi", phi},
+                                    {"noise", noise}}
       }
     };
     return config;

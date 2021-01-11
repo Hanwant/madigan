@@ -442,7 +442,7 @@ namespace madigan{
   class OUPair: public DataSourceTick{
   public:
     OUPair();
-    OUPair(double theta, double phi);
+    OUPair(double theta, double phi, double noise);
     OUPair(Config config);
     OUPair(pybind11::dict config);
     ~OUPair(){}
@@ -454,16 +454,18 @@ namespace madigan{
     std::size_t currentTime() const { return timestamp_; }
 
   protected:
-    virtual void initParams(double theta, double phi);
+    virtual void initParams(double theta, double phi, double noise);
 
   protected:
     const double dT{1.};
     double theta;
     double phi;
     double mean;
+    double noise;
     std::size_t timestamp_;
     std::default_random_engine generator;
-    std::normal_distribution<double> noiseDistribution;
+    std::normal_distribution<double> randomWalkDistribution;
+    std::normal_distribution<double> ouNoiseDistribution;
     PriceVector currentData_;
   };
 
