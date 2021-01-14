@@ -1,5 +1,6 @@
 from pathlib import Path
 from itertools import product
+import traceback
 
 import numpy as np
 import pandas as pd
@@ -21,7 +22,8 @@ from madigan.utils.plotting_pub import make_figs, save_fig
 def make_train_plots(agent_type, title=None, **kw):
     if agent_type in ("DQN", "DQNCURL", "DQNReverser", "DQNController",
                       "DQNRecurrent", "IQN", "IQNCURL", "IQNReverser",
-                      "IQNController", "DQNAE"):
+                      "IQNController", "DQNAE", "DQNMixedActions",
+                      "IQNMixedActions"):
         return TrainPlotsDQN(title=title, **kw)
     if agent_type in ("DDPG", "DDPGDiscretized"):
         return TrainDDPG(title=title, **kw)
@@ -35,7 +37,8 @@ def make_train_plots(agent_type, title=None, **kw):
 def make_test_episode_plots(agent_type, title=None, **kw):
     if agent_type in ("DQN", "DQNCURL", "DQNReverser", "DQNController",
                       "DQNRecurrent", "IQN", "IQNCURL", "IQNReverser",
-                      "IQNController", "DQNAE"):
+                      "IQNController", "DQNAE", "DQNMixedActions",
+                      "IQNMixedActions"):
         return TestEpisodePlotsDQN(title=title, **kw)
     if agent_type in ("DDPG", "DDPGDiscretized"):
         return TestEpisodeDDPG(title=title, **kw)
@@ -49,7 +52,8 @@ def make_test_episode_plots(agent_type, title=None, **kw):
 def make_test_history_plots(agent_type, title=None, **kw):
     if agent_type in ("DQN", "DQNCURL", "DQNReverser", "DQNController",
                       "DQNRecurrent", "IQN", "IQNCURL", "IQNReverser",
-                      "IQNController", "DQNAE"):
+                      "IQNController", "DQNAE", "DQNMixedActions",
+                      "IQNMixedActions"):
         return TestHistoryPlotsDQN(title=title, **kw)
     if agent_type in ("DDPG", "DDPGDiscretized"):
         return TestHistoryDDPG(title=title, **kw)
@@ -107,7 +111,7 @@ class TrainPlots(QGridLayout):
             if name != "loss":
                 plot.setXLink(self.plots['loss'])
 
-    def clear_data(self):
+    def clear_plots(self):
         for line in self.lines.values():
             line.setData(y=[])
 
@@ -116,6 +120,9 @@ class TrainPlots(QGridLayout):
         if len(data) == 0:
             print("train data is empty")
             data = {k: [] for k in self.lines.keys()}
+        # size = len(data['loss'])
+        # if size > 500000:
+        #    sparse_idx = np.random.choice(size / 10_000_000)
         self.lines['loss'].setData(y=data['loss'], pen=self.colours['loss'])
         rewards = data['running_reward']
         rewards_mean = pd.Series(data['running_reward']).ewm(20000).mean()
@@ -627,7 +634,7 @@ class TestEpisodePlots(QGridLayout):
                 run_summary = data[data['env_steps'] == env_steps - 1]
                 if len(run_summary) == 0:
                     run_summary = data[data['env_steps'] == env_steps + 1]
-            print('len run summ: ', len(run_summary))
+            # print('len run summ: ', len(run_summary))
             if len(run_summary) > 0:
                 run_summary = run_summary.to_dict()
                 self.tear_sheet.setData(run_summary)
@@ -703,6 +710,9 @@ class TestEpisodePlotsDQN(TestEpisodePlots):
         if len(data) == 0:
             return
         qvals = self.data['qvals']
+        if len(qvals.shape) == 4:
+            qvals = qvals.squeeze(1)
+            self.data['qvals'] = qvals
         assert len(qvals.shape) == 3
         qvals = qvals.reshape(qvals.shape[0], -1)
         self.lines['qvals'].setImage(qvals, axes={'x': 0, 'y': 1})
@@ -754,7 +764,8 @@ class TestEpisodeDDPG(TestEpisodePlots):
         self.transaction_table = pg.TableWidget()
         self.transaction_table.setVerticalHeaderLabels(['Model Outputs'])
         # self.graphs.addItem(self.actions_table, row=2, col=3, colspan=1)
-        self.addWidget(self.transaction_table, 3, 9, 1, 1)
+        self.tables.addWidget(self.transaction_table)
+        # self.addWidget(self.transaction_table, 3, 9, 1, 1)
         self.link_x_axes()
         self.current_pos_line.sigPositionChanged.connect(
             self.update_transaction_table)
@@ -798,7 +809,7 @@ class TestEpisodeDDPG(TestEpisodePlots):
             self.data['qvals'] = np.array(data['qvals'])
         assert len(self.data['qvals'].shape) == 2
         if isinstance(data['action'], (pd.DataFrame, pd.Series)):
-            self.data['action'] = np.array(data['action'].tolist())
+            self.data['action'] = np.array(data['action'].tolist())[:, 0, :]
         else:
             self.data['action'] = np.array(data['action'])
         assert len(self.data['action'].shape) == 2
@@ -958,7 +969,8 @@ class TestHistoryPlots(QGridLayout):
             'final_equity': (255, 0, 0),
             'mean_reward': (242, 242, 242),
             'cash': (0, 255, 255),
-            'margin': (255, 86, 0)
+            'margin': (255, 86, 0),
+            'max_drawdown': (255, 86, 0)
         }
 
         self.graphs = pg.GraphicsLayoutWidget(show=True, title=title)
@@ -1080,15 +1092,13 @@ class TestHistoryPlots(QGridLayout):
         for name, plot in self.plots.items():
             plot.setXLink(self.plots['equity'])
 
-    def clear_data(self):
+    def clear_plots(self):
         for _, line in self.lines.items():
-            line.setData(y=[])
-
-        # self.lines['mean_transaction_cost'].setData(
-        # y=data['mean_transaction_cost'],
-        # pen=self.colours['mean_transaction_cost'])
-        # self.lines['margin'].setData(y=data['cash'],
-        # pen=self.colours['margin'])
+            if isinstance(line, dict):
+                for _, _line in line.items():
+                    _line.clear()
+            else:
+                line.clear()
 
     def update_timeframes_table(self, data):
         sharpes = [col for col in data.keys() if 'sharpe' in col]
@@ -1153,16 +1163,16 @@ class TestHistoryPlots(QGridLayout):
             print("test self.data is empty")
             self.data = {k: [] for k in self.lines.keys()}
         x = self.data['training_steps']
-        self.lines['mean_equity'].setData(x=x,
-                                          y=self.data['mean_equity'],
-                                          pen=self.colours['mean_equity'])
-        self.lines['final_equity'].setData(x=x,
-                                           y=self.data['final_equity'],
-                                           pen=self.colours['final_equity'])
-        self.lines['mean_reward'].setData(x=x,
-                                          y=self.data['mean_reward'],
-                                          pen=self.colours['mean_reward'])
-        self.lines['max_drawdown'].setData(x=x, y=self.data['max_drawdown'])
+        for label in ('mean_equity', 'final_equity', 'mean_reward',
+                      'max_drawdown'):
+            try:
+                self.lines[label].setData(x=x,
+                                          y=self.data[label],
+                                          pen=self.colours[label])
+            except Exception as E:
+                traceback.print_exc()
+                print('Skipping', label)
+                continue
 
     def process_data(self, data):
         self.data = data
@@ -1171,6 +1181,7 @@ class TestHistoryPlots(QGridLayout):
 
     def set_data(self, data):
         self.process_data(data)
+        self.clear_plots()
         self._set_data()
         self._set_data_for_variable_timeframes()
         self._set_data_for_variable_assets()
