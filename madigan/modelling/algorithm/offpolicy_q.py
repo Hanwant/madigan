@@ -119,7 +119,7 @@ class OffPolicyQ(Agent):
         # if DEBUG:
         #     print("DEBUGGING")
         #     debug_logs = []
-        min_rewards = np.log(.35 * np.ones(self._env.nAssets))
+        # min_rewards = np.log(.35 * np.ones(self._env.nAssets))
         while True:
             self.model_b.sample_noise()
             action, transaction = self.explore(state)

@@ -24,7 +24,7 @@ agent_config:
   nTau2: 8
   noisy_net: true
   noisy_net_sigma: 0.5
-  nstep_return: 5
+  nstep_return: 20
   per_alpha: 0.6
   per_beta: 0.4
   per_beta_steps: 100000
@@ -43,19 +43,19 @@ agent_config:
   tau_soft_update: 0.0001
   train_freq: 4
   transaction_thresh: 0.02
-  unit_size_proportion_avM: 0.01
+  unit_size_proportion_avM: 0.05
 agent_configs:
   A: /home/hemu/madigan/experiments/IQN_OU_Triple_Decreasing_unit.005_Noisy_NoReShap_Replay300_NoPool_AdaptiveAvg/config.yaml
   B: /home/hemu/madigan/experiments/IQN_OU_Triple_Decreasing_PER_Test/config.yaml
-agent_type: IQNMixedActions
+agent_type: IQN
 basepath: /media/hemu/Data/madigan/experiments/
 data_source_config:
-  OUPair: 
-    data_source_config:
-      phi: 0.04
-      theta: 0.015
-      noise: .03
-    data_source_type: OUPair
+  # OUPair: 
+  #   data_source_config:
+  #     phi: 0.04
+  #     theta: 0.015
+  #     noise: .03
+  #   data_source_type: OUPair
   # SineAdder:
   #   data_source_config:
   #     freq:
@@ -81,21 +81,21 @@ data_source_config:
   #     dX: .01
   #     noise: .01
   #   data_source_type: SineAdder
-  # OU:
-  #   data_source_config:
-  #     mean:
-  #       - 10.
-  #       - 5.
-  #       # - 1.
-  #     phi:
-  #       - .04
-  #       - .02
-  #       # - .04
-  #     theta:
-  #       - .15
-  #       - .15
-  #       # - .15
-  #   data_source_type: OU
+  OU:
+    data_source_config:
+      mean:
+        - 10.
+        # - 5.
+        # - 1.
+      phi:
+        - .04
+        # - .02
+        # - .01
+      theta:
+        - .08
+        # - .15
+        # - .15
+    data_source_type: OU
   # SimpleTrend:
   #   data_source_config:
   #     trend_prob:
@@ -211,7 +211,7 @@ data_source_type: Composite
 discrete_action_atoms: 3
 discrete_actions: true
 env_type: Synth
-experiment_id: IQN_OUPair_spread_stacker_norm_nstep5_unit.01
+experiment_id: IQN_OU_.08_nstep20_baseline_unit.05_no_norm
 init_cash: 1000000
 log_freq: 10000
 lot_unit_value: 10000
@@ -269,7 +269,7 @@ optim_config:
   weight_decay: 0
 parent_id: ''
 preprocessor_config:
-  norm: true
+  norm: false
   norm_type: standard_normal
   preprocessor_type: StackerDiscrete
   timeframes:

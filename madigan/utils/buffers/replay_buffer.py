@@ -103,22 +103,27 @@ class ReplayBuffer:
 
     def _sample(self, idxs):
         """ Given batch indices, returns SARSD of collated samples"""
-        state_price = np.stack([self._buffer[idx].state.price for idx in idxs])
-        state_port = np.stack(
-            [self._buffer[idx].state.portfolio for idx in idxs])
-        state_time = np.stack(
-            [self._buffer[idx].state.timestamp for idx in idxs])
-        state = State(state_price, state_port, state_time)
-        next_state_price = np.stack(
-            [self._buffer[idx].next_state.price for idx in idxs])
-        next_state_port = np.stack(
-            [self._buffer[idx].next_state.portfolio for idx in idxs])
-        next_state_time = np.stack(
-            [self._buffer[idx].next_state.timestamp for idx in idxs])
-        next_state = State(next_state_price, next_state_port, next_state_time)
-        action = np.stack([self._buffer[idx].action for idx in idxs])
-        reward = np.stack([self._buffer[idx].reward for idx in idxs])
-        done = np.stack([self._buffer[idx].done for idx in idxs])
+        try:
+            state_price = np.stack([self._buffer[idx].state.price for idx in idxs])
+            state_port = np.stack(
+                [self._buffer[idx].state.portfolio for idx in idxs])
+            state_time = np.stack(
+                [self._buffer[idx].state.timestamp for idx in idxs])
+            state = State(state_price, state_port, state_time)
+            next_state_price = np.stack(
+                [self._buffer[idx].next_state.price for idx in idxs])
+            next_state_port = np.stack(
+                [self._buffer[idx].next_state.portfolio for idx in idxs])
+            next_state_time = np.stack(
+                [self._buffer[idx].next_state.timestamp for idx in idxs])
+            next_state = State(next_state_price, next_state_port, next_state_time)
+            action = np.stack([self._buffer[idx].action for idx in idxs])
+            reward = np.stack([self._buffer[idx].reward for idx in idxs])
+            done = np.stack([self._buffer[idx].done for idx in idxs])
+        except:
+            import traceback; traceback.print_exc()
+            import ipdb; ipdb.set_trace()
+
         return SARSD(state, action, reward, next_state, done)
 
     # def batchify(self, batch: List[SARSD]):

@@ -5,6 +5,7 @@ from functools import partial
 
 import numpy as np
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 from torch.distributions import Uniform
 
@@ -134,9 +135,6 @@ class IQN(DQN):
         input_shape = preprocessor.feature_output_shape
         atoms = config.discrete_action_atoms + 1
         action_space = DiscreteRangeSpace((0, atoms), env.nAssets)
-        # MIXED ACTIONS
-        # atoms = atoms ** env.nAssets
-        action_space = DiscreteRangeSpace((0, atoms), 1)
         aconf = config.agent_config
         unit_size = aconf.unit_size_proportion_avM
         savepath = Path(config.basepath) / config.experiment_id / 'models'
@@ -265,6 +263,9 @@ class IQN(DQN):
 
         self.opt.zero_grad()
         loss.backward()
+        nn.utils.clip_grad_norm_(self.model_b.parameters(),
+                                 max_norm=1.,
+                                 norm_type=2)
         self.opt.step()
 
         self.update_target()
@@ -436,8 +437,9 @@ class IQNMixedActions(IQN):
         preprocessor = make_preprocessor(config, env.nAssets)
         input_shape = preprocessor.feature_output_shape
         atoms = config.discrete_action_atoms + 1
-        action_space = DiscreteRangeSpace((0, atoms), env.nAssets)
-        # ALL MIXED ACTIONS - Full product
+        # Parallel Actions for reference ####################################
+        # action_space = DiscreteRangeSpace((0, atoms), env.nAssets)
+        # ALL MIXED ACTIONS - Full product between n_assets*action_atoms #####
         # atoms = atoms ** env.nAssets
         action_space = DiscreteRangeSpace((0, atoms), 1)
         aconf = config.agent_config
