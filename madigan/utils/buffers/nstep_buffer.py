@@ -14,13 +14,11 @@ def sum_default(nstep_buffer, discounts):
     ])
 
 
-global print_i
-print_i = 0
+global PRINT_I
+PRINT_I = 0
 
 
 def cosine_similarity(p: np.ndarray, q: np.ndarray):
-    ppp = p
-    qqq = q
     norm_p = np.sqrt((p**2).sum(-1))
     norm_q = np.sqrt((q**2).sum(-1))
     return ((p * q).sum(-1) / (norm_p * norm_q)).mean()
@@ -40,27 +38,29 @@ def cosine_port_shaper(nstep_buffer, discounts, desired_portfolio,
          cosine_similarity(dat.next_state.portfolio[-1], desired_portfolio))
         for dat, discount in zip(nstep_buffer, discounts)
     ])
-    global print_i
-    if print_i > 100:
+    global PRINT_I
+    if PRINT_I > 100:
         cosine_reward = sum([
             cosine_similarity(dat.next_state.portfolio, desired_portfolio)
             for dat in nstep_buffer
         ])
         normal_reward = sum([dat.reward for dat in nstep_buffer])
         print(normal_reward, cosine_reward, cosine_reward * cosine_temp)
-        print_i = 0
-    print_i += 1
+        PRINT_I = 0
+    PRINT_I += 1
     return rewards
 
 
 def sharpe_shaper(nstep_buffer, discounts, benchmark=0.):
-    """ Sharpe return aggregation """
+    """
+    Sharpe return aggregation. Use numpy ufuncs to generalize to
+    reward vectors.
+    """
     if len(nstep_buffer) == 1:  # Heuristic for if there is only 1 value
         benchmark = benchmark if isinstance(benchmark, float) else benchmark[0]
         diff = nstep_buffer[0].reward - benchmark
-        if diff == 0.:  # prevent div by 0. in denom
-            return 0.
-        return diff / math.sqrt(diff**2)
+        diff = np.where(diff != 0., diff, 0.)
+        return (diff / np.sqrt(diff**2))
     if not isinstance(benchmark, float):  # if benchmark is an array
         diffs = np.array([
             (dat.reward - ref) * discount
@@ -69,16 +69,21 @@ def sharpe_shaper(nstep_buffer, discounts, benchmark=0.):
     else:  # if benchmark is a constant scalar - default
         diffs = np.array([(dat.reward - benchmark) * discount
                           for dat, discount in zip(nstep_buffer, discounts)])
-    num = diffs.mean()
-    denom = math.sqrt((diffs**2).sum() / (len(diffs) - 1))
-    if denom == 0.:  # prevent div by 0.
-        return 0.
-    global print_i
-    print_i += 1
-    if print_i > 100:
-        print(num, denom, num / denom)#, .1 * (num / denom))  # *.1 for scaling
-        print_i = 0
-    return np.clip((num / denom), -1., 1.)
+    num = diffs.mean(0)
+    denom = np.sqrt((diffs**2).sum(0) / (len(diffs) - 1))
+    # if denom == 0.:  # prevent div by 0.
+    #     return 0.
+    global PRINT_I
+    PRINT_I += 1
+    if PRINT_I > 100:
+        print(num, denom,
+              .1 * num / denom)  #, .1 * (num / denom))  # *.1 for scaling
+        PRINT_I = 0
+    # returns num/denom where denom != 0. else fills that entry with 0.
+    # potentially expensive as it creates zeros vector each time!
+    # make one big global one and then index into it?
+    out = np.divide(num, denom, where=denom != 0, out=np.zeros_like(denom))
+    return np.clip(.1 * out, -1., 1.)
 
 
 def sortino_shaperA(nstep_buffer, discounts, benchmark=0.):
@@ -86,11 +91,8 @@ def sortino_shaperA(nstep_buffer, discounts, benchmark=0.):
     if len(nstep_buffer) == 1:  # Heuristic for if there is only 1 value
         benchmark = benchmark if isinstance(benchmark, float) else benchmark[0]
         diff = nstep_buffer[0].reward - benchmark
-        if diff == 0.:  # prevent div by 0. in denom
-            return 0.
-        if diff < 0:
-            return np.clip(diff / math.sqrt(diff**2), -1., 1.)
-        return 1.
+        return np.clip(np.where(diff != 0., diff / np.sqrt(diff**2), 0.), -1.,
+                       1.)
     if not isinstance(benchmark, float):  # if benchmark is an array
         diffs = np.array([
             (dat.reward - ref) * discount
@@ -99,23 +101,21 @@ def sortino_shaperA(nstep_buffer, discounts, benchmark=0.):
     else:  # if benchmark is a constant scalar - default
         diffs = np.array([(dat.reward - benchmark) * discount
                           for dat, discount in zip(nstep_buffer, discounts)])
-    num = diffs.mean()
-    downside = diffs[np.where(diffs < 0)[0]]
-    if len(downside) == 0:
-        if num == 0:
-            return 0.
-        # print('all upside')
-        return 1.
-    denom = math.sqrt((downside**2).sum() / (len(diffs) - 1))
-    global print_i
-    print_i += 1
-    if print_i > 100:
+    num = diffs.mean(0)
+    downside = np.where(diffs < 0, diffs, 0.)
+    denom = np.sqrt((downside**2).sum(0) / (len(diffs) - 1))
+    global PRINT_I
+    PRINT_I += 1
+    if PRINT_I > 100:
         print(num, denom, num / denom, .1 * (num / denom))
-        print_i = 0
-    return np.clip(.1 * (num / denom), -1., 1.)
+        PRINT_I = 0
+    denom_zero_case = np.where(num == 0., 0., 1.)
+    normal_case = np.clip(.1 * (num / denom), -1., 1.)
+    out = np.where(denom != 0., normal_case, denom_zero_case)
+    return out
 
 
-def sortino_shaperB(nstep_buffer, discounts, benchmark=0.):
+def sortino_shaperB(nstep_buffer, discounts, benchmark=0., exp=2):
     """
     Another version - kinda sortino style. Instead of adjusting for downside
     volatility, returns are squared in magnitude if they are negative.
@@ -139,15 +139,15 @@ def sortino_shaperB(nstep_buffer, discounts, benchmark=0.):
     else:  # if benchmark is a constant scalar - default
         diffs = np.array([(dat.reward - benchmark) * discount
                           for dat, discount in zip(nstep_buffer, discounts)])
-    raw_sum = diffs.sum()
-    diffs = np.where(diffs < -1., -1., diffs)
+    raw_sum = diffs.sum(0)
+    diffs = np.where(diffs < -1., -1., diffs)  # max negative reward = -1.
     downside_idx = np.where(diffs < 0.)[0]
-    diffs[downside_idx] = -((-diffs[downside_idx])**(2 / 3))
-    global print_i
-    print_i += 1
-    if print_i > 100:
+    diffs[downside_idx] = -((-diffs[downside_idx])**exp)
+    global PRINT_I
+    PRINT_I += 1
+    if PRINT_I > 100:
         print(raw_sum, diffs.sum())
-        print_i = 0
+        PRINT_I = 0
     return diffs.sum()
 
 
@@ -174,13 +174,19 @@ class NStepBuffer:
         to the shaper function using partial - keeps reference to both.
         """
         shaper_type = shaper_config['reward_shaper']
+        print('using ', shaper_type)
         if shaper_type in ("cosine_similarity", "cosine_port_shaper"):
             desired_portfolio = np.array(shaper_config['desired_portfolio'])
             temp = shaper_config['cosine_temp']
             return partial(cosine_port_shaper, self._buffer, self.discounts,
                            desired_portfolio, temp)
+        if shaper_type in ("sortino_shaperB", ):
+            exp = shaper_config["sortino_exp"]
+            return partial(sortino_shaperB,
+                           self._buffer,
+                           self.discounts,
+                           exp=exp)
         if shaper_type in globals():
-            print('using ', shaper_type)
             return partial(globals()[shaper_type], self._buffer,
                            self.discounts)
         if shaper_type in ('None', None, 'none'):
