@@ -153,10 +153,31 @@ namespace madigan{
     return led;
   }
 
+  Ledger Portfolio::ledgerFull() const{
+    Ledger led = Ledger(nAssets()+1);
+    led << (cash_-borrowedMargin()), ledger_;
+    return led;
+  }
+
+
   Ledger Portfolio::ledgerAbsNormedFull() const{
     Ledger ledgerNormFull = ledgerNormedFull();
     return (ledgerNormFull.array() /
             ledgerNormFull.array().abs().sum()).matrix();
+  }
+
+  AmountVector Portfolio::positionValues() const {
+    return ledger_.cwiseProduct(currentPrices_);
+  }
+
+  AmountVector Portfolio::positionValuesFull() const{
+    AmountVector led = Ledger(nAssets()+1);
+    led << (cash_-borrowedMargin()), positionValues();
+    return led;
+  }
+
+  double Portfolio::assetValue() const {
+    return ledger_.dot(currentPrices_);
   }
 
   double Portfolio::pnl() const{
@@ -176,7 +197,10 @@ namespace madigan{
 
   double Portfolio::usedMargin() const{
     return requiredMargin_ * ledger_.cwiseAbs().dot(meanEntryPrices_);
+  }
 
+  AmountVector Portfolio::usedMarginLedger() const{
+    return requiredMargin_ * ledger_.cwiseProduct(meanEntryPrices_);
   }
 
   double Portfolio::borrowedMargin() const{
@@ -195,6 +219,10 @@ namespace madigan{
     Eigen::ArrayXd shortMask = (ledger_.array() < 0.).cast<double>();
     auto shortPrices = (currentPrices_.array() * shortMask).matrix();
     return ledger_.dot(shortPrices);
+  }
+
+  Ledger  Portfolio::meanEntryValue() const {
+    return ledger_.cwiseProduct(meanEntryPrices_);
   }
 
   double Portfolio::availableMargin() const{
@@ -277,7 +305,7 @@ namespace madigan{
     double& borrowedMarginRef = borrowedMargin_(assetIdx);
 
     borrowedMarginRef += marginToBorrow;
-    cash_ -= (marginToUse +transactionCost);
+    cash_ -= (marginToUse + transactionCost);
     currentUnits += units;
 
     if (abs(currentUnits) < 0.000001){  // assume position is closed

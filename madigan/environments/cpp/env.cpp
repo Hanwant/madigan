@@ -428,10 +428,17 @@ PYBIND11_MODULE(env, m){
     .def_property_readonly("positionValues", &Portfolio::positionValues,
                            "vector of position values for current holdings",
                            py::return_value_policy::move)
+    .def_property_readonly("positionValuesFull", &Portfolio::positionValuesFull,
+                           "vector of position values for current holdings, "
+                           " including cash holdings",
+                           py::return_value_policy::move)
     .def_property_readonly("borrowedAssetValue", &Portfolio::borrowedAssetValue,
                            "value of current short positions")
     .def_property_readonly("usedMargin", &Portfolio::usedMargin,
-                           "Margin currently committed to long positions ")
+                           "Total margin currently committed to positions ")
+    .def_property_readonly("usedMarginLedger", &Portfolio::usedMarginLedger,
+                           "Ledger showing margin currently committed to positions. "
+                           "Short positions will be negative")
     .def_property_readonly("currentPrices", &Portfolio::currentPrices,
                            "current prices as per registered data source "
                            "\n Careful as the returned array will contain a reference"
@@ -450,6 +457,9 @@ PYBIND11_MODULE(env, m){
     .def_property_readonly("ledger", &Portfolio::ledger,
                            "vector of asset holdings",
                            py::return_value_policy::reference)
+    .def_property_readonly("ledgerFull", &Portfolio::ledgerFull,
+                           "returns full ledger, includes cash as well as asset holdings",
+                           py::return_value_policy::move)
     .def_property_readonly("ledgerNormed", &Portfolio::ledgerNormed,
                            "returns current ledger "
                            " normalized by equity",
@@ -824,6 +834,15 @@ PYBIND11_MODULE(env, m){
                            "required margin level")
     .def_property_readonly("maintenanceMargin", &Env::maintenanceMargin,
                            "maintenance margin level")
+
+    .def_property_readonly("timestamp", &Env::currentTime,
+                           "Alias for currentTime, returns current timestamp"
+                           "as an integer as per dataSource",
+                           py::return_value_policy::copy)
+    .def_property_readonly("currentTime", &Env::currentTime,
+                           "returns current timestamp as an integer as per dataSource",
+                           py::return_value_policy::copy)
+
     .def_property_readonly("currentPrices", &Env::currentPrices,
                            "returns reference to current buffer for prices"
                            ", use reference with care as constness is cast away on python side",
@@ -840,8 +859,11 @@ PYBIND11_MODULE(env, m){
                            "returns reference to current ledger for the default portfolio"
                            ", use reference with care as constness is cast away on python side",
                            py::return_value_policy::reference)/* BE CAREFUL - CASTS AWAY CONSTNESS
-                                                                 AND CONNECTED TO DATA SOURCE*/
-
+                                                                 AND RETURNS REFERENCE */
+    .def_property_readonly("ledgerFull", &Env::ledgerFull,
+                           "returns full ledger, includes cash as well as asset holdings",
+                           " for the default portfolio.",
+                           py::return_value_policy::move)
     .def_property_readonly("ledgerNormed", &Env::ledgerNormed,
                            "returns current ledger for the default portfolio"
                            " normalized by position sizes and cash balance - I.e equity",
@@ -871,6 +893,10 @@ PYBIND11_MODULE(env, m){
     .def_property_readonly("positionValues",  &Env::positionValues,
                            "returns values of individual assets currently held",
                            py::return_value_policy::move)
+    .def_property_readonly("positionValuesFull", &Env::positionValuesFull,
+                           "vector of position values for current holdings, "
+                           " including cash holdings",
+                           py::return_value_policy::move)
     .def_property_readonly("pnl",  &Env::pnl,
                            "returns net pnl of all positions")
     .def_property_readonly("pnlPositions",  &Env::pnlPositions,
@@ -899,9 +925,9 @@ PYBIND11_MODULE(env, m){
     .def("availableMargin_", (double(Env::*)(string) const) &Env::availableMargin,
          "returns net availableMargin")
     .def("borrowedMargin_", (double(Env::*)(string) const) &Env::borrowedMargin,
-         "returns net borrowedMargin")
+         "returns net borrowedMargin for specific portID")
     .def("borrowedAssetValue_", (double(Env::*)(string) const) &Env::borrowedAssetValue,
-         "returns net borrowedAssetValue")
+         "returns net borrowedAssetValue for specific portID")
     .def("checkRisk", &Env::checkRisk,
          "Checks for margin call, useful as when attempting to reverse a position, "
          "a margin call will not be returned by checkRisk(asset, units) as "

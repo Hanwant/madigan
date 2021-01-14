@@ -317,12 +317,12 @@ int main(){
   std::cout<< "===========================================\n";
   std::cout<< "testPortfolio();\n";
   testPortfolio();
-  std::cout<< "===========================================\n";
-  std::cout<< "testAccount();\n";
-  testAccount();
-  std::cout<< "===========================================\n";
-  std::cout<< "testBroker();\n";
-  testBroker();
+  // std::cout<< "===========================================\n";
+  // std::cout<< "testAccount();\n";
+  // testAccount();
+  // std::cout<< "===========================================\n";
+  // std::cout<< "testBroker();\n";
+  // testBroker();
   std::cout<< "===========================================\n";
   std::cout<< "testTransactionHandling();\n";
   testTransactionHandling();

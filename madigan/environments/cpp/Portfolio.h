@@ -54,15 +54,18 @@ namespace madigan{
     double cash() const { return cash_;}
     double balance() const;
     const Ledger& ledger() const {return ledger_;}
+    Ledger ledgerFull() const;
     Ledger ledgerNormed() const;
     Ledger ledgerAbsNormed() const;
     Ledger ledgerNormedFull() const;
     Ledger ledgerAbsNormedFull() const;
-    AmountVector positionValues() const { return ledger_.cwiseProduct(currentPrices_); }
-    double assetValue() const { return ledger_.dot(currentPrices_); }
+    AmountVector positionValues() const;
+    AmountVector positionValuesFull() const;
+    double assetValue() const;
     double borrowedAssetValue() const;
-    Ledger  meanEntryValue() const { return ledger_.cwiseProduct(meanEntryPrices_);}
+    Ledger  meanEntryValue() const;
     double usedMargin() const;
+    AmountVector usedMarginLedger() const;
     double availableMargin() const;
     double borrowedMargin() const;
     const Ledger& borrowedMarginLedger() const;

@@ -58,6 +58,8 @@ namespace madigan{
     std::size_t currentTime() const {return dataSource_->currentTime(); }
     const PriceVectorMap& currentPrices() const { return currentPrices_;}
     const LedgerMap& ledger() const { return defaultLedger_;}
+    Ledger ledgerFull() const
+    { return defaultPortfolio_->ledgerFull();}
     Ledger ledgerNormed() const
     { return defaultPortfolio_->ledgerNormed();}
     Ledger ledgerNormedFull() const
@@ -75,6 +77,7 @@ namespace madigan{
     double cash() const { return defaultPortfolio_->cash(); }
     double assetValue() const{ return defaultPortfolio_->assetValue(); }
     AmountVector positionValues() const { return defaultPortfolio_->positionValues(); }
+    AmountVector positionValuesFull() const { return defaultPortfolio_->positionValuesFull(); }
     double equity() const { return defaultPortfolio_->equity(); }
     double usedMargin() const{ return defaultPortfolio_->usedMargin();}
     double availableMargin() const{ return defaultPortfolio_->availableMargin();}
@@ -199,7 +202,7 @@ namespace madigan{
     BrokerResponseMulti response = broker_->handleTransaction(units);
     PriceVector newPrices = dataSource_->getData();
     double currentEq = defaultPortfolio_->equity();
-    double reward = log(std::max(currentEq / prevEq, 0.01)); // limit to log(0.01) = -4.6
+    double reward = log(std::max(currentEq / prevEq, 0.3)); // limit to log(0.3) = -1.2
 
     bool done{false};
     RiskInfo risk = broker_->checkRisk();
