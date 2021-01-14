@@ -95,6 +95,7 @@ class ConvNetIQN(QNetworkBase):
     def __init__(self,
                  input_shape: tuple,
                  output_shape: tuple,
+                 account_info_len: int,
                  d_model: int = 512,
                  channels: list = [32, 32],
                  kernels: list = [5, 5],
@@ -120,13 +121,13 @@ class ConvNetIQN(QNetworkBase):
             "window_length should be at least as long as sum of kernels"
 
         self.input_shape = input_shape
-        self.n_assets = output_shape[0]
+        self.account_info_len = account_info_len
         self.action_atoms = output_shape[1]
         self.d_model = d_model
         self.act = ACT_FN_DICT[act_fn]()
         self.convnet_state_encoder = ConvNetStateEncoder(
             input_shape,
-            self.n_assets,
+            self.account_info_len,
             d_model,
             channels,
             kernels,

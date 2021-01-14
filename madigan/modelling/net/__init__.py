@@ -20,7 +20,7 @@ def get_model_class(agent_type, model_type):
     """
     model_na = NotImplementedError(f"{model_type} not Implemented " +
                                    f"for agent {agent_type}")
-    if agent_type in ("DQN", "DQNReverser", "DQNController"):
+    if agent_type in ("DQN", "DQNReverser", "DQNController", "DQNMixedActions"):
         if model_type in ("ConvNet", "ConvNetQ"):
             return ConvNet
         if model_type in ("SeriesNet", "SeriesNetQ"):
@@ -36,7 +36,7 @@ def get_model_class(agent_type, model_type):
         if model_type in ("ConvNet", "ConvNetQ", "ConvNetCURL",
                           "ConvNetCurl"):
             return ConvNetCurl
-    if agent_type in ("IQN", "IQNReverser", "IQNController"):
+    if agent_type in ("IQN", "IQNReverser", "IQNController", "IQNMixedActions"):
         if model_type in ("ConvNet", "ConvNetIQN"):
             return ConvNetIQN
         raise model_na

@@ -23,6 +23,7 @@ class ConvNet(QNetworkBase):
     def __init__(self,
                  input_shape: tuple,
                  output_shape: tuple,
+                 account_info_len: int,
                  d_model=512,
                  channels=[32, 32],
                  kernels=[5, 5],
@@ -48,7 +49,7 @@ class ConvNet(QNetworkBase):
 
         self.input_shape = input_shape
         self.window_len = window_len
-        self.n_assets = output_shape[0]
+        self.account_info_len = account_info_len
         self.action_atoms = output_shape[1]
         self.d_model = d_model
         self.act = ACT_FN_DICT[act_fn]()
@@ -56,7 +57,7 @@ class ConvNet(QNetworkBase):
         self.noisy_net_sigma = noisy_net_sigma
         self.convnet_state_encoder = ConvNetStateEncoder(
             input_shape,
-            self.n_assets,
+            account_info_len,
             d_model,
             channels,
             kernels,

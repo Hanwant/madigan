@@ -128,8 +128,8 @@ class Conv1DLayer(nn.Module):
             self.pad = nn.ReplicationPad1d(causal_pad)
         self.act = ACT_FN_DICT[act_fn]()
         # self.norm = nn.BatchNorm1d(channels_out)
-        # self.pool = nn.MaxPool1d(kernel, stride=stride)
-        self.pool = nn.AvgPool1d(kernel, stride=stride)
+        self.pool = nn.MaxPool1d(kernel, stride=stride)
+        # self.pool = nn.AvgPool1d(kernel, stride=stride)
         # self.pool = lambda x: x
         self.norm = lambda x: x
 
@@ -187,7 +187,7 @@ class ConvNetStateEncoder(nn.Module):
     """
     def __init__(self,
                  input_shape: tuple,
-                 n_assets: int,
+                 account_info_len: int,
                  d_model: int = 512,
                  channels: list = [32, 32],
                  kernels: list = [5, 5],
@@ -209,7 +209,7 @@ class ConvNetStateEncoder(nn.Module):
 
         self.input_shape = input_shape
         self.window_len = window_len
-        self.n_assets = n_assets
+        self.account_info_len = account_info_len
         self.d_model = d_model
         self.act = ACT_FN_DICT[act_fn]()
         self.conv_encoder = Conv1DEncoder(
@@ -227,10 +227,9 @@ class ConvNetStateEncoder(nn.Module):
         self.noisy_net_sigma = noisy_net_sigma
         Linear = partial(NoisyLinear, sigma=noisy_net_sigma) \
             if noisy_net else nn.Linear
-
         # normalized portfolio vector fed to model is number of assets + 1
         # +1 for cash (base currency) which is also included in the vector
-        self.port_project = Linear(self.n_assets + 1, d_model)
+        self.port_project = Linear(self.account_info_len, d_model)
 
     def forward(self, state: State):
         """

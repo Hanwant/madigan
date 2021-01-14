@@ -10,7 +10,7 @@ from .conv_net import ConvNetStateEncoder
 from ...utils.data import State
 
 
-class ConvCriticQ(nn.Module):
+class ConvCriticQ(QNetworkBase):
     """
     For use as critic in Actor Critic methods, takes both state and action as input
     """
@@ -21,6 +21,7 @@ class ConvCriticQ(nn.Module):
                  channels=[32, 32],
                  kernels=[5, 5],
                  strides=[1, 1],
+                 dilations=[1, 1],
                  dueling=True,
                  preserve_window_len: bool = False,
                  act_fn: str = 'silu',
@@ -45,30 +46,30 @@ class ConvCriticQ(nn.Module):
         self.act = ACT_FN_DICT[act_fn]()
         self.noisy_net = noisy_net
         self.noisy_net_sigma = noisy_net_sigma
-        self.convnet_state_encoder = ConvNetStateEncoder(
+        self.conv_encoder = Conv1DEncoder(
             input_shape,
-            self.n_assets,
             d_model,
             channels,
             kernels,
-            strides,
+            strides=strides,
+            dilations=dilations,
             preserve_window_len=preserve_window_len,
             act_fn=act_fn,
-            noisy_net=noisy_net,
-            noisy_net_sigma=noisy_net_sigma,
-            **extra)
+            causal_dim=0)
         self.noisy_net = noisy_net
+        self.noisy_net = False
         Linear = partial(NoisyLinear, sigma=noisy_net_sigma) \
             if noisy_net else nn.Linear
 
-        dummy_price= torch.randn(1, *input_shape[::-1])
-        dummy_port = torch.randn(1, self.n_assets+1)
-        emb_shape = self.convnet_state_encoder(State(dummy_price,
-                                                          dummy_port, None)).shape
-        project_in = emb_shape[-1] + self.n_assets
+        # dummy_price= torch.randn(1, *input_shape)
+        # dummy_port = torch.randn(1, self.n_assets+1)
+        # emb_shape = self.convnet_state_encoder(State(dummy_price,
+        #                                              dummy_port, None)).shape
+        # project_in = emb_shape[-1] + self.n_assets
         # projection takes state_emb and actions -> d_model
-        self.projection = nn.Linear(project_in, d_model)
-        self.output_head = Linear(d_model, 1)
+        # self.price_project = nn.Linear(d_model, d_model)
+        self.projection = nn.Linear(d_model + 2 * self.n_assets, d_model)
+        self.output_head = Linear(d_model, output_shape[-1])
         self.register_noisy_layers()
         self.apply(orthogonal_initialization)
 
@@ -110,12 +111,12 @@ class ConvPolicyDeterministic(nn.Module):
     """
     def __init__(self,
                  input_shape: tuple,
-                 n_assets: int,
-                 n_actions: int = 1,
+                 output_shape: tuple,
                  d_model=512,
                  channels=[32, 32],
                  kernels=[5, 5],
                  strides=[1, 1],
+                 dilations=[1, 1],
                  dueling=True,
                  preserve_window_len: bool = False,
                  act_fn: str = 'gelu',
@@ -126,26 +127,29 @@ class ConvPolicyDeterministic(nn.Module):
             "window_length should be at least as long as sum of kernels"
 
         self.input_shape = input_shape
-        self.n_assets = n_assets
-        self.n_actions = n_actions
-        assert self.n_actions == 1
+        self.n_assets = output_shape[0]
+        self.action_atoms = output_shape[1]
+        assert self.action_atoms == 1
         self.d_model = d_model
         self.act = ACT_FN_DICT[act_fn]()
         self.conv_encoder = Conv1DEncoder(
             input_shape,
-            kernels,
+            d_model,
             channels,
+            kernels,
             strides=strides,
+            dilations=dilations,
             preserve_window_len=preserve_window_len,
             act_fn=act_fn,
             causal_dim=0)
 
         # conv_out_shape = calc_conv_out_shape(window_len, self.conv_encoder)
-        dummy_input = torch.randn(1, *input_shape[::-1])
-        conv_out_shape = self.conv_encoder(dummy_input).shape
-        project_in = conv_out_shape[0] * channels[-1] + self.n_assets
+        # dummy_input = torch.randn(1, *input_shape[::-1])
+        # conv_out_shape = self.conv_encoder(dummy_input).shape
+        project_in = d_model + self.n_assets  # +1 for cash entry in ledger
         self.projection = nn.Linear(project_in, d_model)
-        self.output_head = nn.Linear(d_model, self.n_assets * self.n_actions)
+        self.output_head = nn.Linear(d_model,
+                                     self.n_assets * self.action_atoms)
         # self.apply(self.initialize_weights)
         # self.apply(xavier_initialization, linear_range=(-3e-4, 3e-4))
         self.apply(orthogonal_initialization)
@@ -162,7 +166,6 @@ class ConvPolicyDeterministic(nn.Module):
         # price_emb = self.price_project(price_emb)
         # port_emb = self.port_project(port)
         state_emb = torch.cat([price_emb, port], dim=-1)
-        # import ipdb; ipdb.set_trace()
         state_emb = self.projection(state_emb)
         out = self.act(state_emb)
         return out
@@ -177,6 +180,6 @@ class ConvPolicyDeterministic(nn.Module):
             state_emb = self.get_state_emb(state)  # (bs, d_model)
         actions = self.output_head(state_emb).view(state_emb.shape[0],
                                                    self.n_assets,
-                                                   self.n_actions)
-        return torch.tanh(actions)
-        # return torch.sigmoid(actions)
+                                                   self.action_atoms)
+        # return torch.tanh(actions)
+        return torch.sigmoid(actions)
