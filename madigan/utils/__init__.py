@@ -118,6 +118,7 @@ class DiscreteActionSpace(ActionSpace):
                  n_assets: int = 1):
         # assert len(ranges) == 2
         self.actions = actions
+        self.action_atoms = len(actions)
         self.probs = probs
         self.n_assets = n_assets
         self.action_multiplier = 1
@@ -143,10 +144,10 @@ class ContinuousActionSpace(ActionSpace):
     Samples Uniformly from a given low-high range
     if provided, a transformation can be applied (I.e uniform -> gaussian)
     """
-    def __init__(self, low: float, high: float, num_assets, num_actions,
+    def __init__(self, low: float, high: float, num_assets, action_atoms,
                  transform=lambda x: x):
         self.n_assets = num_assets
-        self.n_actions = num_actions
+        self.action_atoms = action_atoms
         self.low = low
         self.high = high
         self.transform = transform
@@ -158,7 +159,7 @@ class ContinuousActionSpace(ActionSpace):
 
     @property
     def shape(self):
-        return (self.n_assets, self.n_actions)
+        return (self.n_assets, self.action_atoms)
 
     def __eq__(self, other):
         if not isinstance(other, ContinuousActionSpace):

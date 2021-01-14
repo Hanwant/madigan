@@ -18,6 +18,7 @@ def make_env(config):
 
 def get_env_info(env):
     return {
+        "timestamp": env.timestamp,
         "riskInfo": env.checkRisk(),
         "prices": np.array(env.currentPrices, copy=True),
         "equity": env.equity,

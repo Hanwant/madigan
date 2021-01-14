@@ -357,10 +357,10 @@ def _sortino_of_returns(returns, benchmark=None, ddof=1):
     diff_mean = np.nanmean(diff)
     if downside == 0.:
         if diff_mean > 0.:
-            return 20.  # heuristic for no downside
+            return 50.  # heuristic for no downside
         else:
             return 0.  # heuristic for no down or upside
-    return np.clip(diff_mean / downside, None, 20.)
+    return np.clip(diff_mean / downside, None, 50.)
 
 
 @nb.njit((nb.float64[:], nb.int64[:], nb.int64, nb.boolean, nb.boolean))

@@ -29,7 +29,7 @@ agent_config:
   per_beta: 0.4
   per_beta_steps: 100000
   prioritized_replay: true
-  proximal_portfolio_penalty: 0.5
+  proximal_portfolio_penalty: 0.0
   replay_min_size: 20000
   replay_size: 300000
   reward_clip: &id001 !!python/tuple
@@ -37,22 +37,23 @@ agent_config:
   - 1.0
   risk_distortion: None
   risk_distortion_param: -0.75
+  reduce_rewards: true
   target_entropy_ratio: 0.98
   tau_embed_size: 64
   tau_soft_update: 0.0001
   train_freq: 4
   transaction_thresh: 0.02
-  unit_size_proportion_avM: 0.02
+  unit_size_proportion_avM: 0.01
 agent_configs:
   A: /home/hemu/madigan/experiments/IQN_OU_Triple_Decreasing_unit.005_Noisy_NoReShap_Replay300_NoPool_AdaptiveAvg/config.yaml
   B: /home/hemu/madigan/experiments/IQN_OU_Triple_Decreasing_PER_Test/config.yaml
-agent_type: IQN
+agent_type: IQNMixedActions
 basepath: /media/hemu/Data/madigan/experiments/
 data_source_config:
   OUPair: 
     data_source_config:
       phi: 0.04
-      theta: 0.15
+      theta: 0.015
       noise: .03
     data_source_type: OUPair
   # SineAdder:
@@ -83,11 +84,17 @@ data_source_config:
   # OU:
   #   data_source_config:
   #     mean:
+  #       - 10.
   #       - 5.
+  #       # - 1.
   #     phi:
   #       - .04
+  #       - .02
+  #       # - .04
   #     theta:
   #       - .15
+  #       - .15
+  #       # - .15
   #   data_source_type: OU
   # SimpleTrend:
   #   data_source_config:
@@ -204,7 +211,7 @@ data_source_type: Composite
 discrete_action_atoms: 3
 discrete_actions: true
 env_type: Synth
-experiment_id: IQN_OUPair_nstep5_unit.02_stacker_ratio_std_norm
+experiment_id: IQN_OUPair_spread_stacker_norm_nstep5_unit.01
 init_cash: 1000000
 log_freq: 10000
 lot_unit_value: 10000
@@ -213,12 +220,12 @@ min_tf: 64
 model_config:
   act_fn: gelu
   action_atoms: 3
-  actor_model_class: ConvPolicySACD
+  actor_model_class: ConvPolicyDeterministic
   channels:
   - 32
   - 32
   compression_factor: 4
-  critic_model_class: TwinQNetwork
+  critic_model_class: ConvCriticQ
   curl_latent_size: 64
   curl_lr: 0.001
   curl_momentum_update: 0.001
@@ -231,8 +238,8 @@ model_config:
   dueling: true
   iqn: true
   kernels:
-  - 7
-  - 7
+  - 5
+  - 5
   lot_unit_value: 10000
   min_tf: 64
   model_class: ConvNet
@@ -264,14 +271,14 @@ parent_id: ''
 preprocessor_config:
   norm: true
   norm_type: standard_normal
-  preprocessor_type: StackerDiscretePairs
+  preprocessor_type: StackerDiscrete
   timeframes:
     - 64
   dilations:
     - 1
     - 5
   window_length: 64
-preprocessor_type: StackerDiscretePairs
+preprocessor_type: StackerDiscrete
 required_margin: 1.0
 reward_clip: *id001
 reward_shaper_config:
