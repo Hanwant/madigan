@@ -50,6 +50,8 @@ def make_normalizer(norm_type):
         return lambda x: np.log(x / x[-1])
     if norm_type == 'log_standard_normal':
         return log_standard_norm
+    if norm_type == 'log':
+        return log_norm
     if norm_type == 'standard_normal':
         return standard_norm
     if norm_type == 'expanding':
@@ -59,6 +61,9 @@ def make_normalizer(norm_type):
                                   "choose from : 'lookback', 'lookback_log', "
                                   "'standard_normal', 'expanding'")
 
+def log_norm(x):
+    """ 0. and negative safe version."""
+    return np.log(np.maximum(x, 1e-5))
 
 def standard_norm(x):
     """
@@ -269,13 +274,13 @@ class StackerDiscretePairs(StackerDiscrete):
 
     def current_data(self):
         """ Computes ratio between pair instead of raw prices """
-        price = np.array(self.price_buffer, copy=True)
-        price = (price[:, 0] / price[:, 1])[:, None]
         # ratio = price[:, 0] / price[:, 1]
         # price[:, 0] = ratio
         # price[:, 1] = 1 / ratio
         # mean = price.mean(-1)[..., None]
         # price = price / mean
+        price = np.array(self.price_buffer, copy=True)
+        price = (price[:, 0] / price[:, 1])[:, None]
         if self.norm:
             price = self.norm_fn(price)
         portfolio = np.array(self.portfolio_buffer, copy=True)
