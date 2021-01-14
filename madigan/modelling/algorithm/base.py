@@ -19,6 +19,7 @@ class Agent(ABC):
                  action_space,
                  discount: float,
                  nstep_return: int,
+                 reduce_rewards: bool,
                  savepath=None):
         self._env = env
         self._preprocessor = preprocessor
@@ -26,6 +27,7 @@ class Agent(ABC):
         self._action_space = action_space
         self.discount = discount
         self.nstep_return = nstep_return
+        self.reduce_rewards = reduce_rewards
         self.savepath = Path(savepath)
         self.training_steps = 0
         self.env_steps = 0

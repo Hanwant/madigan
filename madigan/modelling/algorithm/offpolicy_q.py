@@ -21,12 +21,12 @@ class OffPolicyQ(Agent):
     Base class for all off policy agents with experience replay buffers
     """
     def __init__(self, env, preprocessor, input_shape, action_space, discount,
-                 nstep_return, reward_shaper_config, replay_size,
-                 replay_min_size, prioritized_replay, per_alpha, per_beta,
-                 per_beta_steps, noisy_net, eps, eps_decay, eps_min,
+                 nstep_return, reduce_rewards, reward_shaper_config,
+                 replay_size, replay_min_size, prioritized_replay, per_alpha,
+                 per_beta, per_beta_steps, noisy_net, eps, eps_decay, eps_min,
                  batch_size, test_steps, unit_size, savepath):
         super().__init__(env, preprocessor, input_shape, action_space,
-                         discount, nstep_return, savepath)
+                         discount, nstep_return, reduce_rewards, savepath)
         self.noisy_net = noisy_net
         self.eps = eps
         self.eps_decay = max(eps_decay, 1 -
@@ -119,12 +119,33 @@ class OffPolicyQ(Agent):
         # if DEBUG:
         #     print("DEBUGGING")
         #     debug_logs = []
+        min_rewards = np.log(.35 * np.ones(self._env.nAssets))
         while True:
             self.model_b.sample_noise()
-
             action, transaction = self.explore(state)
+
+            prev_eq = self._env.equity
+            prev_val = self._env.positionValues
+
             _next_state, reward, done, info = self._env.step(transaction)
-            running_cost += np.sum(info.brokerResponse.transactionCost)
+            inf = info.brokerResponse
+            rew = reward
+
+            curr_val = self._env.positionValues
+            mar_diff = (inf.transactionUnits * inf.transactionPrice +
+                        inf.transactionCost)
+            reward = (curr_val - prev_val - mar_diff) / prev_eq
+            reward += 1
+            if (reward < 0.).any():
+                print('large neg reward, prev_eq, curr_eq: ', reward, prev_eq,
+                      self._env.equity)
+            reward = np.log(np.maximum(reward, .35))
+            # reward = np.log(reward, where=reward > 0.35, out=min_rewards)
+            if self.reduce_rewards:
+                reward = reward.sum(keepdims=True)
+
+            running_cost += np.sum(inf.transactionCost)
+
             # if DEBUG:
             #     debug_metrics = {
             #         'action': action,
@@ -137,9 +158,13 @@ class OffPolicyQ(Agent):
             #         'running_cost': running_cost,
             #         **get_env_info(self._env)
             #     }
-            if done:
-                reward = -0.1
-            running_reward += reward
+
+            # if done:  # unnecessary as rewards are truncated anyway
+            #     reward = -0.01 * np.ones_like(reward)
+            # reward = -0.1
+
+            running_reward += reward.sum()
+            # running_reward += reward
             # if DEBUG:
             #     debug_metrics['reward_post_shape'] = reward
             #     debug_metrics['running_reward'] = running_reward
@@ -367,6 +392,7 @@ class OffPolicyQRecurrent(Agent):
             action, transaction, hidden = self.explore(state)
             _next_state, reward, done, info = self._env.step(transaction)
             reward = self.reward_shaper.stream(reward)
+
             self._preprocessor.stream_state(_next_state)
             next_state = self._preprocessor.current_data()
             next_state = self.make_recurrent_state(next_state, action, reward,
@@ -407,6 +433,7 @@ class OffPolicyQRecurrent(Agent):
 
     @torch.no_grad()
     def test_episode(self, test_steps=None, reset=True, target=True) -> dict:
+        self.test_mode()
         test_steps = test_steps or self.test_steps
         if reset:
             self.reset_state()

@@ -3,6 +3,7 @@ from typing import Union
 from pathlib import Path
 from random import random
 import copy
+import itertools as it
 
 import numpy as np
 import torch
@@ -34,20 +35,20 @@ class DQN(OffPolicyQ):
     """
     def __init__(self, env, preprocessor, input_shape: tuple,
                  action_space: ActionSpace, discount: float, nstep_return: int,
-                 reward_shaper_config: Config, replay_size: int,
-                 replay_min_size: int, prioritized_replay: bool,
-                 per_alpha: float, per_beta: float, per_beta_steps: int,
-                 noisy_net: bool, noisy_net_sigma: float, eps: float,
-                 eps_decay: float, eps_min: float, batch_size: int,
+                 reduce_rewards: bool, reward_shaper_config: Config,
+                 replay_size: int, replay_min_size: int,
+                 prioritized_replay: bool, per_alpha: float, per_beta: float,
+                 per_beta_steps: int, noisy_net: bool, noisy_net_sigma: float,
+                 eps: float, eps_decay: float, eps_min: float, batch_size: int,
                  test_steps: int, unit_size: float, savepath: Union[Path, str],
                  double_dqn: bool, tau_soft_update: float, model_class: str,
                  model_config: Union[dict, Config], lr: float):
         super().__init__(env, preprocessor, input_shape, action_space,
-                         discount, nstep_return, reward_shaper_config,
-                         replay_size, replay_min_size, prioritized_replay,
-                         per_alpha, per_beta, per_beta_steps, noisy_net, eps,
-                         eps_decay, eps_min, batch_size, test_steps, unit_size,
-                         savepath)
+                         discount, nstep_return, reduce_rewards,
+                         reward_shaper_config, replay_size, replay_min_size,
+                         prioritized_replay, per_alpha, per_beta,
+                         per_beta_steps, noisy_net, eps, eps_decay, eps_min,
+                         batch_size, test_steps, unit_size, savepath)
 
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self._action_space = action_space
@@ -60,10 +61,11 @@ class DQN(OffPolicyQ):
         output_shape = (action_space.n_assets, action_space.action_atoms)
         model_config['noisy_net'] = noisy_net
         model_config['noisy_net_sigma'] = noisy_net_sigma
+        account_info_len = self._env.nAssets + 1
         self.model_b = self.model_class(input_shape, output_shape,
-                                        **model_config)
+                                        account_info_len, **model_config)
         self.model_t = self.model_class(input_shape, output_shape,
-                                        **model_config)
+                                        account_info_len, **model_config)
         self.opt = torch.optim.Adam(self.model_b.parameters(), lr=lr)
 
         if not self.savepath.is_dir():
@@ -84,7 +86,7 @@ class DQN(OffPolicyQ):
         unit_size = aconf.unit_size_proportion_avM
         savepath = Path(config.basepath) / config.experiment_id / 'models'
         return cls(env, preprocessor, input_shape, action_space,
-                   aconf.discount, aconf.nstep_return,
+                   aconf.discount, aconf.nstep_return, aconf.reduce_rewards,
                    config.reward_shaper_config, aconf.replay_size,
                    aconf.replay_min_size, aconf.prioritized_replay,
                    aconf.per_alpha, aconf.per_beta, aconf.per_beta_steps,
@@ -418,3 +420,126 @@ class DQNCURL(DQN):
 
 # For temporary backwards-comp
 DQNReverser = DQN
+
+
+class DQNMixedActions(DQN):
+    """
+    Implements a base DQN agent from which extensions can inherit
+    The Agent instance can be called directly to get an action based on a state:
+        action = agent.get_action(state)
+        transaction = agent.action_to_transaction(action)
+    use dqn.step(n) to step through n environment interactions
+    The method for training a single batch is self.train_step(sarsd) where sarsd is a class with ndarray members (I.e of shape (bs, time, feats))
+    """
+    def __init__(self, env, preprocessor, input_shape: tuple,
+                 action_space: ActionSpace, discount: float, nstep_return: int,
+                 reduce_rewards: bool, reward_shaper_config: Config,
+                 replay_size: int, replay_min_size: int,
+                 prioritized_replay: bool, per_alpha: float, per_beta: float,
+                 per_beta_steps: int, noisy_net: bool, noisy_net_sigma: float,
+                 eps: float, eps_decay: float, eps_min: float, batch_size: int,
+                 test_steps: int, unit_size: float, savepath: Union[Path, str],
+                 double_dqn: bool, tau_soft_update: float, model_class: str,
+                 model_config: Union[dict, Config], lr: float):
+        super(DQN, self).__init__(env, preprocessor, input_shape, action_space,
+                                  discount, nstep_return, reduce_rewards,
+                                  reward_shaper_config, replay_size,
+                                  replay_min_size, prioritized_replay,
+                                  per_alpha, per_beta, per_beta_steps,
+                                  noisy_net, eps, eps_decay, eps_min,
+                                  batch_size, test_steps, unit_size, savepath)
+
+        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        self._action_space = action_space
+        self.double_dqn = double_dqn
+        self.discount = discount
+        # safeguard to get 0.001 instead of 0.99
+        self.tau_soft_update = min(tau_soft_update, 1 - tau_soft_update)
+
+        self.model_class = get_model_class(type(self).__name__, model_class)
+        # NORMAL ACTIONS ##########################
+        # output_shape = (action_space.n_assets, action_space.action_atoms)
+        # MIXED ACTIONS ###########################
+        output_shape = (1, action_space.action_atoms)
+        model_config['noisy_net'] = noisy_net
+        model_config['noisy_net_sigma'] = noisy_net_sigma
+        account_info_len = self._env.nAssets + 1
+        self.model_b = self.model_class(input_shape, output_shape,
+                                        account_info_len, **model_config)
+        self.model_t = self.model_class(input_shape, output_shape,
+                                        account_info_len, **model_config)
+        self.opt = torch.optim.Adam(self.model_b.parameters(), lr=lr)
+
+        if not self.savepath.is_dir():
+            self.savepath.mkdir(parents=True)
+        if (self.savepath / 'main.pth').is_file():
+            self.load_state()
+        else:
+            self.model_t.load_state_dict(self.model_b.state_dict())
+
+        ##################################################################
+        # MIXED ACTIONS ##################################################
+        ##################################################################
+
+        if not self.reduce_rewards:
+            msg = "non-reduced rewards not compatible with MixedActions. " \
+                "Specify reduce_rewards = true in config or __init__"
+            raise ValueError(msg)
+
+        # self.n_assets = self._env.nAssets
+        self.actual_n_assets = self._env.nAssets
+        self.actual_action_atoms = int(
+            self.action_atoms**(1 / self.actual_n_assets))
+        # ALL MIXED ACTIONS FULL ACTION SPACE ################################
+        self.action_dict = list(
+            it.product(*(range(self.actual_action_atoms)
+                         for i in range(self.actual_n_assets))))
+        # RESTRICTED TO EXPLICIT SPREADS Between PAIR #####################
+        self.action_dict = [(0, 0), (1, 3), (3, 1), (2, 2)]
+
+    @classmethod
+    def from_config(cls, config):
+        env = make_env(config)
+        preprocessor = make_preprocessor(config, env.nAssets)
+        input_shape = preprocessor.feature_output_shape
+        atoms = config.discrete_action_atoms + 1
+        # FOR ALL MIXED ACTIONS
+        # atoms = atoms**env.nAssets
+        action_space = DiscreteRangeSpace((0, atoms), 1)
+        aconf = config.agent_config
+        unit_size = aconf.unit_size_proportion_avM
+        savepath = Path(config.basepath) / config.experiment_id / 'models'
+        return cls(env, preprocessor, input_shape, action_space,
+                   aconf.discount, aconf.nstep_return, aconf.reduce_returns,
+                   config.reward_shaper_config, aconf.replay_size,
+                   aconf.replay_min_size, aconf.prioritized_replay,
+                   aconf.per_alpha, aconf.per_beta, aconf.per_beta_steps,
+                   aconf.noisy_net, aconf.noisy_net_sigma, aconf.eps,
+                   aconf.eps_decay, aconf.eps_min, aconf.batch_size,
+                   config.test_steps, unit_size, savepath, aconf.double_dqn,
+                   aconf.tau_soft_update, config.model_config.model_class,
+                   config.model_config, config.optim_config.lr)
+
+    def action_to_transaction(
+            self, action: Union[torch.Tensor, np.ndarray]) -> np.ndarray:
+        """
+        Takes output from net and converts to transaction units
+        """
+        assert action.shape == (1, )
+        units = self.unit_size * self._env.availableMargin \
+            / self._env.currentPrices
+        actions = np.empty((self.actual_n_assets), dtype=np.int)
+        actions[:] = self.action_dict[action[0]]
+        actions_centered = (actions - (self.action_atoms // 2))
+        if isinstance(actions_centered, torch.Tensor):
+            actions_centered = actions_centered.cpu().numpy()
+        transactions = actions_centered * units
+        # Reverse position if action is '0' and position exists
+        for i, act in enumerate(actions):
+            if act == 0:
+                current_holding = self._env.ledger[i]
+                if current_holding != 0:
+                    transactions[i] = -current_holding
+                else:
+                    transactions[i] = 0.
+        return transactions

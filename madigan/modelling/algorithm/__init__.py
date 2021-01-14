@@ -1,7 +1,7 @@
-from .dqn import DQN, DQNCURL, DQNAE
+from .dqn import DQN, DQNCURL, DQNAE, DQNMixedActions
 from .dqn_controller import DQNController
 from .dqn_recurrent import DQNRecurrent
-from .iqn import IQN, IQNCURL
+from .iqn import IQN, IQNCURL, IQNMixedActions
 from .iqn_controller import IQNController
 from .ddpg import DDPG, DDPGDiscretized
 from .sac import SACDiscrete

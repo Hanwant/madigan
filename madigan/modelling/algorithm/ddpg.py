@@ -4,14 +4,13 @@ from pathlib import Path
 
 import numpy as np
 import torch
-# import torch.functional
 import torch.nn as nn
 
 from .offpolicy_ac import OffPolicyActorCritic
 from ..utils import get_model_class
 from ...utils import ActionSpace, ContinuousActionSpace
 from ...utils.config import Config
-from ...utils.data import State
+from ...utils.data import State, SARSD
 from ...utils.preprocessor import make_preprocessor
 from ...environments import make_env
 
@@ -31,16 +30,20 @@ class DDPG(OffPolicyActorCritic):
     """
     def __init__(self, env, preprocessor, input_shape: tuple,
                  action_space: ActionSpace, discount: float, nstep_return: int,
-                 replay_size: int, replay_min_size: int, batch_size: int,
-                 test_steps: int, savepath: Union[Path, str],
+                 reduce_rewards: bool, reward_shaper_config, replay_size: int,
+                 replay_min_size: int, prioritized_replay: bool,
+                 per_alpha: float, per_beta: float, per_beta_steps: int,
+                 batch_size: int, test_steps: int, savepath: Path,
                  expl_noise_sd: float, double_dqn: bool,
                  tau_soft_update: float, model_class_critic: str,
                  model_class_actor: str, lr_critic: float, lr_actor: float,
                  model_config: Union[dict, Config],
                  proximal_portfolio_penalty: float):
         super().__init__(env, preprocessor, input_shape, action_space,
-                         discount, nstep_return, replay_size, replay_min_size,
-                         batch_size, test_steps, savepath)
+                         discount, nstep_return, reduce_rewards,
+                         reward_shaper_config, replay_size, replay_min_size,
+                         prioritized_replay, per_alpha, per_beta,
+                         per_beta_steps, batch_size, test_steps, savepath)
 
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self._action_space.transform = self.action_to_transaction
@@ -54,14 +57,14 @@ class DDPG(OffPolicyActorCritic):
         self.actor_model_class = get_model_class(
             type(self).__name__, model_class_actor)
 
-
-        self.critic_b = self.critic_model_class(input_shape, self.n_assets, 1,
+        output_shape = self._action_space.shape
+        self.critic_b = self.critic_model_class(input_shape, output_shape,
                                                 **model_config)
-        self.critic_t = self.critic_model_class(input_shape, self.n_assets, 1,
+        self.critic_t = self.critic_model_class(input_shape, output_shape,
                                                 **model_config)
-        self.actor_b = self.actor_model_class(input_shape, self.n_assets, 1,
+        self.actor_b = self.actor_model_class(input_shape, output_shape,
                                               **model_config)
-        self.actor_t = self.actor_model_class(input_shape, self.n_assets, 1,
+        self.actor_t = self.actor_model_class(input_shape, output_shape,
                                               **model_config)
         self.opt_critic = torch.optim.Adam(self.critic_b.parameters(),
                                            lr=lr_critic)
@@ -89,15 +92,17 @@ class DDPG(OffPolicyActorCritic):
         action_space = ContinuousActionSpace(-1., 1., env.nAssets + 1, 1)
         aconf = config.agent_config
         savepath = Path(config.basepath) / config.experiment_id / 'models'
-        return cls(env, preprocessor, input_shape, action_space,
-                   aconf.discount, aconf.nstep_return, aconf.replay_size,
-                   aconf.replay_min_size, aconf.batch_size,
-                   config.test_steps, savepath, aconf.expl_noise_sd,
-                   aconf.double_dqn, aconf.tau_soft_update,
-                   config.model_config.critic_model_class,
-                   config.model_config.actor_model_class,
-                   config.optim_config.lr_critic, config.optim_config.lr_actor,
-                   config.model_config, aconf.proximal_portfolio_penalty)
+        return cls(
+            env, preprocessor, input_shape, action_space, aconf.discount,
+            aconf.nstep_return, aconf.reduce_rewards,
+            config.reward_shaper_config, aconf.replay_size,
+            aconf.replay_min_size, aconf.prioritized_replay, aconf.per_alpha,
+            aconf.per_beta, aconf.per_beta_steps, aconf.batch_size,
+            config.test_steps, savepath, aconf.expl_noise_sd, aconf.double_dqn,
+            aconf.tau_soft_update, config.model_config.critic_model_class,
+            config.model_config.actor_model_class,
+            config.optim_config.lr_critic, config.optim_config.lr_actor,
+            config.model_config, aconf.proximal_portfolio_penalty)
 
     @property
     def env(self):
@@ -175,7 +180,6 @@ class DDPG(OffPolicyActorCritic):
         action += noise_sd * torch.randn_like(action)
         return action.numpy()[0], self.action_to_transaction(action)[0]
 
-
     def action_to_transaction(self, actions: torch.Tensor) -> np.ndarray:
         """
         Takes output from net and converts to transaction units
@@ -185,11 +189,18 @@ class DDPG(OffPolicyActorCritic):
         assert actions.shape[1:] == (self.n_assets, )
         # cash_pct = self.env.cash / self.env.equity
         # current_port = np.concatenate(([cash_pct], self.env.ledgerNormed))
+        # actions = actions.cpu().numpy()
+        if actions.sum(-1) == 0:  # prevent div by 0.
+            desired_port = actions
+        else:
+            desired_port = actions / actions.sum(axis=-1)
+        # max_amount = self.env.availableMargin * 0.25
         current_port = self.env.ledgerNormedFull
         assert abs(current_port.sum() - 1.) < 1e-8
-        # actions = actions.cpu().numpy()
-        desired_port = actions / actions.sum(axis=-1)
-        # max_amount = self.env.availableMargin * 0.25
+        # assert abs(desired_port.sum() - 1.) < 1e-8
+        if not abs(desired_port.sum() - 1.) < 1e-5:
+            import ipdb
+            ipdb.set_trace()
         amounts = (desired_port - current_port) * self.env.equity
         # amounts = ((desired_port - current_port) * self.env.equity
         #            ).clip(-max_amount, max_amount)
@@ -234,8 +245,22 @@ class DDPG(OffPolicyActorCritic):
                                device=self.device)
         return state, action, reward, next_state, done
 
-    def loss_fn(self, Q_t, G_t):
-        return nn.functional.smooth_l1_loss(Q_t, G_t)
+    def critic_loss_fn(self, Q_t, G_t, weights):
+        return self.critic_loss_fn_mse(Q_t, G_t, weights)
+
+    def critic_loss_fn_huber(self, Q_t, G_t, weights: torch.Tensor = None):
+        loss = nn.functional.smooth_l1_loss(Q_t, G_t, reduce=False)
+        assert loss.shape == (Q_t.shape[0], )
+        if weights is None:
+            return loss.mean()
+        return (loss * weights).mean()
+
+    def critic_loss_fn_mse(self, Q_t, G_t, weights: torch.Tensor = None):
+        loss = nn.functional.mse_loss(Q_t, G_t, reduce=False)
+        assert loss.shape == (Q_t.shape[0], )
+        if weights is None:
+            return loss.mean()
+        return (loss * weights).mean()
 
     @torch.no_grad()
     def calculate_Gt_target(self, next_state, reward, done):
@@ -250,18 +275,16 @@ class DDPG(OffPolicyActorCritic):
         Gt = reward[..., None] + (~done[..., None] *
                                   (self.discount**self.nstep_return) *
                                   qvals_next)  # Gt = (bs, n_assets)
-        # if Gt.mean() > 10.:
-        #     import ipdb; ipdb.set_trace()
         return Gt
 
-    def train_step(self, sarsd=None):
-        sarsd = sarsd or self.buffer.sample(self.batch_size)
+    def train_step(self, sarsd: SARSD = None, weights: np.ndarray = None):
+        sarsd, weights = self.buffer.sample(
+            self.batch_size) if sarsd is None else (sarsd, weights)
         state, action, reward, next_state, done = \
             self.prep_sarsd_tensors(sarsd)
-        loss_critic, Qt, Gt = \
-            self.train_step_critic(state, action, reward, next_state, done)
+        loss_critic, Qt, Gt, td_error = self.train_step_critic(
+            state, action, reward, next_state, done, weights)
         loss_actor = self.train_step_actor(state)
-        td_error = (Qt - Gt).abs()
         self.update_critic_target()
         self.update_actor_target()
         return {
@@ -272,20 +295,26 @@ class DDPG(OffPolicyActorCritic):
             'Gt': Gt.detach().mean().item()
         }
 
-    def train_step_critic(self, state, action, reward, next_state, done):
-        Qt = self.critic_b(state, action)
-        Gt = self.calculate_Gt_target(next_state, reward, done)
+    def train_step_critic(self, state, action, reward, next_state, done,
+                          weights):
+        Qt = self.critic_b(state, action).mean(-1)  # mean across assets
+        Gt = self.calculate_Gt_target(next_state, reward, done).mean(-1)
         assert Qt.shape == Gt.shape
 
-        loss_critic = self.loss_fn(Qt, Gt)
+        td_error = (Gt - Qt).abs().detach()
+        if self.prioritized_replay:
+            self.buffer.update_priority(td_error.squeeze())
+            weights = torch.from_numpy(weights).to(self.device)
+
+        loss_critic = self.critic_loss_fn(Qt, Gt, weights)
 
         self.opt_critic.zero_grad()
         loss_critic.backward()
         self.opt_critic.step()
 
-        return loss_critic.detach().item(), Qt, Gt
+        return loss_critic.detach().item(), Qt, Gt, td_error
 
-    def train_step_actor(self, state):
+    def train_step_actor(self, state, weights=None):
         action = self.actor_b(state).squeeze(-1)
         loss_actor = -self.critic_t(state, action).mean()
         port_penalty = ((action - state.portfolio)**2).mean()

@@ -8,7 +8,7 @@ import torch
 import torch.nn.functional as F
 from torch.distributions import Uniform
 
-from .dqn import DQN
+from .dqn import DQN, DQNMixedActions
 from ...environments import make_env
 from ..net.conv_net_iqn import ConvNetIQN
 from ...utils import default_device, DiscreteActionSpace, DiscreteRangeSpace
@@ -22,7 +22,7 @@ cliiped_uniform_dist = Uniform(1e-7, 1 - 1e-7)
 
 def make_risk_distortion(risk_distortion_type: str,
                          risk_distortion_param: float):
-    if risk_distortion_type in ('None', 'none', 'neutral',  None):
+    if risk_distortion_type in ('None', 'none', 'neutral', None):
         return lambda x: x
     if risk_distortion_type in globals():
         return partial(globals()[risk_distortion_type], risk_distortion_param)
@@ -80,6 +80,7 @@ class IQN(DQN):
             action_space: tuple,
             discount: float,
             nstep_return: int,
+            reduce_rewards: bool,
             reward_shaper_config: Config,
             replay_size: int,
             replay_min_size: int,
@@ -110,12 +111,13 @@ class IQN(DQN):
             risk_distortion: str,
             risk_distortion_param: float):
         super().__init__(env, preprocessor, input_shape, action_space,
-                         discount, nstep_return, reward_shaper_config,
-                         replay_size, replay_min_size, prioritized_replay,
-                         per_alpha, per_beta, per_beta_steps, noisy_net,
-                         noisy_net_sigma, eps, eps_decay, eps_min, batch_size,
-                         test_steps, unit_size, savepath, double_dqn,
-                         tau_soft_update, model_class, model_config, lr)
+                         discount, nstep_return, reduce_rewards,
+                         reward_shaper_config, replay_size, replay_min_size,
+                         prioritized_replay, per_alpha, per_beta,
+                         per_beta_steps, noisy_net, noisy_net_sigma, eps,
+                         eps_decay, eps_min, batch_size, test_steps, unit_size,
+                         savepath, double_dqn, tau_soft_update, model_class,
+                         model_config, lr)
 
         self.nTau1 = nTau1
         self.nTau2 = nTau2
@@ -123,7 +125,7 @@ class IQN(DQN):
         self.risk_distortion = make_risk_distortion(risk_distortion,
                                                     risk_distortion_param)
 
-        self.desired_port = torch.tensor([1., 0.], device=self.device)[None, :]
+        # self.desired_port = torch.tensor([1., 0.], device=self.device)[None, :]
 
     @classmethod
     def from_config(cls, config):
@@ -132,20 +134,24 @@ class IQN(DQN):
         input_shape = preprocessor.feature_output_shape
         atoms = config.discrete_action_atoms + 1
         action_space = DiscreteRangeSpace((0, atoms), env.nAssets)
+        # MIXED ACTIONS
+        # atoms = atoms ** env.nAssets
+        action_space = DiscreteRangeSpace((0, atoms), 1)
         aconf = config.agent_config
         unit_size = aconf.unit_size_proportion_avM
         savepath = Path(config.basepath) / config.experiment_id / 'models'
-        return cls(
-            env, preprocessor, input_shape, action_space, aconf.discount,
-            aconf.nstep_return, config.reward_shaper_config, aconf.replay_size,
-            aconf.replay_min_size, aconf.prioritized_replay, aconf.per_alpha,
-            aconf.per_beta, aconf.per_beta_steps, aconf.noisy_net,
-            aconf.noisy_net_sigma, aconf.eps, aconf.eps_decay, aconf.eps_min,
-            aconf.batch_size, config.test_steps, unit_size, savepath,
-            aconf.double_dqn, aconf.tau_soft_update,
-            config.model_config.model_class, config.model_config,
-            config.optim_config.lr, aconf.nTau1, aconf.nTau2, aconf.k_huber,
-            aconf.risk_distortion, aconf.risk_distortion_param)
+        return cls(env, preprocessor, input_shape, action_space,
+                   aconf.discount, aconf.nstep_return, aconf.reduce_rewards,
+                   config.reward_shaper_config, aconf.replay_size,
+                   aconf.replay_min_size, aconf.prioritized_replay,
+                   aconf.per_alpha, aconf.per_beta, aconf.per_beta_steps,
+                   aconf.noisy_net, aconf.noisy_net_sigma, aconf.eps,
+                   aconf.eps_decay, aconf.eps_min, aconf.batch_size,
+                   config.test_steps, unit_size, savepath, aconf.double_dqn,
+                   aconf.tau_soft_update, config.model_config.model_class,
+                   config.model_config, config.optim_config.lr, aconf.nTau1,
+                   aconf.nTau2, aconf.k_huber, aconf.risk_distortion,
+                   aconf.risk_distortion_param)
 
     @torch.no_grad()
     def get_quantiles(self, state, target=False, device=None):
@@ -213,14 +219,21 @@ class IQN(DQN):
         quantiles_next = self.model_t(next_state, tau=tau2)
         assert quantiles_next.shape[1:] == (self.nTau2, self.n_assets,
                                             self.action_atoms)
-        quantiles_next = (
-            quantiles_next * one_hot[:, None, :, 0, :]).sum(-1).mean(
-                -1)  # get max qval within asset and average across assets
-        assert quantiles_next.shape[1:] == (self.nTau2, )
-        Gt = reward[:, None] + (~done[:, None] *
-                                (self.discount**self.nstep_return) *
-                                quantiles_next)
-        assert Gt.shape[1:] == (self.nTau2, )
+        # quantiles_next = (
+        #     quantiles_next * one_hot[:, None, :, 0, :]).sum(-1).mean(
+        #         -1)  # get max qval within asset and average across assets
+        # assert quantiles_next.shape[1:] == (self.nTau2, )
+        # Gt = reward[:, None] + (~done[:, None] *
+        #                         (self.discount**self.nstep_return) *
+        #                         quantiles_next)
+        # assert Gt.shape[1:] == (self.nTau2, )
+        # PARALLEL REWARDS VERSION
+        quantiles_next = (quantiles_next * one_hot[:, None, :, 0, :]).sum(-1)
+        assert quantiles_next.shape[1:] == (self.nTau2, self.n_assets)
+        Gt = reward[:, None, :] + (~done[:, None, None] *
+                                   (self.discount**self.nstep_return) *
+                                   quantiles_next)
+        assert Gt.shape[1:] == (self.nTau2, self.n_assets)
         return Gt
 
     def train_step(self, sarsd: SARSD = None, weights: np.ndarray = None):
@@ -240,7 +253,9 @@ class IQN(DQN):
                                 self.action_atoms).to(self.device)
 
         Gt = self.calculate_Gt_target(next_state, reward, done)  # (bs, nTau2)
-        Qt = (quantiles * action_mask).sum(-1).mean(-1)  # (bs, nTau1)
+        # Qt = (quantiles * action_mask).sum(-1).mean(-1)  # (bs, nTau1)
+        # PARALLEL REWARDS VERSION
+        Qt = (quantiles * action_mask).sum(-1)  # (bs, nTau1, self.n_assets)
         if self.prioritized_replay:
             weights = torch.from_numpy(weights).to(self.device)
             loss, td_error = self.loss_fn(Qt, Gt, tau1, weights)
@@ -270,27 +285,42 @@ class IQN(DQN):
             loss: scalar
             td_error: scalar
         """
-        assert Qt.shape[1:] == (self.nTau1, )
-        assert Gt.shape[1:] == (self.nTau2, )
+        # assert Qt.shape[1:] == (self.nTau1, )
+        # assert Gt.shape[1:] == (self.nTau2, )
+        # PARALLEL REWARDS VERSION
+        assert Qt.shape[1:] == (self.nTau1, self.n_assets)
+        assert Gt.shape[1:] == (self.nTau2, self.n_assets)
         td_error = Gt.unsqueeze(1) - Qt.unsqueeze(2)
-        assert td_error.shape[1:] == (
-            self.nTau1,
-            self.nTau2,
-        )
+        # assert td_error.shape[1:] == (
+        #     self.nTau1,
+        #     self.nTau2,
+        # )
+        # PARALLEL REWARDS VERSION
+        assert td_error.shape[1:] == (self.nTau1, self.nTau2, self.n_assets)
         huber_loss = torch.where(
             td_error.abs() <= self.k_huber, 0.5 * td_error.pow(2),
             self.k_huber * (td_error.abs() - self.k_huber / 2))
         assert huber_loss.shape == td_error.shape
-        quantile_loss = torch.abs(tau[:, :, None] -
+        # quantile_loss = torch.abs(tau[:, :, None] -
+        #                           (td_error.detach() < 0.).float()) *\
+        #     huber_loss / self.k_huber
+        # PARALLEL REWARDS
+        quantile_loss = torch.abs(tau[:, :, None, None] -
                                   (td_error.detach() < 0.).float()) *\
             huber_loss / self.k_huber
         assert quantile_loss.shape == huber_loss.shape
         if weights is None:
-            loss = quantile_loss.mean(-1).sum(-1)
+            # loss = quantile_loss.mean(-1).sum(-1)
+            # PARALLEL REWARDS
+            loss = quantile_loss.sum(-1).mean(-1).sum(-1)
         else:
-            loss = quantile_loss.mean(-1).sum(-1) * weights
+            # loss = quantile_loss.mean(-1).sum(-1) * weights
+            # PARALLEL REWARD
+            loss = quantile_loss.sum(-1).mean(-1).sum(-1) * weights
+        # assert loss.shape == (Qt.shape[0], )
+        #PARALLEL REWARDS
         assert loss.shape == (Qt.shape[0], )
-        return loss.mean(), td_error.abs().mean(-1).mean(-1).detach()
+        return loss.mean(), td_error.abs().mean((-1, -2, -3)).detach()
 
     def loss_fn_mse(self, Qt, Gt, tau, weights: torch.Tensor = None):
         """
@@ -343,3 +373,89 @@ class IQNCURL(IQN):
 
 # for temporary backward comp
 IQNReverser = IQN
+
+
+class IQNMixedActions(IQN):
+    def __init__(
+            self,
+            env,
+            preprocessor,
+            input_shape: tuple,
+            action_space: tuple,
+            discount: float,
+            nstep_return: int,
+            reduce_rewards: bool,
+            reward_shaper_config: Config,
+            replay_size: int,
+            replay_min_size: int,
+            prioritized_replay: bool,
+            per_alpha: float,
+            per_beta: float,
+            per_beta_steps: int,
+            noisy_net: bool,
+            noisy_net_sigma: float,
+            eps: float,
+            eps_decay: float,
+            eps_min: float,
+            batch_size: int,
+            test_steps: int,
+            unit_size: float,
+            savepath: Union[Path, str],
+            double_dqn: bool,
+            tau_soft_update: float,
+            model_class: str,
+            model_config: Union[dict, Config],
+            lr: float,
+            ##############
+            # Extra 4 Args specific to IQN
+            ##############
+            nTau1: int,
+            nTau2: int,
+            k_huber: float,
+            risk_distortion: str,
+            risk_distortion_param: float):
+        DQNMixedActions.__init__(
+            self, env, preprocessor, input_shape, action_space, discount,
+            nstep_return, reduce_rewards, reward_shaper_config, replay_size,
+            replay_min_size, prioritized_replay, per_alpha, per_beta,
+            per_beta_steps, noisy_net, noisy_net_sigma, eps, eps_decay,
+            eps_min, batch_size, test_steps, unit_size, savepath, double_dqn,
+            tau_soft_update, model_class, model_config, lr)
+
+        self.nTau1 = nTau1
+        self.nTau2 = nTau2
+        self.k_huber = k_huber
+        self.risk_distortion = make_risk_distortion(risk_distortion,
+                                                    risk_distortion_param)
+
+        # self.desired_port = torch.tensor([1., 0.], device=self.device)[None, :]
+
+    @classmethod
+    def from_config(cls, config):
+        env = make_env(config)
+        preprocessor = make_preprocessor(config, env.nAssets)
+        input_shape = preprocessor.feature_output_shape
+        atoms = config.discrete_action_atoms + 1
+        action_space = DiscreteRangeSpace((0, atoms), env.nAssets)
+        # ALL MIXED ACTIONS - Full product
+        # atoms = atoms ** env.nAssets
+        action_space = DiscreteRangeSpace((0, atoms), 1)
+        aconf = config.agent_config
+        unit_size = aconf.unit_size_proportion_avM
+        savepath = Path(config.basepath) / config.experiment_id / 'models'
+        return cls(env, preprocessor, input_shape, action_space,
+                   aconf.discount, aconf.nstep_return, aconf.reduce_rewards,
+                   config.reward_shaper_config, aconf.replay_size,
+                   aconf.replay_min_size, aconf.prioritized_replay,
+                   aconf.per_alpha, aconf.per_beta, aconf.per_beta_steps,
+                   aconf.noisy_net, aconf.noisy_net_sigma, aconf.eps,
+                   aconf.eps_decay, aconf.eps_min, aconf.batch_size,
+                   config.test_steps, unit_size, savepath, aconf.double_dqn,
+                   aconf.tau_soft_update, config.model_config.model_class,
+                   config.model_config, config.optim_config.lr, aconf.nTau1,
+                   aconf.nTau2, aconf.k_huber, aconf.risk_distortion,
+                   aconf.risk_distortion_param)
+
+    def action_to_transaction(
+            self, action: Union[torch.Tensor, np.ndarray]) -> np.ndarray:
+        return DQNMixedActions.action_to_transaction(self, action)
