@@ -86,13 +86,15 @@ def sharpe_shaper(nstep_buffer, discounts, benchmark=0.):
     return np.clip(.1 * out, -1., 1.)
 
 
-def sortino_shaperA(nstep_buffer, discounts, benchmark=0.):
+def sortino_shaperA(nstep_buffer, discounts, benchmark=0., exp=2):
     """ Sortino return aggregation """
     if len(nstep_buffer) == 1:  # Heuristic for if there is only 1 value
         benchmark = benchmark if isinstance(benchmark, float) else benchmark[0]
         diff = nstep_buffer[0].reward - benchmark
-        return np.clip(np.where(diff != 0., diff / np.sqrt(diff**2), 0.), -1.,
+        downside = (np.abs(diff)**exp)**(1 / exp)
+        return np.clip(0.1 * np.where(diff != 0., diff / downside, 0.), -1.,
                        1.)
+
     if not isinstance(benchmark, float):  # if benchmark is an array
         diffs = np.array([
             (dat.reward - ref) * discount
@@ -101,36 +103,40 @@ def sortino_shaperA(nstep_buffer, discounts, benchmark=0.):
     else:  # if benchmark is a constant scalar - default
         diffs = np.array([(dat.reward - benchmark) * discount
                           for dat, discount in zip(nstep_buffer, discounts)])
+
     num = diffs.mean(0)
     downside = np.where(diffs < 0, diffs, 0.)
-    denom = np.sqrt((downside**2).sum(0) / (len(diffs) - 1))
-    global PRINT_I
-    PRINT_I += 1
-    if PRINT_I > 100:
-        print(num, denom, num / denom, .1 * (num / denom))
-        PRINT_I = 0
+    denom = ((np.abs(downside)**exp) / (len(diffs) - 1))**(1 / exp)
+    denom = denom.sum(0)
     denom_zero_case = np.where(num == 0., 0., 1.)
     normal_case = np.clip(.1 * (num / denom), -1., 1.)
     out = np.where(denom != 0., normal_case, denom_zero_case)
+    global PRINT_I
+    PRINT_I += 1
+    if PRINT_I > 100:
+        print(num, denom, 10.*out, out)
+        PRINT_I = 0
     return out
 
 
+# @np.errstate(invalid='ignore')
 def sortino_shaperB(nstep_buffer, discounts, benchmark=0., exp=2):
     """
     Another version - kinda sortino style. Instead of adjusting for downside
-    volatility, returns are squared in magnitude if they are negative.
+    volatility, returns are scaled in magnitude if they are negative.
+
+    Scaled by taking downside ** (1/exp). Because 'downside' is the return
+    clipped to be -1. < x < 0, taking the root (1/exp) results in increasing
+    the value as if the power was taken (i.e if abs(x) > 1.).
 
     """
     if len(nstep_buffer) == 1:  # Heuristic for if there is only 1 value
         benchmark = benchmark if isinstance(benchmark, float) else benchmark[0]
-        diff = nstep_buffer[0].reward - benchmark
-        if diff == 0.:  # prevent div by 0. in denom
-            return 0.
-        if diff < 0:
-            if diff < -1.:
-                return -1.
-            return -((-diff)**(1 / 2))
-        return diff
+        diff = np.clip(nstep_buffer[0].reward - benchmark, -1., None)
+        diff = np.where(diff < 0., -(-diff)**(1 / exp), diff)  # scale neg rew
+        # diff = np.where(diff == 0., -.01, diff)
+        return np.clip(diff, -1., 1.)
+
     if not isinstance(benchmark, float):  # if benchmark is an array
         diffs = np.array([
             (dat.reward - ref) * discount
@@ -139,16 +145,18 @@ def sortino_shaperB(nstep_buffer, discounts, benchmark=0., exp=2):
     else:  # if benchmark is a constant scalar - default
         diffs = np.array([(dat.reward - benchmark) * discount
                           for dat, discount in zip(nstep_buffer, discounts)])
+
     raw_sum = diffs.sum(0)
-    diffs = np.where(diffs < -1., -1., diffs)  # max negative reward = -1.
-    downside_idx = np.where(diffs < 0.)[0]
-    diffs[downside_idx] = -((-diffs[downside_idx])**exp)
+    diffs = np.clip(diffs, -1., None)  # max negative reward = -1.
+    # downside_idx = np.where(diffs < 0.)[0]
+    # diffs[downside_idx] = -((-diffs[downside_idx])**exp)
+    diffs = np.where(diffs < 0., -(-diffs)**(1 / exp), diffs)  # scale neg rew
     global PRINT_I
     PRINT_I += 1
     if PRINT_I > 100:
-        print(raw_sum, diffs.sum())
+        print(raw_sum, diffs.sum(0))
         PRINT_I = 0
-    return diffs.sum()
+    return np.clip(diffs.sum(0), -1., 1.)
 
 
 class NStepBuffer:
@@ -175,14 +183,16 @@ class NStepBuffer:
         """
         shaper_type = shaper_config['reward_shaper']
         print('using ', shaper_type)
-        if shaper_type in ("cosine_similarity", "cosine_port_shaper"):
+        if shaper_type in ("cosine", "cosine_similarity",
+                           "cosine_port_shaper"):
             desired_portfolio = np.array(shaper_config['desired_portfolio'])
             temp = shaper_config['cosine_temp']
             return partial(cosine_port_shaper, self._buffer, self.discounts,
                            desired_portfolio, temp)
-        if shaper_type in ("sortino_shaperB", ):
+        if shaper_type in ("sortino_shaperA", "sortino_shaperB"):
             exp = shaper_config["sortino_exp"]
-            return partial(sortino_shaperB,
+            sortino_shaper = globals()[shaper_type]
+            return partial(sortino_shaper,
                            self._buffer,
                            self.discounts,
                            exp=exp)
