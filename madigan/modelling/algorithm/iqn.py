@@ -10,10 +10,11 @@ import torch.nn.functional as F
 from torch.distributions import Uniform
 
 from .dqn import DQN, DQNMixedActions
-from ...environments import make_env
+from ...environments import make_env, get_env_info
 from ..net.conv_net_iqn import ConvNetIQN
 from ...utils import default_device, DiscreteActionSpace, DiscreteRangeSpace
 from ...utils.preprocessor import make_preprocessor
+from ...utils.metrics import list_2_dict
 from ...utils.config import Config
 from ...utils.data import State, SARSD
 
@@ -25,6 +26,9 @@ def make_risk_distortion(risk_distortion_type: str,
                          risk_distortion_param: float):
     if risk_distortion_type in ('None', 'none', 'neutral', None):
         return lambda x: x
+    if risk_distortion_type in globals():
+        return partial(globals()[risk_distortion_type], risk_distortion_param)
+    risk_distortion_type += '_distortion'
     if risk_distortion_type in globals():
         return partial(globals()[risk_distortion_type], risk_distortion_param)
     raise NotImplementedError(
@@ -152,7 +156,11 @@ class IQN(DQN):
                    aconf.risk_distortion_param)
 
     @torch.no_grad()
-    def get_quantiles(self, state, target=False, device=None):
+    def get_quantiles(self,
+                      state,
+                      target=False,
+                      risk_distort=False,
+                      device=None):
         device = device or self.device
         state = self.prep_state_tensors(state, device=device)
         if target:
@@ -162,18 +170,19 @@ class IQN(DQN):
                          dtype=torch.float32,
                          device=self.device,
                          requires_grad=False)
-        tau = self.risk_distortion(tau)
+        if risk_distort:
+            tau = self.risk_distortion(tau)
         return self.model_b(state, tau=tau)
 
     @torch.no_grad()
-    def get_qvals(self, state, target=False, device=None):
+    def get_qvals(self, state, target=False, risk_distort=True, device=None):
         """
         External interface - for inference and env interaction
         Takes in numpy arrays
         and return qvals for actions
         """
         quantiles = self.get_quantiles(
-            state, target=target,
+            state, target=target, risk_distort=risk_distort,
             device=device)  #(bs, nTau1, n_assets, n_actions)
         return quantiles.mean(1)  #(bs, n_assets, n_actions)
 
@@ -349,6 +358,38 @@ class IQN(DQN):
             loss = quantile_loss.mean(-1).sum(-1) * weights
         assert loss.shape == (Qt.shape[0], )
         return loss.mean(), td_error.abs().mean(-1).mean(-1).detach()
+
+    @torch.no_grad()
+    def test_episode(self, test_steps=None, reset=True, target=True) -> dict:
+        self.test_mode()
+        test_steps = test_steps or self.test_steps
+        if reset:
+            self.reset_state()
+        self._preprocessor.initialize_history(
+            self.env)  # probably already initialized
+        state = self._preprocessor.current_data()
+        tst_metrics = []
+        i = 0
+        while i <= test_steps:
+            _tst_metrics = {}
+            qvals = self.get_qvals(state, target=target, risk_distort=True)
+            action = self.get_action(qvals=qvals, target=target).cpu().numpy()
+            transaction = self.action_to_transaction(action)
+            _tst_metrics['timestamp'] = state.timestamp[-1]
+            state, reward, done, info = self._env.step(transaction)
+            self._preprocessor.stream_state(state)
+            state = self._preprocessor.current_data()
+            _tst_metrics['qvals'] = qvals.cpu().numpy()
+            _tst_metrics['reward'] = reward
+            _tst_metrics['transaction'] = info.brokerResponse.transactionUnits
+            _tst_metrics[
+                'transaction_cost'] = info.brokerResponse.transactionCost
+            # _tst_metrics['info'] = info
+            tst_metrics.append({**_tst_metrics, **get_env_info(self._env)})
+            if done:
+                break
+            i += 1
+        return list_2_dict(tst_metrics)
 
 
 class IQNCURL(IQN):

@@ -82,6 +82,7 @@ class Trainer:
                                                   '1h', '2h', '4h', '8h', '1d')
             ]
         else:
+            # max tf that has at least 10 samples, going up in powers of 2
             max_tf = int(np.log2(self.test_steps // 10))
             self.test_summary_timeframes = [(str(2**i), 2**i)
                                             for i in range(max_tf)]

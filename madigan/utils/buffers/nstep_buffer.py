@@ -119,7 +119,7 @@ def sortino_shaperA(nstep_buffer, discounts, benchmark=0., exp=2):
     return out
 
 
-# @np.errstate(invalid='ignore')
+@np.errstate(invalid='ignore')
 def sortino_shaperB(nstep_buffer, discounts, benchmark=0., exp=2):
     """
     Another version - kinda sortino style. Instead of adjusting for downside
@@ -182,7 +182,7 @@ class NStepBuffer:
         to the shaper function using partial - keeps reference to both.
         """
         shaper_type = shaper_config['reward_shaper']
-        print('using ', shaper_type)
+        print('using ', shaper_type, 'reward shaper')
         if shaper_type in ("cosine", "cosine_similarity",
                            "cosine_port_shaper"):
             desired_portfolio = np.array(shaper_config['desired_portfolio'])

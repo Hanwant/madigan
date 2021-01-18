@@ -24,7 +24,7 @@ agent_config:
   nTau2: 8
   noisy_net: true
   noisy_net_sigma: 0.5
-  nstep_return: 20
+  nstep_return: 5
   per_alpha: 0.6
   per_beta: 0.4
   per_beta_steps: 100000
@@ -36,14 +36,14 @@ agent_config:
   - -1.0
   - 1.0
   risk_distortion: None
-  risk_distortion_param: -0.75
+  risk_distortion_param: 0.5
   reduce_rewards: true
   target_entropy_ratio: 0.98
   tau_embed_size: 64
   tau_soft_update: 0.0001
   train_freq: 4
   transaction_thresh: 0.02
-  unit_size_proportion_avM: 0.05
+  unit_size_proportion_avM: 0.01
 agent_configs:
   A: /home/hemu/madigan/experiments/IQN_OU_Triple_Decreasing_unit.005_Noisy_NoReShap_Replay300_NoPool_AdaptiveAvg/config.yaml
   B: /home/hemu/madigan/experiments/IQN_OU_Triple_Decreasing_PER_Test/config.yaml
@@ -81,21 +81,21 @@ data_source_config:
   #     dX: .01
   #     noise: .01
   #   data_source_type: SineAdder
-  OU:
-    data_source_config:
-      mean:
-        - 10.
-        # - 5.
-        # - 1.
-      phi:
-        - .04
-        # - .02
-        # - .01
-      theta:
-        - .08
-        # - .15
-        # - .15
-    data_source_type: OU
+  # OU:
+  #   data_source_config:
+  #     mean:
+  #       - 10.
+  #       # - 5.
+  #       # - 1.
+  #     phi:
+  #       - .04
+  #       # - .02
+  #       # - .01
+  #     theta:
+  #       - .08
+  #       # - .15
+  #       # - .15
+    # data_source_type: OU
   # SimpleTrend:
   #   data_source_config:
   #     trend_prob:
@@ -136,29 +136,29 @@ data_source_config:
   #     ema_alpha: # not used
   #       - .99
   #   data_source_type: TrendOU
-  # TrendyOU:
-  #   data_source_config:
-  #     trend_prob:
-  #       - .01
-  #     noise_trend:
-  #       - .1
-  #     min_period:
-  #       - 100
-  #     max_period:
-  #       - 500
-  #     start:
-  #       - 5.
-  #     theta:
-  #       - .15
-  #     phi:
-  #       - .04
-  #     dYMin:
-  #       - .0005
-  #     dYMax:
-  #       - .001
-  #     ema_alpha: # not used
-  #       - .99
-  #   data_source_type: TrendyOU
+  TrendyOU:
+    data_source_config:
+      trend_prob:
+        - .01
+      noise_trend:
+        - .1
+      min_period:
+        - 100
+      max_period:
+        - 500
+      start:
+        - 5.
+      theta:
+        - .15
+      phi:
+        - .04
+      dYMin:
+        - .0005
+      dYMax:
+        - .001
+      ema_alpha: # not used
+        - .99
+    data_source_type: TrendyOU
   # SineDynamic:
   #   data_source_config:
   #     freqRange:
@@ -211,7 +211,7 @@ data_source_type: Composite
 discrete_action_atoms: 3
 discrete_actions: true
 env_type: Synth
-experiment_id: IQN_OU_.08_nstep20_baseline_unit.05_no_norm
+experiment_id: IQN_TrendyOU_.08_nstep5_log_std_norm_2
 init_cash: 1000000
 log_freq: 10000
 lot_unit_value: 10000
@@ -269,16 +269,16 @@ optim_config:
   weight_decay: 0
 parent_id: ''
 preprocessor_config:
-  norm: false
-  norm_type: standard_normal
-  preprocessor_type: StackerDiscrete
+  norm: true
+  norm_type: log_standard_normal
+  preprocessor_type: MultiStackerDiscrete
   timeframes:
     - 64
   dilations:
     - 1
     - 5
   window_length: 64
-preprocessor_type: StackerDiscrete
+preprocessor_type: MultiStackerDiscrete
 required_margin: 1.0
 reward_clip: *id001
 reward_shaper_config:
