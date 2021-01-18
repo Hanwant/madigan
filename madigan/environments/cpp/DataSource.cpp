@@ -1366,9 +1366,14 @@ namespace madigan{
       if(trending[i]){
         // double& x = currentData_(i);
         // trendNoise =  trendNoiseDist[i](generator);
-        trendComponent[i] += y * (dY[i] * currentDirection[i]) + trendNoiseDist[i](generator);
-        trendComponent[i] = std::max(0.01, trendComponent[i]);
+        trendComponent[i] += trendComponent[i] * (dY[i] * currentDirection[i]);// + trendNoiseDist[i](generator);
+        trendComponent[i] = std::max(0.1, trendComponent[i]);
         // ouMean[i] = y;
+        if (trendComponent[i] <= .1){
+          currentDirection[i] = 1;
+          trending[i] = true;
+          currentTrendLen[i] = trendLenDist[i](generator);
+        }
         if (--currentTrendLen[i] == 0){
           trending[i] = false;
           // ouMean[i] = y;
@@ -1385,10 +1390,7 @@ namespace madigan{
       }
       y = ouComponent[i] + trendComponent[i];
       // ema[i] = emaAlpha[i] * ema[i] + (1-emaAlpha[i]) * y;
-      y = std::max(0.001, y);
-      if (y <= .001){
-        currentDirection[i] = 1;
-      }
+      // y = std::max(0.001, y);
     }
     timestamp_ += 1;
     return currentData_;
