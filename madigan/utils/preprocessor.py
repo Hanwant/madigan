@@ -85,9 +85,10 @@ def log_standard_norm(x):
     Nan safe, otherwise lambda can be used-> lambda x: (x-x.mean(0)) / x.std(0)
     Assumes x > 0
     """
+    # if (x < 0.).any():
+    #     import ipdb; ipdb.set_trace()
     x = np.log(x)
-    mean = x.mean(0)
-    res = np.nan_to_num((x - mean) / x.std(0), 0.)
+    res = np.nan_to_num(((x - np.nanmean(x, 0)) / np.nanstd(x, 0)), 0.)
     return res
 
 
