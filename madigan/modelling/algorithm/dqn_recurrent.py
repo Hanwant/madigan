@@ -13,7 +13,6 @@ from .offpolicy_q import OffPolicyQRecurrent
 from .utils import discrete_action_to_transaction, abs_port_norm
 from ..utils import get_model_class
 from ...environments import make_env
-from ...environments.reward_shaping import RewardShaper, make_reward_shaper
 from ...utils import DiscreteActionSpace, DiscreteRangeSpace
 from ...utils import ActionSpace
 from ...utils.preprocessor import make_preprocessor
@@ -34,19 +33,19 @@ class DQNRecurrent(OffPolicyQRecurrent):
     """
     def __init__(self, env, preprocessor, input_shape: tuple,
                  action_space: ActionSpace, discount: float, nstep_return: int,
-                 reward_shaper: RewardShaper, replay_size: int,
-                 replay_min_size: int, prioritized_replay: bool,
-                 per_alpha: float, per_beta: float, per_beta_steps: int,
-                 episode_len: int, burn_in_steps: int, episode_overlap: int,
-                 store_hidden: bool, noisy_net: bool, noisy_net_sigma: float,
-                 eps: float, eps_decay: float, eps_min: float, batch_size: int,
-                 test_steps: int, unit_size: float, savepath: Union[Path, str],
+                 replay_size: int, replay_min_size: int,
+                 prioritized_replay: bool, per_alpha: float, per_beta: float,
+                 per_beta_steps: int, episode_len: int, burn_in_steps: int,
+                 episode_overlap: int, store_hidden: bool, noisy_net: bool,
+                 noisy_net_sigma: float, eps: float, eps_decay: float,
+                 eps_min: float, batch_size: int, test_steps: int,
+                 unit_size: float, savepath: Union[Path, str],
                  double_dqn: bool, tau_soft_update: float, model_class: str,
                  model_config: Union[dict, Config], lr: float):
         super().__init__(env, preprocessor, input_shape, action_space,
-                         discount, nstep_return, reward_shaper, replay_size,
-                         replay_min_size, prioritized_replay, per_alpha,
-                         per_beta, per_beta_steps, episode_len, burn_in_steps,
+                         discount, nstep_return, replay_size, replay_min_size,
+                         prioritized_replay, per_alpha, per_beta,
+                         per_beta_steps, episode_len, burn_in_steps,
                          episode_overlap, store_hidden, noisy_net, eps,
                          eps_decay, eps_min, batch_size, test_steps, unit_size,
                          savepath)
@@ -82,19 +81,18 @@ class DQNRecurrent(OffPolicyQRecurrent):
         input_shape = preprocessor.feature_output_shape
         atoms = config.discrete_action_atoms + 1
         action_space = DiscreteRangeSpace((0, atoms), env.nAssets)
-        reward_shaper = make_reward_shaper(config)
         aconf = config.agent_config
         unit_size = aconf.unit_size_proportion_avM
         savepath = Path(config.basepath) / config.experiment_id / 'models'
         return cls(env, preprocessor, input_shape, action_space,
-                   aconf.discount, aconf.nstep_return, reward_shaper,
-                   aconf.replay_size, aconf.replay_min_size,
-                   aconf.prioritized_replay, aconf.per_alpha, aconf.per_beta,
-                   aconf.per_beta_steps, aconf.episode_length,
-                   aconf.burn_in_steps, aconf.episode_overlap,
-                   aconf.store_hidden, aconf.noisy_net, aconf.noisy_net_sigma,
-                   aconf.eps, aconf.eps_decay, aconf.eps_min, aconf.batch_size,
-                   config.test_steps, unit_size, savepath, aconf.double_dqn,
+                   aconf.discount, aconf.nstep_return, aconf.replay_size,
+                   aconf.replay_min_size, aconf.prioritized_replay,
+                   aconf.per_alpha, aconf.per_beta, aconf.per_beta_steps,
+                   aconf.episode_length, aconf.burn_in_steps,
+                   aconf.episode_overlap, aconf.store_hidden, aconf.noisy_net,
+                   aconf.noisy_net_sigma, aconf.eps, aconf.eps_decay,
+                   aconf.eps_min, aconf.batch_size, config.test_steps,
+                   unit_size, savepath, aconf.double_dqn,
                    aconf.tau_soft_update, config.model_config.model_class,
                    config.model_config, config.optim_config.lr)
 

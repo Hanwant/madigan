@@ -14,7 +14,6 @@ from .offpolicy_q import OffPolicyQ
 from .utils import discrete_action_to_transaction, abs_port_norm
 from ..utils import get_model_class
 from ...environments import make_env
-from ...environments.reward_shaping import RewardShaper
 from ...utils import DiscreteActionSpace, DiscreteRangeSpace
 from ...utils import ActionSpace
 from ...utils.preprocessor import make_preprocessor

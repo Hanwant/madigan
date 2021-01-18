@@ -15,7 +15,6 @@ from .base import Agent
 from .utils import discrete_action_to_transaction, abs_port_norm
 from ..utils import get_model_class
 from ...environments import make_env
-from ...environments.reward_shaping import RewardShaper, make_reward_shaper
 from ..net.conv_net import ConvNet
 from ..net.mlp_net import MLPNet
 from ...utils import default_device, DiscreteActionSpace, DiscreteRangeSpace
@@ -97,20 +96,19 @@ class IQNController(IQN):
         })
         atoms = len(agents) + 1  # +1 for null agent
         action_space = DiscreteRangeSpace((0, atoms), env.nAssets)
-        reward_shaper = make_reward_shaper(config)
         aconf = config.agent_config
         unit_size = aconf.unit_size_proportion_avM
         savepath = Path(config.basepath) / config.experiment_id / 'models'
-        return cls(
-            agents, env, preprocessor, input_shape, action_space,
-            aconf.discount, aconf.nstep_return, reward_shaper,
-            aconf.replay_size, aconf.replay_min_size, aconf.prioritized_replay,
-            aconf.per_alpha, aconf.per_beta, aconf.per_beta_steps,
-            aconf.noisy_net, aconf.noisy_net_sigma, aconf.eps, aconf.eps_decay,
-            aconf.eps_min, aconf.batch_size, config.test_steps, unit_size,
-            savepath, aconf.double_dqn, aconf.tau_soft_update,
-            config.model_config.model_class, config.model_config,
-            config.optim_config.lr, aconf.nTau1, aconf.nTau2, aconf.k_huber)
+        return cls(agents, env, preprocessor, input_shape, action_space,
+                   aconf.discount, aconf.nstep_return, aconf.replay_size,
+                   aconf.replay_min_size, aconf.prioritized_replay,
+                   aconf.per_alpha, aconf.per_beta, aconf.per_beta_steps,
+                   aconf.noisy_net, aconf.noisy_net_sigma, aconf.eps,
+                   aconf.eps_decay, aconf.eps_min, aconf.batch_size,
+                   config.test_steps, unit_size, savepath, aconf.double_dqn,
+                   aconf.tau_soft_update, config.model_config.model_class,
+                   config.model_config, config.optim_config.lr, aconf.nTau1,
+                   aconf.nTau2, aconf.k_huber)
 
     @property
     def env(self):
