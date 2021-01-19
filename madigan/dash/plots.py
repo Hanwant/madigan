@@ -317,32 +317,46 @@ class TrainPlotsSACD(TrainPlots):
             print("train data is empty")
             data = {k: [] for k in self.lines.keys()}
 
-        self.lines['loss_critic1'].setData(y=data['loss_critic1'],
+        self.lines['loss_critic1'].setData(x=self.idxs,
+                                           y=data['loss_critic1'][self.idxs],
                                            pen=self.colours['loss_critic1'])
-        self.lines['loss_critic2'].setData(y=data['loss_critic2'],
+        self.lines['loss_critic2'].setData(x=self.idxs,
+                                           y=data['loss_critic2'][self.idxs],
                                            pen=self.colours['loss_critic2'])
-        self.lines['loss_actor'].setData(y=data['loss_actor'],
+        self.lines['loss_actor'].setData(x=self.idxs,
+                                         y=data['loss_actor'][self.idxs],
                                          pen=self.colours['loss_actor'])
-        self.lines['loss_entropy'].setData(y=data['loss_entropy'],
+        self.lines['loss_entropy'].setData(x=self.idxs,
+                                           y=data['loss_entropy'][self.idxs],
                                            pen=self.colours['loss_entropy'])
-        rewards = data['running_reward']
+        rewards = data['running_reward'][self.idxs]
         rewards_mean = pd.Series(data['running_reward']).ewm(20000).mean()
-        rewards_mean = np.nan_to_num(rewards_mean.values)
-        self.lines['running_reward'].setData(y=rewards,
+        rewards_mean = np.nan_to_num(rewards_mean.values)[self.idxs]
+        self.lines['running_reward'].setData(x=self.idxs,
+                                             y=rewards,
                                              pen=self.colours['reward'])
         self.lines['running_reward_mean'].setData(
+            x=self.idxs,
             y=rewards_mean,
             pen=pg.mkPen({
                 'color': self.colours['reward_mean'],
                 'width': 2
             }))
-        self.lines['Gt'].setData(y=data['Gt'], pen=self.colours['Gt'])
-        self.lines['Qt1'].setData(y=data['Qt1'], pen=self.colours['Qt1'])
-        self.lines['Qt2'].setData(y=data['Qt2'], pen=self.colours['Qt2'])
+        self.lines['Gt'].setData(x=self.idxs,
+                                 y=data['Gt'][self.idxs],
+                                 pen=self.colours['Gt'])
+        self.lines['Qt1'].setData(x=self.idxs,
+                                  y=data['Qt1'][self.idxs],
+                                  pen=self.colours['Qt1'])
+        self.lines['Qt2'].setData(x=self.idxs,
+                                  y=data['Qt2'][self.idxs],
+                                  pen=self.colours['Qt2'])
 
-        self.lines['entropy'].setData(y=data['entropy'],
+        self.lines['entropy'].setData(x=self.idxs,
+                                      y=data['entropy'][self.idxs],
                                       pen=self.colours['entropy'])
-        self.lines['entropy_temp'].setData(y=data['entropy_temp'],
+        self.lines['entropy_temp'].setData(x=self.idxs,
+                                           y=data['entropy_temp'][self.idxs],
                                            pen=self.colours['entropy_temp'])
 
 
