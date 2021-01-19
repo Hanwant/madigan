@@ -74,6 +74,7 @@ class TrainPlots(QGridLayout):
         super().__init__()
         self.datapath = None
         self.data = None
+        self.idxs = None
         self.graphs = pg.GraphicsLayoutWidget(show=True, title=title)
         self.addWidget(self.graphs)
         self.colours = {
@@ -115,21 +116,39 @@ class TrainPlots(QGridLayout):
         for line in self.lines.values():
             line.setData(y=[])
 
+    def process_data(self, data):
+        """ Converts data to ndarrays """
+        self.data = dict(data.items())
+        for label, arr in self.data.items():
+            self.data[label] = np.array(arr)
+
     def set_data(self, data):
-        self.data = data
+        self.process_data(data)
         if len(data) == 0:
             print("train data is empty")
             data = {k: [] for k in self.lines.keys()}
+        if len(self.data['loss']) > 100_000:
+            self.idxs = np.sort(
+                np.random.choice(len(self.data['loss']),
+                                 100_000,
+                                 replace=False))
+        else:
+            self.idxs = np.arange(len(self.data['loss']))
         # size = len(data['loss'])
         # if size > 500000:
         #    sparse_idx = np.random.choice(size / 10_000_000)
-        self.lines['loss'].setData(y=data['loss'], pen=self.colours['loss'])
-        rewards = data['running_reward']
-        rewards_mean = pd.Series(data['running_reward']).ewm(20000).mean()
+        self.lines['loss'].setData(x=self.idxs,
+                                   y=self.data['loss'][self.idxs],
+                                   pen=self.colours['loss'])
+        rewards = self.data['running_reward'][self.idxs]
+        rewards_mean = pd.Series(
+            self.data['running_reward'][self.idxs]).ewm(20000).mean()
         rewards_mean = np.nan_to_num(rewards_mean.values)
-        self.lines['running_reward'].setData(y=rewards,
+        self.lines['running_reward'].setData(x=self.idxs,
+                                             y=rewards,
                                              pen=self.colours['reward'])
         self.lines['running_reward_mean'].setData(
+            x=self.idxs,
             y=rewards_mean,
             pen=pg.mkPen({
                 'color': self.colours['reward_mean'],
@@ -178,8 +197,12 @@ class TrainPlotsDQN(TrainPlots):
         super().set_data(data)
         if data is None or len(data) == 0:
             return
-        self.lines['Gt'].setData(y=data['Gt'], pen=self.colours['Gt'])
-        self.lines['Qt'].setData(y=data['Qt'], pen=self.colours['Qt'])
+        self.lines['Gt'].setData(x=self.idxs,
+                                 y=self.data['Gt'][self.idxs],
+                                 pen=self.colours['Gt'])
+        self.lines['Qt'].setData(x=self.idxs,
+                                 y=self.data['Qt'][self.idxs],
+                                 pen=self.colours['Qt'])
 
 
 class TrainDDPG(TrainPlots):
@@ -214,23 +237,30 @@ class TrainDDPG(TrainPlots):
             print("train data is empty")
             data = {k: [] for k in self.lines.keys()}
 
-        self.lines['loss_critic'].setData(y=data['loss_critic'],
-                                          pen=self.colours['loss_critic'])
-        self.lines['loss_actor'].setData(y=data['loss_actor'],
+        self.lines['loss_critic'].setData(
+            x=self.idxs,
+            y=self.data['loss_critic'][self.idxs],
+            pen=self.colours['loss_critic'][self.idxs])
+        self.lines['loss_actor'].setData(x=self.idxs,
+                                         y=self.data['loss_actor'][self.idxs],
                                          pen=self.colours['loss_actor'])
-        rewards = data['running_reward']
-        rewards_mean = pd.Series(data['running_reward']).ewm(20000).mean()
-        rewards_mean = np.nan_to_num(rewards_mean.values)
-        self.lines['running_reward'].setData(y=rewards,
-                                             pen=self.colours['reward'])
-        self.lines['running_reward_mean'].setData(
-            y=rewards_mean,
-            pen=pg.mkPen({
-                'color': self.colours['reward_mean'],
-                'width': 2
-            }))
-        self.lines['Gt'].setData(y=data['Gt'], pen=self.colours['Gt'])
-        self.lines['Qt'].setData(y=data['Qt'], pen=self.colours['Qt'])
+        # rewards = data['running_reward'][self.idxs]
+        # rewards_mean = pd.Series(data['running_reward']).ewm(20000).mean()
+        # rewards_mean = np.nan_to_num(rewards_mean.values)
+        # self.lines['running_reward'].setData(y=rewards,
+        #                                      pen=self.colours['reward'])
+        # self.lines['running_reward_mean'].setData(
+        #     y=rewards_mean,
+        #     pen=pg.mkPen({
+        #         'color': self.colours['reward_mean'],
+        #         'width': 2
+        #     }))
+        self.lines['Gt'].setData(x=self.idxs,
+                                 y=self.data['Gt'][self.idxs],
+                                 pen=self.colours['Gt'])
+        self.lines['Qt'].setData(x=self.idxs,
+                                 y=self.data['Qt'][self.idxs],
+                                 pen=self.colours['Qt'])
 
 
 class TrainPlotsSACD(TrainPlots):
