@@ -105,7 +105,7 @@ def sortino_shaperA(nstep_buffer, discounts, benchmark=0., exp=2):
                           for dat, discount in zip(nstep_buffer, discounts)])
 
     num = diffs.mean(0)
-    downside = np.where(diffs < 0, diffs, 0.)
+    downside = np.clip(np.where(diffs < 0, diffs, 0.), -1., None)
     denom = ((np.abs(downside)**exp) / (len(diffs) - 1))**(1 / exp)
     denom = denom.sum(0)
     denom_zero_case = np.where(num == 0., 0., 1.)
