@@ -14,6 +14,73 @@ def sum_default(nstep_buffer, discounts):
     ])
 
 
+class DSR:
+    """Differential Sharpe Ratio - Moody and Saffell
+    Currently treats discounted aggregation of rewards indepdnently
+    - doesn't update self.A and self.B for successive rewards
+    """
+    def __init__(self, adaptation_rate, nstep_buffer, discounts):
+        self.n = adaptation_rate
+        self.nstep_buffer = nstep_buffer
+        self.discounts = discounts
+        self.A = 0
+        self.B = 0
+
+    def __call__(self):
+        rewards = sum([
+            discount * self.calculate_dsr(dat.reward)
+            for dat, discount in zip(self.nstep_buffer, self.discounts)
+        ])
+        # as this will be called when popping from the nstep buffer
+        # this is an appropriate place to update params
+        self.update_parameters(self.nstep_buffer[0].reward)
+        return rewards
+
+    def calculate_dsr(self, raw_return):
+        dA = raw_return - self.A
+        dB = raw_return**2 - self.B
+        dsr = (self.B * dA - (self.A * dB) / 2) / (self.B - self.A**2)**(3 / 2)
+        return dsr
+
+    def update_parameters(self, raw_return):
+        dA = raw_return - self.A
+        dB = raw_return**2 - self.B
+        self.A += self.n * dA
+        self.B += self.n * dB
+
+
+class DDR:
+    """Differential Downside Ratio (sortino) - Moody and Saffell """
+    def __init__(self, adaptation_rate, nstep_buffer, discounts):
+        self.n = adaptation_rate
+        self.nstep_buffer = nstep_buffer
+        self.discounts = discounts
+        self.A = 0
+        self.B = 0
+
+    def __call__(self):
+        rewards = sum([
+            discount * self.calculate_ddr(dat.reward)
+            for dat, discount in zip(self.nstep_buffer, self.discounts)
+        ])
+        # as this will be called when popping from the nstep buffer
+        # this is an appropriate place to update params
+        self.update_parameters(self.nstep_buffer[0].reward)
+        return rewards
+
+    def calculate_ddr(self, raw_return):
+        dA = raw_return - self.A
+        dB = min(raw_return, 0)**2 - self.B
+        ddr = (self.B * dA - (self.A * dB) / 2) / (self.B - self.A**2)**(3 / 2)
+        return ddr
+
+    def update_parameters(self, raw_return):
+        dA = raw_return - self.A
+        dB = min(raw_return, 0)**2 - self.B
+        self.A += self.n * dA
+        self.B += self.n * dB
+
+
 global PRINT_I
 PRINT_I = 0
 
@@ -105,7 +172,7 @@ def sortino_shaperA(nstep_buffer, discounts, benchmark=0., exp=2):
                           for dat, discount in zip(nstep_buffer, discounts)])
 
     num = diffs.mean(0)
-    downside = np.clip(np.where(diffs < 0, diffs, 0.), -1., None)
+    downside = np.clip(np.minimum(diffs, 0.), -1., None)
     denom = ((np.abs(downside)**exp) / (len(diffs) - 1))**(1 / exp)
     denom = denom.sum(0)
     denom_zero_case = np.where(num == 0., 0., 1.)
@@ -114,7 +181,7 @@ def sortino_shaperA(nstep_buffer, discounts, benchmark=0., exp=2):
     global PRINT_I
     PRINT_I += 1
     if PRINT_I > 100:
-        print(num, denom, 10.*out, out)
+        print(num, denom, 10. * out, out)
         PRINT_I = 0
     return out
 
@@ -176,34 +243,6 @@ class NStepBuffer:
         #                                  self.discounts)
         self.aggregate_rewards = self.make_reward_shaper(reward_shaper_config)
 
-    def make_reward_shaper(self, shaper_config):
-        """
-        Constructs rewards shapers by binding self._buffer and self.discount
-        to the shaper function using partial - keeps reference to both.
-        """
-        shaper_type = shaper_config['reward_shaper']
-        print('using ', shaper_type, 'reward shaper')
-        if shaper_type in ("cosine", "cosine_similarity",
-                           "cosine_port_shaper"):
-            desired_portfolio = np.array(shaper_config['desired_portfolio'])
-            temp = shaper_config['cosine_temp']
-            return partial(cosine_port_shaper, self._buffer, self.discounts,
-                           desired_portfolio, temp)
-        if shaper_type in ("sortino_shaperA", "sortino_shaperB"):
-            exp = shaper_config["sortino_exp"]
-            sortino_shaper = globals()[shaper_type]
-            return partial(sortino_shaper,
-                           self._buffer,
-                           self.discounts,
-                           exp=exp)
-        if shaper_type in globals():
-            return partial(globals()[shaper_type], self._buffer,
-                           self.discounts)
-        if shaper_type in ('None', None, 'none'):
-            return partial(sum_default, self._buffer, self.discounts)
-        raise NotImplementedError(
-            f"Reward Shaper type {shaper_type} not implemented")
-
     def add(self, sarsd: SARSD) -> None:
         self._buffer.append(sarsd)
 
@@ -245,3 +284,35 @@ class NStepBuffer:
 
     def __len__(self):
         return len(self._buffer)
+
+    def make_reward_shaper(self, shaper_config):
+        """
+        Constructs rewards shapers by binding self._buffer and self.discount
+        to the shaper function using partial - keeps reference to both.
+        """
+        shaper_type = shaper_config['reward_shaper']
+        print('using ', shaper_type, 'reward shaper')
+        if shaper_type in ("cosine", "cosine_similarity",
+                           "cosine_port_shaper"):
+            desired_portfolio = np.array(shaper_config['desired_portfolio'])
+            temp = shaper_config['cosine_temp']
+            return partial(cosine_port_shaper, self._buffer, self.discounts,
+                           desired_portfolio, temp)
+        if shaper_type in ("sortino_shaperA", "sortino_shaperB"):
+            exp = shaper_config["sortino_exp"]
+            sortino_shaper = globals()[shaper_type]
+            return partial(sortino_shaper,
+                           self._buffer,
+                           self.discounts,
+                           exp=exp)
+        if shaper_type in ("DSR", "DDR"):
+            adaptation_rate = shaper_config["adaptation_rate"]
+            return globals()[shaper_type](adaptation_rate, self._buffer,
+                                          self.discounts)
+        if shaper_type in globals():
+            return partial(globals()[shaper_type], self._buffer,
+                           self.discounts)
+        if shaper_type in ('None', None, 'none'):
+            return partial(sum_default, self._buffer, self.discounts)
+        raise NotImplementedError(
+            f"Reward Shaper type {shaper_type} not implemented")
