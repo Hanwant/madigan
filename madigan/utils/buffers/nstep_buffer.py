@@ -1,3 +1,15 @@
+"""
+As reward aggregation is done in the nstep buffer, this module contains
+the different methods for reward aggregation/shaping including:
+DSR
+DDR
+sharpe_shaper (naive)
+sortino_shaperA (naive)
+sortino_shaperB (naive)  - greater contribution from negative rewards
+cosine_port_shaper - cosine similarity between desired portfolio and portfolio
+                     resulting from action
+
+"""
 from functools import partial
 import math
 import numpy as np
@@ -5,6 +17,8 @@ import numba as nb
 from ..data import SARSD
 
 import warnings
+
+EPS = np.finfo(np.float32).eps
 
 
 def sum_default(nstep_buffer, discounts):
@@ -14,7 +28,7 @@ def sum_default(nstep_buffer, discounts):
     ])
 
 
-class DSR:
+class _DSR:
     """Differential Sharpe Ratio - Moody and Saffell
     Currently treats discounted aggregation of rewards indepdnently
     - doesn't update self.A and self.B for successive rewards
@@ -22,24 +36,51 @@ class DSR:
     def __init__(self, adaptation_rate, nstep_buffer, discounts):
         self.n = adaptation_rate
         self.nstep_buffer = nstep_buffer
-        self.discounts = discounts
-        self.A = 0
-        self.B = 0
+        self.discounts = np.array(discounts)
+        self.A = None
+        self.B = None
+        self.i = 0
 
     def __call__(self):
-        rewards = sum([
-            discount * self.calculate_dsr(dat.reward)
-            for dat, discount in zip(self.nstep_buffer, self.discounts)
-        ])
+        """ Called JUST ONCE to determine shape of rewards.
+        Afterwards this implementation is replaced by __main_func__
+        By changing class instance to DSR
+        This was done because __call__ is bound to the class and so
+        could not be monkey patched as normal - without affecting all other
+        instances.
+        """
+        reward = self.nstep_buffer[0].reward
+        if isinstance(reward, float):
+            self.A = 0.
+            self.B = 0.
+        elif isinstance(reward, np.ndarray):
+            self.A = np.zeros(reward.shape[0])
+            self.B = np.zeros(reward.shape[0])
+            self.discounts = self.discounts[:, None]
+        self.__class__ = DSR
+        return self.__main_func__()
+
+    def __main_func__(self):
+        # rewards = sum([
+        #     discount * self.calculate_dsr(dat.reward)
+        #     for dat, discount in zip(self.nstep_buffer, self.discounts)
+        # ]) / len(self.nstep_buffer)
+        rewards = np.array([dat.reward for dat in self.nstep_buffer])
+        rewards = (self.discounts[:len(rewards)] *
+                   self.calculate_dsr(rewards)).sum(0) / len(rewards)
         # as this will be called when popping from the nstep buffer
         # this is an appropriate place to update params
         self.update_parameters(self.nstep_buffer[0].reward)
-        return rewards
+        self.i += 1
+        if self.i % 100 == 0:
+            print(rewards, rewards / len(self.nstep_buffer))
+        return np.clip(rewards, -1., 1.)  # clip to (-1, 1)
 
     def calculate_dsr(self, raw_return):
         dA = raw_return - self.A
         dB = raw_return**2 - self.B
-        dsr = (self.B * dA - (self.A * dB) / 2) / (self.B - self.A**2)**(3 / 2)
+        dsr = (self.B * dA -
+               (self.A * dB) / 2) / (((self.B - self.A**2)**2)**(3 / 4) + EPS)
         return dsr
 
     def update_parameters(self, raw_return):
@@ -49,36 +90,78 @@ class DSR:
         self.B += self.n * dB
 
 
-class DDR:
+class DSR(_DSR):
+    """ After the first time a _DSR instance is called,
+    This class gets patched in."""
+    def __call__(self):
+        return self.__main_func__()
+
+
+class _DDR:
     """Differential Downside Ratio (sortino) - Moody and Saffell """
     def __init__(self, adaptation_rate, nstep_buffer, discounts):
         self.n = adaptation_rate
         self.nstep_buffer = nstep_buffer
-        self.discounts = discounts
-        self.A = 0
-        self.B = 0
+        self.discounts = np.array(discounts)
+        self.A = None
+        self.B = None
+        self.i = 0
 
     def __call__(self):
-        rewards = sum([
-            discount * self.calculate_ddr(dat.reward)
-            for dat, discount in zip(self.nstep_buffer, self.discounts)
-        ])
+        """ Called JUST ONCE to determine shape of rewards.
+        Afterwards this implementation is replaced by __main_func__
+        By Patching in DDR class to this instance
+        """
+        reward = self.nstep_buffer[0].reward
+        if isinstance(reward, float):
+            self.A = 0.
+            self.B = 0.
+        elif isinstance(reward, np.ndarray):
+            self.A = np.zeros(reward.shape[0])
+            self.B = np.zeros(reward.shape[0])
+            self.discounts = self.discounts[:, None]
+            print(self.discounts.shape)
+        self.__class__ = DDR
+        return self.__main_func__()
+
+    def __main_func__(self):
+        # rewards = sum([
+        #     discount * self.calculate_ddr(dat.reward)
+        #     for dat, discount in zip(self.nstep_buffer, self.discounts)
+        # ]) / len(self.nstep_buffer)
+        rewards = np.array([dat.reward for dat in self.nstep_buffer])
+        rewards = (self.discounts[:len(rewards)] *
+                   self.calculate_ddr(rewards)).sum(0) / len(rewards)
         # as this will be called when popping from the nstep buffer
         # this is an appropriate place to update params
         self.update_parameters(self.nstep_buffer[0].reward)
-        return rewards
+        self.i += 1
+        if self.i % 100 == 0:
+            print(rewards)
+        return np.clip(rewards, -1., 1)  # clip to (-1, 1)
 
     def calculate_ddr(self, raw_return):
-        dA = raw_return - self.A
-        dB = min(raw_return, 0)**2 - self.B
-        ddr = (self.B * dA - (self.A * dB) / 2) / (self.B - self.A**2)**(3 / 2)
+        # dA = raw_return - self.A
+        # dB = min(raw_return, 0)**2 - self.B
+        # ddr = (self.B * dA -
+        #        (self.A * dB) / 2) / (((self.B - self.A**2)**2)**(3 / 4) + EPS)
+        ddr = np.where(raw_return > 0.,
+                       (raw_return - self.A / 2) / (np.sqrt(self.B) + EPS),
+                       (self.B * (raw_return - self.A / 2) -
+                        (self.A * raw_return**2) / 2) /
+                       (self.B**(3 / 2) + EPS))
         return ddr
 
     def update_parameters(self, raw_return):
         dA = raw_return - self.A
-        dB = min(raw_return, 0)**2 - self.B
+        dB = np.minimum(raw_return, 0.)**2 - self.B
         self.A += self.n * dA
         self.B += self.n * dB
+
+
+class DDR(_DDR):
+    def __call__(self):
+        return self.__main_func__()
 
 
 global PRINT_I
@@ -307,8 +390,8 @@ class NStepBuffer:
                            exp=exp)
         if shaper_type in ("DSR", "DDR"):
             adaptation_rate = shaper_config["adaptation_rate"]
-            return globals()[shaper_type](adaptation_rate, self._buffer,
-                                          self.discounts)
+            return globals()["_" + shaper_type](adaptation_rate, self._buffer,
+                                                self.discounts)
         if shaper_type in globals():
             return partial(globals()[shaper_type], self._buffer,
                            self.discounts)
