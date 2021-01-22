@@ -301,13 +301,67 @@ void testEnvData(){
   std::cout << env.currentPrices() << "\n";
 }
 
-void testHDFSource(){
-  string filepath="/media/hemu/Data/Markets/FX/working_data_aud_nzd.h5";
-  string mainKey="aud_nzd/10min";
+void testHDFSourceSingle(){
+  using namespace HighFive;
+
+  string filepath="test_envTest.h5";
+  string mainKey="group/dataset";
   string priceKey="midprice";
   string timestampKey="timestamp";
+  File file(filepath, File::ReadWrite | File::Create | File::Truncate);
+  // Eigen::VectorXd price (10);
+  // Eigen::Vector<int, Eigen::Dynamic> timestamps (10);
+  vector<double> price(10);
+  vector<int> timestamps(10);
+  for (int i=0; i<10; i++){
+    price[i] = (double)i;
+    timestamps[i] = i;
+  }
+  std::vector<std::size_t> Dims {10};
+  file.createGroup(mainKey);
+  DataSet priceDataset = file.createDataSet<double>(mainKey+'/'+priceKey, DataSpace(Dims));
+  DataSet timestampsDataset = file.createDataSet<int>(mainKey+'/'+timestampKey, DataSpace(Dims));
+  // H5Easy::dump works without having to createGroup
+  // H5Easy::dump(file, mainKey+'/'+priceKey, price);
+  // H5Easy::dump(file, mainKey+'/'+timestampKey, timestamps);
+  priceDataset.write(price);
+  timestampsDataset.write(timestamps);
+
   HDFSource dataSource(filepath, mainKey, priceKey, timestampKey);
+  std::cout << dataSource.getData() << "\n";
 }
+
+void testHDFSourceSingle(){
+  using namespace HighFive;
+
+  string filepath="test_envTest.h5";
+  string mainKey="group/dataset";
+  string priceKey="midprice";
+  string timestampKey="timestamp";
+  File file(filepath, File::ReadWrite | File::Create | File::Truncate);
+  // Eigen::VectorXd price (10);
+  // Eigen::Vector<int, Eigen::Dynamic> timestamps (10);
+  vector<double> price(10);
+  vector<int> timestamps(10);
+  for (int i=0; i<10; i++){
+    price[i] = (double)i;
+    timestamps[i] = i;
+  }
+  std::vector<std::size_t> Dims {10};
+  file.createGroup(mainKey);
+  DataSet priceDataset = file.createDataSet<double>(mainKey+'/'+priceKey, DataSpace(Dims));
+  DataSet timestampsDataset = file.createDataSet<int>(mainKey+'/'+timestampKey, DataSpace(Dims));
+  // H5Easy::dump works without having to createGroup
+  // H5Easy::dump(file, mainKey+'/'+priceKey, price);
+  // H5Easy::dump(file, mainKey+'/'+timestampKey, timestamps);
+  priceDataset.write(price);
+  timestampsDataset.write(timestamps);
+
+  HDFSource dataSource(filepath, mainKey, priceKey, timestampKey);
+  std::cout << dataSource.getData() << "\n";
+}
+
+
 
 int main(){
 
@@ -317,12 +371,12 @@ int main(){
   std::cout<< "===========================================\n";
   std::cout<< "testPortfolio();\n";
   testPortfolio();
-  // std::cout<< "===========================================\n";
-  // std::cout<< "testAccount();\n";
-  // testAccount();
-  // std::cout<< "===========================================\n";
-  // std::cout<< "testBroker();\n";
-  // testBroker();
+  std::cout<< "===========================================\n";
+  std::cout<< "testAccount();\n";
+  testAccount();
+  std::cout<< "===========================================\n";
+  std::cout<< "testBroker();\n";
+  testBroker();
   std::cout<< "===========================================\n";
   std::cout<< "testTransactionHandling();\n";
   testTransactionHandling();
@@ -339,8 +393,11 @@ int main(){
   std::cout<< "testEnvData();\n";
   testEnvData();
   std::cout<< "===========================================\n";
-  std::cout<< "testHDFSource();\n";
-  testHDFSource();
+  std::cout<< "testHDFSourceSingle();\n";
+  testHDFSourceSingle();
+  std::cout<< "===========================================\n";
+  std::cout<< "testHDFSourceMulti();\n";
+  testHDFSourceMulti();
   std::cout<< "===========================================\n";
   std::cout<< "TESTS COMPLETED\n";
 
