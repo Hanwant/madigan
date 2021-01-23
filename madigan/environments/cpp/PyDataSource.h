@@ -13,12 +13,12 @@ namespace madigan{
                         getData,);
     }
   };
-  class PyHDFSource: public HDFSource{
+  class PyHDFSourceSingle: public HDFSourceSingle{
   public:
-    using HDFSource::HDFSource;
+    using HDFSourceSingle::HDFSourceSingle;
     const PriceVector& getData() override {
       PYBIND11_OVERLOAD(const PriceVector&,
-                        HDFSource,
+                        HDFSourceSingle,
                         getData,);
     }
   };

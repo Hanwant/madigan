@@ -138,7 +138,7 @@ namespace madigan {
           throw ConfigError("config for DataSource type TrendOU/TrendyOU needs data_source_config");
         }
       }
-      else if ( dataSourceType == "HDFSource"){
+      else if ( dataSourceType == "HDFSourceSingle"){
         auto datasource_pydictFound=std::find_if(dict.begin(), dict.end(),
                                          [](const std::pair<pybind11::handle, pybind11::handle>& pair){
                                            return string(pybind11::str(pair.first)) == "data_source_config";
@@ -148,7 +148,7 @@ namespace madigan {
           config = makeHDFSourceConfigFromPyDict(datasource_pydict);
         }
         else{
-          throw ConfigError("config for DataSource type HDFSource needs data_source_config");
+          throw ConfigError("config for DataSource type HDFSourceSingle needs data_source_config");
         }
       }
       else{
@@ -549,7 +549,8 @@ namespace madigan {
   }
 
   Config makeHDFSourceConfigFromPyDict(pybind11::dict datasource_pydict){
-    for (auto key: {"filepath", "main_key", "price_key", "timestamp_key"}){
+    for (auto key: {"filepath", "group_key", "price_key", "timestamp_key",
+                    "cache_size"}){
       auto keyFound=std::find_if(datasource_pydict.begin(), datasource_pydict.end(),
                                  [key](const std::pair<pybind11::handle, pybind11::handle>& pair){
                                    return string(pybind11::str(pair.first)) == key;
@@ -558,11 +559,17 @@ namespace madigan {
         throw ConfigError(string(key)+" key not found in data_source_config in config");
       }
     }
-    Config config{{"data_source_type", "HDFSource"}};
+    Config config{{"data_source_type", "HDFSourceSingle"}};
     Config data_source_config;
     for(auto& item: datasource_pydict){
       string key = string(pybind11::str(item.first));
-      data_source_config[key] = item.second.cast<string>();
+      if (key == "filepath" || key == "group_key" || key == "price_key" ||
+          key == "feature_key" || key == "timestamp_key"){
+        data_source_config[key] = item.second.cast<string>();
+      }
+      else if ( key == "cache_size" || key == "start_time" || key == "end_time"){
+        data_source_config[key] = item.second.cast<int>();
+      }
     }
     config["data_source_config"] = data_source_config;
     return config;

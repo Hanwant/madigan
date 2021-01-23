@@ -95,8 +95,8 @@ namespace madigan{
     else if (dataSourceType == "Composite"){
       return make_unique<Composite>(config);
     }
-    else if (dataSourceType == "HDFSource"){
-      return make_unique<HDFSource>(config);
+    else if (dataSourceType == "HDFSourceSingle"){
+      return make_unique<HDFSourceSingle>(config);
     }
     else{
       std::stringstream ss;
@@ -107,69 +107,293 @@ namespace madigan{
     }
   }
 
-  bool checkKeysPresent(Config config, vector<string> keys){
-    bool allKeysPresent{true};
+  vector<string> checkKeysPresent(Config config, vector<string> keys){
+    // Returns missing keys (if any)
+    vector<string> missing;
     for (auto key: keys){
       if (config.find(key) == config.end()){
-        allKeysPresent=false;
-        throw ConfigError("Config doesn't contain required key: "+key);
+        missing.push_back(key);
       }
     }
-    return allKeysPresent;
+    return missing;
   }
 
-  template<class T>
-  T loadVectorFromHDF(string fname, string mainKey, string vectorKey){
+  template<class T>  // T expected to be an EigenVector
+  T loadVectorFromHDF(string fname, string groupKey, string vectorKey,
+                      std::size_t start=0, std::size_t  size=-1){
     H5Easy::File file(fname, HighFive::File::ReadOnly);
-    string datasetPath = "/"+mainKey+"/"+vectorKey;
+    string datasetPath = "/"+groupKey+"/"+vectorKey;
     size_t len = H5Easy::getSize(file, datasetPath);
+    if (size == -1) size = len;
+    else{
+      len = size;
+    }
     T out(len);
-    out = H5Easy::load<T>(file, datasetPath);
+    HighFive::DataSet dataset = file.getDataSet(datasetPath);
+    dataset.select({start}, {size}).read(out.data());
     return out;
   }
 
-
-  // HDF SOURCE  //////////////////////////////////////////////////////////////////////////
-
-  HDFSource::HDFSource(string filepath, string mainKey, string priceKey,
-                       string timestampKey): filepath(filepath),
-                                             mainKey(mainKey),
-                                             priceKey(priceKey),
-                                             timestampKey(timestampKey)
-  {
-    assets_ = Assets({mainKey});
-    loadData();
+  template<class T>  // T expected to be an EigenMatrix
+  T loadMatrixFromHDF(string filename, string groupKey, string matrixKey,
+                      std::size_t start=0, std::size_t  size=-1){
+    H5Easy::File file(filename, HighFive::File::ReadOnly);
+    string datasetPath = "/"+groupKey+"/"+matrixKey;
+    HighFive::DataSet dataset = file.getDataSet(datasetPath);
+    vector<size_t> shape = dataset.getSpace().getDimensions();
+    if (size == -1) size = shape[0];
+    if (size > shape[0]) size = shape[0];
+    T out(size, shape[1]);
+    dataset.select({start, 0}, {size, shape[1]}).read(out.data());
+    return out;
   }
 
-  HDFSource::HDFSource(Config config){
-    checkKeysPresent(config, {"data_source_config"});
+  template<class T>
+  std::pair<T, T> getBounds(string filepath, string groupKey, string dsetKey){
+    H5Easy::File file(filepath, HighFive::File::ReadOnly);
+    string datasetPath = "/"+groupKey+"/"+dsetKey;
+    // size_t len = H5Easy::getSize(file, datasetPath);
+    HighFive::DataSet dataset = file.getDataSet(datasetPath);
+    vector<size_t> shape = dataset.getSpace().getDimensions();
+    std::pair<T, T> out;
+    dataset.select({0}, {1}).read(&out.first);
+    dataset.select({shape[0]-1}, {1}).read(&out.second);
+    vector<T> full(shape[0]);
+    dataset.read(full.data());
+    return out;
+  }
+
+  template<class T>
+  size_t binarySearchSortedHDFArray(string filepath, string key, T val){
+    H5Easy::File file (filepath, HighFive::File::ReadOnly);
+    HighFive::DataSet dataset = file.getDataSet(key);
+    vector<size_t> shape = dataset.getSpace().getDimensions();
+    int maxTries = log2(shape[0]) + 2;
+    size_t l=0, r=shape[0], m;
+    T buffer;
+    while (l <= r && maxTries -- > 0){
+      m = l + (r-l) / 2;
+      dataset.select({m}, {1}).read(&buffer);
+      if (buffer == val){
+        return m;
+      }
+      if (buffer < val){
+        l = m + 1;
+      }
+      else{
+        r = m - 1;
+      }
+    }
+    return m;
+  }
+
+
+  /////////////////////////////////////////////////////////////////////////////////////////
+  // HDF SOURCE  //////////////////////////////////////////////////////////////////////////
+  /////////////////////////////////////////////////////////////////////////////////////////
+  void HDFSourceSingle::init(){
+    checkKeys();
+    loadAssets();
+    loadDimsInfo();
+    loadData();
+  }
+  HDFSourceSingle::HDFSourceSingle(string filepath, string groupKey, string priceKey,
+                                   string featureKey, string timestampKey,
+                                   std::size_t cacheSize):
+    filepath(filepath),
+    groupKey(groupKey),
+    priceKey(priceKey),
+    featureKey(featureKey),
+    timestampKey(timestampKey),
+    cacheSize(cacheSize)
+  {
+    init();
+  }
+
+  HDFSourceSingle::HDFSourceSingle(string filepath, string groupKey, string priceKey,
+                                   string featureKey, string timestampKey,
+                                   std::size_t cacheSize, std::size_t startTime,
+                                   std::size_t endTime):
+    filepath(filepath),
+    groupKey(groupKey),
+    priceKey(priceKey),
+    featureKey(featureKey),
+    timestampKey(timestampKey),
+    cacheSize(cacheSize),
+    startTime(startTime),
+    endTime(endTime)
+  {
+    init();
+  }
+
+  HDFSourceSingle::HDFSourceSingle(Config config){
+    if (checkKeysPresent(config, {"data_source_config"}).size() !=0){
+      throw ConfigError("Key: data_source_config not in Config");
+    }
     Config params = std::any_cast<Config>(config["data_source_config"]);
-    bool allKeysPresent =
-      checkKeysPresent(params, {"filepath", "main_key","timestamp_key", "price_key"});
-    if (allKeysPresent){
+    vector<string> missing =
+      checkKeysPresent(params, {"filepath", "group_key", "feature_key",
+                                "timestamp_key", "price_key", "cache_size"});
+    if (missing.size() == 0){
       filepath = std::any_cast<string>(params["filepath"]);
-      mainKey = std::any_cast<string>(params["main_key"]);
+      groupKey = std::any_cast<string>(params["group_key"]);
       timestampKey = std::any_cast<string>(params["timestamp_key"]);
       priceKey= std::any_cast<string>(params["price_key"]);
-      assets_ = Assets({mainKey});
-      loadData();
+      featureKey= std::any_cast<string>(params["feature_key"]);
+      cacheSize = (std::size_t) std::any_cast<int>(params["cache_size"]);
+      if (checkKeysPresent(params, {"start_time", "end_time"}).size()==0){
+        startTime = std::any_cast<std::size_t>(params["start_time"]);
+        endTime = std::any_cast<std::size_t>(params["end_time"]);
+      }
+      // Main Init
+      init();
+    }
+    else{
+      stringstream msg;
+      msg << "Missing keys in call to HDFSourceSingle: \n";
+      for (auto& missing_key: missing){
+        msg << missing_key << ", ";
+      }
+      msg << "\n";
+      throw ConfigError(msg.str());
     }
   }
 
-  void HDFSource::loadData(){
-    prices_ = loadVectorFromHDF<PriceVector>(filepath, mainKey, priceKey);
-    timestamps_ = loadVectorFromHDF<TimeVector>(filepath, mainKey, timestampKey);
+  void checkHDFObjForKey(const vector<string>& names, const string& target,
+                         const string& filepath, const string& searchLoc){
+    auto found = std::find(names.begin(), names.end(), target);
+    if (found == names.end()){
+      stringstream msg;
+      msg  << "key: " << target << "not found in " << searchLoc << " in hdfile: ";
+      msg << filepath << "\n";
+      throw ConfigError(msg.str());
+    }
   }
 
-  const PriceVector& HDFSource::getData(){
-    currentPrices_(0) = prices_(currentIdx_);
-    timestamp_ = timestamps_(currentIdx_);
+
+  void HDFSourceSingle::checkKeys(){
+    H5Easy::File file (filepath, HighFive::File::ReadOnly);
+    HighFive::Group group = file.getGroup(groupKey);
+    vector<string> objects = group.listAttributeNames();
+    checkHDFObjForKey(objects, "assets", filepath, groupKey);
+    objects = group.listObjectNames();
+    checkHDFObjForKey(objects, priceKey, filepath, groupKey);
+    checkHDFObjForKey(objects, featureKey, filepath, groupKey);
+    checkHDFObjForKey(objects, timestampKey, filepath, groupKey);
+  }
+
+  void HDFSourceSingle::loadAssets(){
+    H5Easy::File file (filepath, HighFive::File::ReadOnly);
+    HighFive::Group group = file.getGroup(groupKey);
+    HighFive::Attribute attr = group.getAttribute("assets");
+    vector<std::size_t> dims = attr.getSpace().getDimensions();
+    vector<string> assetCodes(dims[0]);
+    attr.read(assetCodes);
+    assets_ = Assets(assetCodes);
+  }
+
+
+  void HDFSourceSingle::loadDimsInfo(){
+    vector<std::size_t> dims;
+    H5Easy::File file (filepath, HighFive::File::ReadOnly);
+    dims = H5Easy::getShape(file, groupKey+'/'+featureKey);
+    // HighFive::Group group = file.getGroup(groupKey);
+    // vector<std::size_t> dims = group.getDataSet(priceKey).getSpace().getDimensions();
+
+    getTimeBounds();
+    findBounds();
+
+    fullDataSetLen_ = boundsIdx_.second - boundsIdx_.first;
+    currentIdx_ = boundsIdx_.first;
+    nfeats_ = dims[1];
+    cacheSize = min(cacheSize, fullDataSetLen_);
+    // data_.resize(min(cacheSize, fullDataSetLen_), nfeats_);
+    currentData_.resize(nfeats_);
+    currentPrices_.resize(1);
+  }
+
+  void HDFSourceSingle::getTimeBounds(){
+    std::pair<size_t, size_t> bounds = getBounds<size_t>(filepath, groupKey, timestampKey);
+    if (startTime == 0 && endTime == 0){  // get time bounds from data
+      // std::pair<size_t, size_t> bounds = getTimeBounds();
+      startTime = bounds.first;
+      endTime = bounds.second;
+    }
+    else{  // validate given timebounds
+      if (!(startTime >= bounds.first && endTime <= bounds.second)){
+        throw std::out_of_range("Given start and endTimes not "
+                                "within bounds found in timestamp data");
+      }
+    }
+  }
+
+  void HDFSourceSingle::findBounds(){
+    // Does Approximate Binary Seach. For startTime and endTime in timestamps
+    // By First doing a normal binary Search and then adjusting if not exact match
+    size_t startIdx = binarySearchSortedHDFArray(filepath, groupKey+'/'+timestampKey,
+                                                 startTime);
+    size_t endIdx = binarySearchSortedHDFArray(filepath, groupKey+'/'+timestampKey,
+                                               endTime);
+    if (endIdx - startIdx < 1){
+      stringstream msg;
+      msg << "dset size only 1!\n";
+      msg << "with startIdx, startTime: " << startIdx << ", " << startTime << "\n";
+      msg << "and endIdx, endTime: " << endIdx << ", " << endTime << "\n";
+      throw std::length_error(msg.str());
+    }
+
+    HighFive::File file(filepath, HighFive::File::ReadOnly);
+    HighFive::DataSet dataset = file.getDataSet(groupKey+'/'+timestampKey);
+    vector<size_t> dims = dataset.getSpace().getDimensions();
+    size_t buff;
+
+    dataset.select({startIdx}, {1}).read(&buff);
+    if (buff == startTime || startIdx == 0){
+      boundsIdx_.first = startIdx;
+    }else boundsIdx_.first = (buff < startTime)? (startIdx+1): startIdx;
+    dataset.select({endIdx}, {1}).read(&buff);
+    if (buff == endTime || endIdx == dims[0] - 1){
+      boundsIdx_.second = endIdx;
+    }else boundsIdx_.second = (buff < endTime)? (endIdx+1): endIdx;
+  }
+
+  void HDFSourceSingle::loadData(){
+    if (currentIdx_ == boundsIdx_.second ){
+      currentIdx_ = boundsIdx_.first;
+    }
+    std::size_t nextCacheSize = min(cacheSize, boundsIdx_.second - currentIdx_);
+    prices_ = loadVectorFromHDF<PriceVector>(filepath, groupKey, priceKey,
+                                             currentIdx_, nextCacheSize);
+    data_ = loadMatrixFromHDF<PriceMatrix>(filepath, groupKey, featureKey,
+                                               currentIdx_, nextCacheSize);
+    timestamps_ = loadVectorFromHDF<TimeVector>(filepath, groupKey, timestampKey,
+                                                currentIdx_, nextCacheSize);
+  }
+
+  const PriceVector& HDFSourceSingle::getData(){
+    currentPrices_(0) = prices_(currentCacheIdx_);
+    currentData_ = data_.row(currentCacheIdx_);
+    timestamp_ = timestamps_(currentCacheIdx_);
+    iterDataSource();
+    return currentData_;
+  }
+
+  void HDFSourceSingle::iterDataSource(){
     // restart from beginning after hitting end
-    currentIdx_ = (currentIdx_ + 1) % prices_.size();
+    currentIdx_++;
+    currentCacheIdx_++;
+    if (currentCacheIdx_ == cacheSize || currentIdx_ == fullDataSetLen_){
+      if (cacheSize < fullDataSetLen_){
+        currentIdx_ = boundsIdx_.first;
+        currentCacheIdx_ = 0;
+      }else{
+        loadData();
+        currentCacheIdx_ = 0;
+      }
+    }
     // For negative indices:
     // currentIdx_ = (((currentIdx_ + 1) % prices_.size()) + prices_.size()) % prices_.size();
 
-    return currentPrices_;
   }
 
   // COMPOSITE SOURCE  //////////////////////////////////////////////////////////////////////////
@@ -254,11 +478,13 @@ namespace madigan{
   }
 
   Synth::Synth(Config config){
-    checkKeysPresent(config, {"data_source_config"});
+    if (checkKeysPresent(config, {"data_source_config"}).size() !=0){
+      throw ConfigError("Key: data_source_config not in Config");
+    }
     Config params = std::any_cast<Config>(config["data_source_config"]);
-    bool allKeysPresent =
+    vector<string> missing =
       checkKeysPresent(params, {"freq", "mu", "amp", "phase", "dX"});
-    if (allKeysPresent){
+    if (missing.size() == 0){
       vector<double> freq = std::any_cast<vector<double>>(params["freq"]);
       vector<double> mu = std::any_cast<vector<double>>(params["mu"]);
       vector<double> amp = std::any_cast<vector<double>>(params["amp"]);
@@ -274,11 +500,13 @@ namespace madigan{
 
     }
     else{
-      vector<double> freq{1., 0.3, 2., 0.5};
-      vector<double> mu{2., 2.1, 2.2, 2.3};
-      vector<double> amp{1., 1.2, 1.3, 1.};
-      vector<double> phase{0., 1., 2., 1.};
-      initParams(freq, mu, amp, phase, 0.01, 0.);
+      stringstream msg;
+      msg << "Missing keys in call to Synth: \n";
+      for (auto& missing_key: missing){
+        msg << missing_key << ", ";
+      }
+      msg << "\n";
+      throw ConfigError(msg.str());
     }
   }
 

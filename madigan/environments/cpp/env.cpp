@@ -98,7 +98,7 @@ PYBIND11_MODULE(env, m){
   py::class_<TrendOU, DataSourceTick>_TrendOU(m, "TrendOU");
   py::class_<TrendyOU, DataSourceTick>_TrendyOU(m, "TrendyOU");
   py::class_<Composite, DataSourceTick>_Composite(m, "Composite");
-  py::class_<HDFSource, DataSourceTick, PyHDFSource>_HDFSource(m, "HDFSource");
+  py::class_<HDFSourceSingle, DataSourceTick, PyHDFSourceSingle>_HDFSourceSingle(m, "HDFSourceSingle");
 
   py::class_<Portfolio>_Portfolio(m, "Portfolio");
   py::class_<Account>_Account(m, "Account");
@@ -373,19 +373,29 @@ PYBIND11_MODULE(env, m){
     .def("currentData", (PriceVector& (Composite::*) ()) &Composite::currentData,
          "Get current data - make be raw prices or preprocessed or anything else",
          py::return_value_policy::reference);
-  _HDFSource.def(py::init<string, string, string, string>(),
-                 py::arg("filepath"), py::arg("mainKey"),
-                 py::arg("priceKeu"), py::arg("timestampKey"))
-    .def_property_readonly("nAssets", &HDFSource::nAssets,
+  _HDFSourceSingle.def(py::init<string, string, string, string, string, std::size_t>(),
+                       py::arg("filepath"), py::arg("groupKey"),
+                       py::arg("priceKey"), py::arg("featureKey"),
+                       py::arg("timestampKey"), py::arg("cacheSize"))
+    .def(py::init<string, string, string, string, string,
+         std::size_t, std::size_t, std::size_t>(),
+         py::arg("filepath"), py::arg("groupKey"),
+         py::arg("priceKey"), py::arg("featureKey"),
+         py::arg("timestampKey"), py::arg("cacheSize"),
+         py::arg("startTime"), py::arg("endTime"))
+    .def_property_readonly("nAssets", &HDFSourceSingle::nAssets,
                            "number of Assets - length of currentPrices",
                            py::return_value_policy::move)
-    .def_property_readonly("currentTime", &HDFSource::currentTime,
+    .def_property_readonly("currentTime", &HDFSourceSingle::currentTime,
                            "get the current timestamp",
                            py::return_value_policy::move)
-    .def("getData", (PriceVector& (HDFSource::*) ()) &HDFSource::getData,
+    .def_property_readonly("nfeats", &HDFSourceSingle::nfeats,
+                           "get the number of features",
+                           py::return_value_policy::move)
+    .def("getData", (PriceVector& (HDFSourceSingle::*) ()) &HDFSourceSingle::getData,
          "Get Next data points",
          py::return_value_policy::reference)
-    .def("currentPrices", (PriceVector& (HDFSource::*) ()) &HDFSource::currentPrices,
+    .def("currentPrices", (PriceVector& (HDFSourceSingle::*) ()) &HDFSourceSingle::currentPrices,
          "Get current prices",
          py::return_value_policy::reference);
 

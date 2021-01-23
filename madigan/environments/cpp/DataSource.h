@@ -68,9 +68,10 @@ namespace madigan{
     Assets assets() const {return assets_; }
     virtual const PriceMatrix& getData()=0;
     virtual const PriceMatrix& currentData() const=0;
-    virtual const PriceMatrix& currentPrices() const=0;
+    virtual const PriceVector& currentPrices() const=0;
     virtual void reset()=0;
     virtual std::size_t currentTime() const =0;
+    virtual bool isDateTime() const { return false; }
   protected:
     Assets assets_;
   };
@@ -85,21 +86,79 @@ namespace madigan{
 
 
   // The following DataSources load data from files
-  class HDFSource: public DataSourceTick{
+  class HDFSourceSingle: public DataSourceTick{
   public:
     string filepath;
-    string mainKey;
-    string timestampKey;
+    string groupKey;
     string priceKey;
+    string featureKey;
+    string timestampKey;
+    std::size_t cacheSize;
+    std::size_t startTime{0};
+    std::size_t endTime{0};
 
   public:
-    HDFSource(string datapath, string mainKey,
-              string pricekey, string timestampKey);
-    HDFSource(Config config);
-    HDFSource(pybind11::dict config): HDFSource(makeConfigFromPyDict(config)){}
-    void loadData();
+    HDFSourceSingle(string datapath, string groupKey,
+                    string pricekey, string featureKey,
+                    string timestampKey, std::size_t cacheSize);
+    HDFSourceSingle(string datapath, string groupKey,
+                    string pricekey, string featureKey,
+                    string timestampKey, std::size_t cacheSize,
+                    std::size_t startTime, std::size_t endTime);
+    HDFSourceSingle(Config config);
+    HDFSourceSingle(pybind11::dict config): HDFSourceSingle(makeConfigFromPyDict(config)){}
     const PriceVector& getData();
-    const PriceVector& currentData() const{return currentPrices_;}
+    const PriceVector& currentData() const{return currentData_;}
+    const PriceVector& currentPrices() const{return currentPrices_;}
+    void reset(){}
+    int size(){ return fullDataSetLen_; }
+    int nfeats(){ return nfeats_; }
+    std::size_t currentTime() const{return timestamp_;}
+    bool isDateTime() const override { return true; }
+    std::pair<size_t, size_t> boundsIdx() const {return boundsIdx_; }
+
+  private:
+    void init();
+    void checkKeys();
+    void loadAssets();
+    void loadDimsInfo();
+    void loadData();
+    void loadFromFile();
+    void iterDataSource();
+    void getTimeBounds();
+    void findBounds();
+
+  private:
+    PriceMatrix data_;  // (min(cacheLen, fullDataSetlen), nfeats_)
+    PriceVector prices_;  // (min(cacheLen, fullDataSetlen), )
+    PriceVector currentData_; // (nfeats_, )
+    PriceVector currentPrices_; // (1, )
+    TimeVector timestamps_;  // (min(cacheLen, fullDatasetLen), )
+    std::size_t timestamp_;
+    std::size_t fullDataSetLen_;
+    std::size_t currentIdx_{0};
+    std::size_t currentCacheIdx_{0};
+    std::pair<size_t, size_t> boundsIdx_;
+    int nfeats_;
+  };
+
+  class HDFSourceMulti: public DataSource<PriceMatrix>{
+  public:
+    string filepath;
+    string groupKey;
+    string timestampKey;
+    string priceKey;
+    int cacheSize;
+
+  public:
+    HDFSourceMulti(string datapath, string groupKey,
+                   string pricekey, string timestampKey,
+                   int cacheSize);
+    HDFSourceMulti(Config config);
+    HDFSourceMulti(pybind11::dict config): HDFSourceMulti(makeConfigFromPyDict(config)){}
+    void loadData();
+    const PriceMatrix& getData();
+    const PriceMatrix& currentData() const{return currentData_;}
     const PriceVector& currentPrices() const{return currentPrices_;}
     void reset(){}
     int size(){ return prices_.size();}
@@ -109,7 +168,9 @@ namespace madigan{
   private:
     PriceVector prices_;
     PriceVector currentPrices_{1};
-    TimeVector timestamps_;
+    PriceMatrix data_;
+    PriceMatrix currentData_;
+    Eigen::Vector<int, Eigen::Dynamic> timestamps_;
     std::size_t timestamp_;
     int currentIdx_{0};
   };

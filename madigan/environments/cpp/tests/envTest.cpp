@@ -301,34 +301,19 @@ void testEnvData(){
   std::cout << env.currentPrices() << "\n";
 }
 
-void testHDFSourceSingle(){
-  using namespace HighFive;
-
-  string filepath="test_envTest.h5";
-  string mainKey="group/dataset";
-  string priceKey="midprice";
-  string timestampKey="timestamp";
-  File file(filepath, File::ReadWrite | File::Create | File::Truncate);
-  // Eigen::VectorXd price (10);
-  // Eigen::Vector<int, Eigen::Dynamic> timestamps (10);
-  vector<double> price(10);
-  vector<int> timestamps(10);
-  for (int i=0; i<10; i++){
-    price[i] = (double)i;
-    timestamps[i] = i;
-  }
-  std::vector<std::size_t> Dims {10};
-  file.createGroup(mainKey);
-  DataSet priceDataset = file.createDataSet<double>(mainKey+'/'+priceKey, DataSpace(Dims));
-  DataSet timestampsDataset = file.createDataSet<int>(mainKey+'/'+timestampKey, DataSpace(Dims));
-  // H5Easy::dump works without having to createGroup
-  // H5Easy::dump(file, mainKey+'/'+priceKey, price);
-  // H5Easy::dump(file, mainKey+'/'+timestampKey, timestamps);
-  priceDataset.write(price);
-  timestampsDataset.write(timestamps);
-
-  HDFSource dataSource(filepath, mainKey, priceKey, timestampKey);
-  std::cout << dataSource.getData() << "\n";
+template<class T>  // T expected to be an EigenMatrix
+T loadMatrixFromHDF(string fname, string groupKey, string vectorKey,
+                    std::size_t start=0, std::size_t  size=-1){
+  H5Easy::File file(fname, HighFive::File::ReadOnly);
+  string datasetPath = "/"+groupKey+"/"+vectorKey;
+  vector<size_t> shape = H5Easy::getShape(file, datasetPath);
+  // T out(len);
+  // out = H5Easy::load<T>(file, datasetPath);
+  if (size == -1) size = shape[0];
+  T out(size, shape[1]);
+  HighFive::DataSet dataset = file.getDataSet(datasetPath);
+  dataset.select({start, 0}, {size, shape[1]}).read(out.data());
+  return out;
 }
 
 void testHDFSourceSingle(){
@@ -337,29 +322,119 @@ void testHDFSourceSingle(){
   string filepath="test_envTest.h5";
   string mainKey="group/dataset";
   string priceKey="midprice";
+  string featureKey="feats";
   string timestampKey="timestamp";
+  vector<string> assets{"Test"};
+  {
   File file(filepath, File::ReadWrite | File::Create | File::Truncate);
   // Eigen::VectorXd price (10);
   // Eigen::Vector<int, Eigen::Dynamic> timestamps (10);
   vector<double> price(10);
-  vector<int> timestamps(10);
+  vector<vector<double>> feats(10, vector<double>(1, 0.));
+  vector<std::uint64_t> timestamps(10);
   for (int i=0; i<10; i++){
     price[i] = (double)i;
-    timestamps[i] = i;
+    feats[i][0] = (double)i*i*i;
+    timestamps[i] = i * i;
   }
-  std::vector<std::size_t> Dims {10};
-  file.createGroup(mainKey);
-  DataSet priceDataset = file.createDataSet<double>(mainKey+'/'+priceKey, DataSpace(Dims));
-  DataSet timestampsDataset = file.createDataSet<int>(mainKey+'/'+timestampKey, DataSpace(Dims));
-  // H5Easy::dump works without having to createGroup
+  std::vector<std::size_t> featDims {10, 1};
+  std::vector<std::size_t> vecDims {10};
+  Group group = file.createGroup(mainKey);
+  Attribute attr = group.createAttribute("assets", assets);
+  attr.write(assets);
+
+  DataSet priceDataset = file.createDataSet<double>(mainKey+'/'+priceKey,
+                                                    DataSpace(vecDims));
+  DataSet featsDataset = file.createDataSet<double>(mainKey+'/'+featureKey,
+                                                    DataSpace(featDims));
+  DataSet timestampsDataset = file.createDataSet<std::uint64_t>(mainKey+'/'+timestampKey,
+                                                         DataSpace(vecDims));
+  priceDataset.write(price);
+  featsDataset.write(feats);
+  timestampsDataset.write(timestamps);
+  // H5Easy Works too
   // H5Easy::dump(file, mainKey+'/'+priceKey, price);
   // H5Easy::dump(file, mainKey+'/'+timestampKey, timestamps);
-  priceDataset.write(price);
-  timestampsDataset.write(timestamps);
+  // {
+  //   PriceMatrix data;
+  //   DataSet dset = file.getDataSet(mainKey+'/'+priceKey);
+  //   vector<size_t> shape = H5Easy::getShape(file, mainKey+'/'+priceKey);
+  //   data.resize(shape[0], shape[1]);
+  //   dset.select({0, 0}, {5, 1}).read(data.data());
+  //   std::cout << data << "\n";
+  //   std::cout <<"done explicit load\n";
+  // }
 
-  HDFSource dataSource(filepath, mainKey, priceKey, timestampKey);
-  std::cout << dataSource.getData() << "\n";
+  }
+
+  HDFSourceSingle dataSource(filepath, mainKey, priceKey, featureKey,
+                             timestampKey, 10);
+  dataSource.getData(); dataSource.getData(); dataSource.getData();
+  std::cout << "Prices: " << dataSource.currentPrices() << "\n";
+  std::cout << "Feats: " << dataSource.currentData() << "\n";
+  std::cout << "Assets: " << dataSource.assets() << "\n";
+  std::cout << "Time Bounds: " << dataSource.startTime << ", " << dataSource.endTime << "\n";
+  std::cout << "Bounds: " << dataSource.boundsIdx().first << ", "
+            << dataSource.boundsIdx().second << "\n";
+
+  // Check Specification of time range - should end up with boundsIdx (1, 8)
+  HDFSourceSingle dataSource2(filepath, mainKey, priceKey, featureKey,
+                              timestampKey, 10, 1, 63);
+
+  dataSource2.getData(); dataSource2.getData(); dataSource2.getData();
+  std::cout << "Prices: " << dataSource2.currentPrices() << "\n";
+  std::cout << "Feats: " << dataSource2.currentData() << "\n";
+  std::cout << "Assets: " << dataSource2.assets() << "\n";
+  std::cout << "Time Bounds: " << dataSource2.startTime << ", " << dataSource2.endTime << "\n";
+  std::cout << "Bounds: " << dataSource2.boundsIdx().first << ", "
+            << dataSource2.boundsIdx().second << "\n";
+
+  assert(dataSource2.boundsIdx().first == 1);
+  assert(dataSource2.boundsIdx().second == 8);
+
+  // If startTime or endTime is outside of range of dataset
+  // raise exception
+  bool caught = false;
+  try{
+    HDFSourceSingle dataSource3(filepath, mainKey, priceKey, featureKey,
+                                timestampKey, 10, 0, 82);
+  } catch (const std::out_of_range& oor){
+    std::cerr<< "Expected exception caught: \n";
+    std::cerr << oor.what() << "\n";
+    caught=true;
+  }
+  assert(caught);
 }
+
+// void testHDFSourceMulti(){
+//   using namespace HighFive;
+
+//   string filepath="test_envTest.h5";
+//   string mainKey="group/dataset";
+//   string priceKey="midprice";
+//   string timestampKey="timestamp";
+//   File file(filepath, File::ReadWrite | File::Create | File::Truncate);
+//   // Eigen::VectorXd price (10);
+//   // Eigen::Vector<int, Eigen::Dynamic> timestamps (10);
+//   vector<double> price(10);
+//   vector<int> timestamps(10);
+//   for (int i=0; i<10; i++){
+//     price[i] = (double)i;
+//     timestamps[i] = i;
+//   }
+//   std::vector<std::size_t> Dims {10};
+//   file.createGroup(mainKey);
+//   DataSet priceDataset = file.createDataSet<double>(mainKey+'/'+priceKey, DataSpace(Dims));
+//   DataSet timestampsDataset = file.createDataSet<int>(mainKey+'/'+timestampKey, DataSpace(Dims));
+//   // H5Easy::dump works without having to createGroup
+//   // H5Easy::dump(file, mainKey+'/'+priceKey, price);
+//   // H5Easy::dump(file, mainKey+'/'+timestampKey, timestamps);
+//   priceDataset.write(price);
+//   timestampsDataset.write(timestamps);
+
+//   HDFSource dataSource(filepath, mainKey, priceKey, timestampKey);
+//   std::cout << dataSource.getData() << "\n";
+// }
 
 
 
@@ -395,9 +470,9 @@ int main(){
   std::cout<< "===========================================\n";
   std::cout<< "testHDFSourceSingle();\n";
   testHDFSourceSingle();
-  std::cout<< "===========================================\n";
-  std::cout<< "testHDFSourceMulti();\n";
-  testHDFSourceMulti();
+  // std::cout<< "===========================================\n";
+  // std::cout<< "testHDFSourceMulti();\n";
+  // testHDFSourceMulti();
   std::cout<< "===========================================\n";
   std::cout<< "TESTS COMPLETED\n";
 

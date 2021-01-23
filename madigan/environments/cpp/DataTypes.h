@@ -22,7 +22,8 @@ namespace madigan{
   typedef Eigen::VectorXi ActionVector;
   typedef Eigen::VectorXd PriceVector;
   typedef Eigen::Map<const PriceVector> PriceVectorMap;
-  typedef Eigen::MatrixXd PriceMatrix;
+  // typedef Eigen::MatrixXd PriceMatrix;
+  typedef Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> PriceMatrix;
   typedef Eigen::Map<const PriceMatrix> PriceMatrixMap;
   typedef Eigen::VectorXd AmountVector;
   typedef Eigen::VectorXd Ledger;
