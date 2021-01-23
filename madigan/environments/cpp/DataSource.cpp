@@ -199,9 +199,10 @@ namespace madigan{
   }
 
   void HDFSourceSingle::reset(){
-    currentIdx_ = 0;
-    currentCacheIdx_ = 0;
-    loadData();
+    // Carry on
+    // currentIdx_ = 0;
+    // currentCacheIdx_ = 0;
+    // loadData();
   }
 
   HDFSourceSingle::HDFSourceSingle(string filepath, string groupKey, string priceKey,

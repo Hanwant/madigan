@@ -50,7 +50,7 @@ class Trainer:
         self.agent = agent
         self.agent.to(device)
         self.config = config
-        self.test_env = make_env(config)
+        self.test_env = make_env(config, test=True)
         self.test_preprocessor = make_preprocessor(config,
                                                    self.test_env.nAssets)
         self.train_steps = config.train_steps
@@ -276,8 +276,9 @@ class Trainer:
         self.agent.initialize_buffer()
         test_metrics.append((i, self.agent.test_episode()))
 
-        # summary = test_summary(pd.DataFrame(test_metrics[-1][1]),
-        #                        self.test_summary_timeframes, self.assets,)
+        summary = test_summary(pd.DataFrame(test_metrics[-1][1]),
+                               self.test_summary_timeframes, self.assets,
+                               is_datetime=self.agent.env.isDateTime)
 
         self.logger.info("Starting Training")
         train_loop = self.agent.step(nsteps, log_freq=5000)

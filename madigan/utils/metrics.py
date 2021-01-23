@@ -104,6 +104,7 @@ def test_summary(test_metrics: Union[dict, pd.DataFrame],
         )
     if is_datetime:
         timestamps = pd.to_datetime(df.index).values.astype(np.int64)
+        timeframes = [(tf_name, tf.value) for (tf_name, tf) in timeframes]
     else:
         timestamps = df.index.values.astype(np.int64)
 

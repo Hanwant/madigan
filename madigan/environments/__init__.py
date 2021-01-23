@@ -1,8 +1,14 @@
-from .cpp.build import Env, Assets
+import copy
 import numpy as np
-# from .synth import Synth
+from .cpp.build import Env, Assets
 
-def make_env(config):
+def make_env(config, test=False):
+    config = copy.deepcopy(config)
+    if test:
+        if 'data_source_config_test' in config.keys():
+            config["data_source_config"] = config["data_source_config_test"]
+        else:
+            print("using default data_source_config as test_config")
     if config.env_type in ("Synth", ):
         if config.data_source_config is not None:
             env = Env(config.data_source_type, config.init_cash, config)

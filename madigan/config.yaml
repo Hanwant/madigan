@@ -49,7 +49,7 @@ agent_configs:
   B: /home/hemu/madigan/experiments/IQN_OU_Triple_Decreasing_PER_Test/config.yaml
 agent_type: IQN
 basepath: /media/hemu/Data/madigan/experiments/
-data_source_config:
+# data_source_config:
   # OUPair: 
   #   data_source_config:
   #     phi: 0.04
@@ -215,6 +215,13 @@ data_source_config:
   feature_key: features
   timestamp_key: timestamps
   cache_size: 1000000
+data_source_config_test:
+  filepath: /media/hemu/Data/Markets/Crypto/CME/brti_rolled.hdf5
+  group_key: min
+  price_key: price
+  feature_key: features
+  timestamp_key: timestamps
+  cache_size: 10000
 data_source_type: HDFSourceSingle
 discrete_action_atoms: 3
 discrete_actions: true
