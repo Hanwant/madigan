@@ -49,6 +49,7 @@ namespace madigan{
   class DataSource<PriceVector>{
   public:
     int nAssets() const{ return assets_.size();}
+    virtual int nFeats() const =0;
     Assets assets() const { return assets_; }
 
     virtual const PriceVector& getData()=0;
@@ -65,6 +66,7 @@ namespace madigan{
   class DataSource<PriceMatrix>{
   public:
     int nAssets() const{ return assets_.size();}
+    virtual int nFeats() const=0;
     Assets assets() const {return assets_; }
     virtual const PriceMatrix& getData()=0;
     virtual const PriceMatrix& currentData() const=0;
@@ -110,9 +112,12 @@ namespace madigan{
     const PriceVector& getData();
     const PriceVector& currentData() const{return currentData_;}
     const PriceVector& currentPrices() const{return currentPrices_;}
-    void reset(){}
-    int size(){ return fullDataSetLen_; }
-    int nfeats(){ return nfeats_; }
+    void reset();
+    size_t size() const { return fullDataSetLen_; }
+    size_t currentCacheSize() const { return currentCacheSize_; }
+    int nFeats() const { return nFeats_; }
+    size_t currentIdx() const { return currentIdx_; }
+    size_t currentCacheIdx() const { return currentCacheIdx_; }
     std::size_t currentTime() const{return timestamp_;}
     bool isDateTime() const override { return true; }
     std::pair<size_t, size_t> boundsIdx() const {return boundsIdx_; }
@@ -138,8 +143,9 @@ namespace madigan{
     std::size_t fullDataSetLen_;
     std::size_t currentIdx_{0};
     std::size_t currentCacheIdx_{0};
+    std::size_t currentCacheSize_;
     std::pair<size_t, size_t> boundsIdx_;
-    int nfeats_;
+    int nFeats_;
   };
 
   class HDFSourceMulti: public DataSource<PriceMatrix>{
@@ -186,9 +192,10 @@ namespace madigan{
       Composite(makeConfigFromPyDict(config)){}
     const PriceVector& getData();
     const PriceVector& currentData() const{return currentData_;}
-    const PriceVector& currentPrices() const{return currentData_;}
+    const PriceVector& currentPrices() const{return currentPrices_;}
     std::size_t currentTime() const{return timestamp_;}
     const vector<std::unique_ptr<DataSourceTick>>& dataSources() const{ return dataSources_;}
+    int nFeats() const { return nFeats_; }
     void reset() {for (auto& source: dataSources_){
         source->reset();
       }}
@@ -197,6 +204,7 @@ namespace madigan{
     PriceVector currentPrices_;
     PriceVector currentData_;
     std::size_t timestamp_;
+    int nFeats_;
 
   };
 
@@ -217,6 +225,7 @@ namespace madigan{
     const pybind11::array_t<double> getData_np() ;
     const PriceVector& currentData() const{ return currentData_;}
     const PriceVector& currentPrices() const{ return currentData_;}
+    int nFeats() const { return nAssets(); }
     void reset(){}
     std::size_t currentTime() const { return timestamp_; }
 
@@ -254,6 +263,7 @@ namespace madigan{
     const PriceVector& getData() ;
     const PriceVector& currentData() const{ return currentData_;}
     const PriceVector& currentPrices() const{ return currentData_;}
+    int nFeats() const { return nAssets(); }
     void reset(){}
     std::size_t currentTime() const { return timestamp_; }
   protected:
@@ -292,6 +302,7 @@ namespace madigan{
     const PriceVector& currentData() const{ return currentData_;}
     const PriceVector& currentPrices() const{ return currentData_;}
     double getProcess(int i);
+    int nFeats() const { return nAssets(); }
     void reset();
     std::size_t currentTime() const { return timestamp_; }
   protected:
@@ -349,6 +360,7 @@ namespace madigan{
     const PriceVector& getData() ;
     const PriceVector& currentData() const{ return currentData_;}
     const PriceVector& currentPrices() const{ return currentData_;}
+    int nFeats() const { return nAssets(); }
     double getProcess(int i);
     void reset();
     std::size_t currentTime() const { return timestamp_; }
@@ -418,6 +430,7 @@ namespace madigan{
     const pybind11::array_t<double> getData_np() ;
     const PriceVector& currentData() const{ return currentData_;}
     const PriceVector& currentPrices() const{ return currentData_;}
+    int nFeats() const { return nAssets(); }
     void reset(){}
     std::size_t currentTime() const { return timestamp_; }
 
@@ -446,6 +459,7 @@ namespace madigan{
     const pybind11::array_t<double> getData_np() ;
     const PriceVector& currentData() const{ return currentData_;}
     const PriceVector& currentPrices() const{ return currentData_;}
+    int nFeats() const { return nAssets(); }
     void reset(){}  // doesn't need to do anything
     std::size_t currentTime() const { return timestamp_; }
 
@@ -477,6 +491,7 @@ namespace madigan{
     const pybind11::array_t<double> getData_np() ;
     const PriceVector& currentData() const{ return currentData_;}
     const PriceVector& currentPrices() const{ return currentData_;}
+    int nFeats() const { return nAssets(); }
     void reset();
     std::size_t currentTime() const { return timestamp_; }
 
@@ -511,6 +526,7 @@ namespace madigan{
     const pybind11::array_t<double> getData_np() ;
     const PriceVector& currentData() const{ return currentData_;}
     const PriceVector& currentPrices() const{ return currentData_;}
+    int nFeats() const { return nAssets(); }
     void reset();
     std::size_t currentTime() const { return timestamp_; }
 
@@ -545,6 +561,7 @@ namespace madigan{
     const PriceVector& getData();
     const PriceVector& currentData() const{ return currentData_;}
     const PriceVector& currentPrices() const{ return currentData_;}
+    int nFeats() const { return nAssets(); }
     void reset();
     std::size_t currentTime() const { return timestamp_; }
 
@@ -593,6 +610,7 @@ namespace madigan{
     const virtual PriceVector& getData() ;
     const PriceVector& currentData() const{ return currentData_;}
     const PriceVector& currentPrices() const{ return currentData_;}
+    int nFeats() const { return nAssets(); }
     void reset();
     std::size_t currentTime() const { return timestamp_; }
 
@@ -648,6 +666,7 @@ namespace madigan{
     const PriceVector& getData() ;
     const PriceVector& currentData() const{ return currentData_;}
     const PriceVector& currentPrices() const{ return currentData_;}
+    int nFeats() const { return nAssets(); }
     void reset();
     std::size_t currentTime() const { return timestamp_; }
 

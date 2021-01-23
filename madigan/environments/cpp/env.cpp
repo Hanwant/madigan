@@ -187,6 +187,8 @@ PYBIND11_MODULE(env, m){
     .def_property_readonly("currentTime", &Synth::currentTime,
                            "get the current timestamp",
                            py::return_value_policy::move)
+    .def_property_readonly("nFeats", &Synth::nFeats,
+                           "get the number of features")
     .def("getData", (PriceVector& (Synth::*) ()) &Synth::getData,
          "Get Next data points",
          py::return_value_policy::reference)
@@ -208,6 +210,8 @@ PYBIND11_MODULE(env, m){
     .def_property_readonly("currentTime", &SawTooth::currentTime,
                            "get the current timestamp",
                            py::return_value_policy::move)
+    .def_property_readonly("nFeats", &SawTooth::nFeats,
+                           "get the number of features")
     .def("getData", (PriceVector& (SawTooth::*) ()) &SawTooth::getData,
          "Get Next data points",
          py::return_value_policy::reference)
@@ -226,6 +230,8 @@ PYBIND11_MODULE(env, m){
     .def_property_readonly("currentTime", &Triangle::currentTime,
                            "get the current timestamp",
                            py::return_value_policy::move)
+    .def_property_readonly("nFeats", &Triangle::nFeats,
+                           "get the number of features")
     .def("getData", (PriceVector& (Triangle::*) ()) &Triangle::getData,
          "Get Next data points",
          py::return_value_policy::reference)
@@ -244,6 +250,8 @@ PYBIND11_MODULE(env, m){
     .def_property_readonly("currentTime", &SineAdder::currentTime,
                            "get the current timestamp",
                            py::return_value_policy::move)
+    .def_property_readonly("nFeats", &SineAdder::nFeats,
+                           "get the number of features")
     .def("getData", (PriceVector& (SineAdder::*) ()) &SineAdder::getData,
          "Get Next data points",
          py::return_value_policy::reference)
@@ -263,6 +271,8 @@ PYBIND11_MODULE(env, m){
     .def_property_readonly("currentTime", &SineDynamic::currentTime,
                            "get the current timestamp",
                            py::return_value_policy::move)
+    .def_property_readonly("nFeats", &SineDynamic::nFeats,
+                           "get the number of features")
     .def("getData", (PriceVector& (SineDynamic::*) ()) &SineDynamic::getData,
          "Get Next data points",
          py::return_value_policy::reference)
@@ -288,6 +298,8 @@ PYBIND11_MODULE(env, m){
     .def_property_readonly("currentTime", &SimpleTrend::currentTime,
                            "get the current timestamp",
                            py::return_value_policy::move)
+    .def_property_readonly("nFeats", &SimpleTrend::nFeats,
+                           "get the number of features")
     .def("getData", (PriceVector& (SimpleTrend::*) ()) &SimpleTrend::getData,
          "Get Next data points",
          py::return_value_policy::reference)
@@ -313,6 +325,8 @@ PYBIND11_MODULE(env, m){
     .def_property_readonly("currentTime", &TrendOU::currentTime,
                            "get the current timestamp",
                            py::return_value_policy::move)
+    .def_property_readonly("nFeats", &TrendOU::nFeats,
+                           "get the number of features")
     .def("getData", (PriceVector& (TrendOU::*) ()) &TrendOU::getData,
          "Get Next data points",
          py::return_value_policy::reference)
@@ -338,6 +352,8 @@ PYBIND11_MODULE(env, m){
     .def_property_readonly("currentTime", &TrendyOU::currentTime,
                            "get the current timestamp",
                            py::return_value_policy::move)
+    .def_property_readonly("nFeats", &TrendyOU::nFeats,
+                           "get the number of features")
     .def("getData", (PriceVector& (TrendyOU::*) ()) &TrendyOU::getData,
          "Get Next data points",
          py::return_value_policy::reference)
@@ -351,6 +367,8 @@ PYBIND11_MODULE(env, m){
     .def_property_readonly("nAssets", &Composite::nAssets,
                            "number of Assets - length of currentPrices",
                            py::return_value_policy::move)
+    .def_property_readonly("nFeats", &Composite::nFeats,
+                           "get the number of features")
     .def_property_readonly("currentTime", &Composite::currentTime,
                            "get the current timestamp",
                            py::return_value_policy::move)
@@ -389,8 +407,25 @@ PYBIND11_MODULE(env, m){
     .def_property_readonly("currentTime", &HDFSourceSingle::currentTime,
                            "get the current timestamp",
                            py::return_value_policy::move)
-    .def_property_readonly("nfeats", &HDFSourceSingle::nfeats,
+    .def_property_readonly("nFeats", &HDFSourceSingle::nFeats,
                            "get the number of features",
+                           py::return_value_policy::move)
+    .def_property_readonly("size", &HDFSourceSingle::size,
+                           "get size of full dataset",
+                           py::return_value_policy::move)
+    .def_property_readonly("currentCacheSize", &HDFSourceSingle::currentCacheSize,
+                           "get size of currentCache",
+                           py::return_value_policy::move)
+    .def_property_readonly("boundsIdx", &HDFSourceSingle::boundsIdx,
+                           "get the start and end Idx",
+                           py::return_value_policy::move)
+    .def_property_readonly("currentIdx", &HDFSourceSingle::currentIdx,
+                           "get the current Idx for location traversed"
+                           "into the dataset",
+                           py::return_value_policy::move)
+    .def_property_readonly("currentCacheIdx", &HDFSourceSingle::currentCacheIdx,
+                           "get the current cache Idx for location traversed"
+                           "into the the cache",
                            py::return_value_policy::move)
     .def("getData", (PriceVector& (HDFSourceSingle::*) ()) &HDFSourceSingle::getData,
          "Get Next data points",
@@ -920,6 +955,8 @@ PYBIND11_MODULE(env, m){
                            "returns net borrowedMargin")
     .def_property_readonly("borrowedAssetValue", &Env::borrowedAssetValue,
                            "returns net borrowed assets (i.e value of shorts)")
+    .def_property_readonly("nFeats", &Env::nFeats,
+                           "number of assets")
     .def_property_readonly("nAssets", &Env::nAssets,
                            "number of assets")
     .def_property_readonly("assets", &Env::assets,

@@ -197,6 +197,13 @@ namespace madigan{
     loadDimsInfo();
     loadData();
   }
+
+  void HDFSourceSingle::reset(){
+    currentIdx_ = 0;
+    currentCacheIdx_ = 0;
+    loadData();
+  }
+
   HDFSourceSingle::HDFSourceSingle(string filepath, string groupKey, string priceKey,
                                    string featureKey, string timestampKey,
                                    std::size_t cacheSize):
@@ -305,10 +312,10 @@ namespace madigan{
 
     fullDataSetLen_ = boundsIdx_.second - boundsIdx_.first;
     currentIdx_ = boundsIdx_.first;
-    nfeats_ = dims[1];
+    nFeats_ = dims[1];
     cacheSize = min(cacheSize, fullDataSetLen_);
     // data_.resize(min(cacheSize, fullDataSetLen_), nfeats_);
-    currentData_.resize(nfeats_);
+    currentData_.resize(nFeats_);
     currentPrices_.resize(1);
   }
 
@@ -361,13 +368,13 @@ namespace madigan{
     if (currentIdx_ == boundsIdx_.second ){
       currentIdx_ = boundsIdx_.first;
     }
-    std::size_t nextCacheSize = min(cacheSize, boundsIdx_.second - currentIdx_);
+    currentCacheSize_ = min(cacheSize, boundsIdx_.second - currentIdx_);
     prices_ = loadVectorFromHDF<PriceVector>(filepath, groupKey, priceKey,
-                                             currentIdx_, nextCacheSize);
+                                             currentIdx_, currentCacheSize_);
     data_ = loadMatrixFromHDF<PriceMatrix>(filepath, groupKey, featureKey,
-                                               currentIdx_, nextCacheSize);
+                                               currentIdx_, currentCacheSize_);
     timestamps_ = loadVectorFromHDF<TimeVector>(filepath, groupKey, timestampKey,
-                                                currentIdx_, nextCacheSize);
+                                                currentIdx_, currentCacheSize_);
   }
 
   const PriceVector& HDFSourceSingle::getData(){
@@ -383,7 +390,7 @@ namespace madigan{
     currentIdx_++;
     currentCacheIdx_++;
     if (currentCacheIdx_ == cacheSize || currentIdx_ == fullDataSetLen_){
-      if (cacheSize < fullDataSetLen_){
+      if (cacheSize >= fullDataSetLen_){
         currentIdx_ = boundsIdx_.first;
         currentCacheIdx_ = 0;
       }else{
@@ -410,7 +417,9 @@ namespace madigan{
       std::unique_ptr<DataSource> source = makeDataSource<PriceVector>(dataSourceType, config);
       dataSources_.emplace_back(std::move(source));
     }
+    nFeats_ = 0;
     for(const auto& source: dataSources_){
+      nFeats_ += source->nFeats();
       for (const auto& asset: source->assets()){
         if (std::find(assets_.begin(), assets_.end(), asset) != assets_.end()){
           assets_.emplace_back(Asset(asset.code + "_1"));
@@ -418,16 +427,20 @@ namespace madigan{
         else assets_.emplace_back(asset);
       }
     }
-    currentData_.resize(nAssets());
+    currentPrices_.resize(nAssets());
+    currentData_.resize(nFeats_);
     // currentPrices_.resize(nAssets());
   }
 
   const PriceVector& Composite::getData(){
-    int idx{0};
+    int featIdx{0};
+    int priceIdx{0};
     for (int i=0; i<dataSources_.size(); i++){
       DataSource* source = dataSources_[i].get();
-      currentData_.segment(idx, source->nAssets()) = source->getData();
-      idx += source->nAssets();
+      currentData_.segment(featIdx, source->nFeats()) = source->getData();
+      currentPrices_.segment(priceIdx, source->nAssets()) = source->currentPrices();
+      featIdx += source->nFeats();
+      priceIdx += source->nAssets();
     }
     timestamp_ += 1;
     return currentData_;

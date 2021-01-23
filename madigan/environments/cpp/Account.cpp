@@ -167,7 +167,8 @@ namespace madigan{
 
   void Account::setDataSource(DataSourceTick* source){
     dataSource_ = source;
-    new (&currentPrices_) PriceVectorMap(source->currentData().data(), source->currentData().size());
+    new (&currentPrices_) PriceVectorMap(source->currentPrices().data(),
+                                         source->currentPrices().size());
     for (auto&& port: portfolios_){
       port.setDataSource(source);
     }

@@ -135,7 +135,7 @@ class IQN(DQN):
     @classmethod
     def from_config(cls, config):
         env = make_env(config)
-        preprocessor = make_preprocessor(config, env.nAssets)
+        preprocessor = make_preprocessor(config, env.nFeats)
         input_shape = preprocessor.feature_output_shape
         atoms = config.discrete_action_atoms + 1
         action_space = DiscreteRangeSpace((0, atoms), env.nAssets)
@@ -475,7 +475,7 @@ class IQNMixedActions(IQN):
     @classmethod
     def from_config(cls, config):
         env = make_env(config)
-        preprocessor = make_preprocessor(config, env.nAssets)
+        preprocessor = make_preprocessor(config, env.nFeats)
         input_shape = preprocessor.feature_output_shape
         atoms = config.discrete_action_atoms + 1
         # Parallel Actions for reference ####################################

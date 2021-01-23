@@ -81,21 +81,21 @@ data_source_config:
   #     dX: .01
   #     noise: .01
   #   data_source_type: SineAdder
-  OU:
-    data_source_config:
-      mean:
-        - 10.
-  #      - 5.
-  #      - 1.
-      phi:
-        - .04
-  #      - .02
-  #      - .01
-      theta:
-        - .08
-  #      - .15
-  #      - .15
-    data_source_type: OU
+  # OU:
+  #   data_source_config:
+  #     mean:
+  #       - 10.
+  # #      - 5.
+  # #      - 1.
+  #     phi:
+  #       - .04
+  # #      - .02
+  # #      - .01
+  #     theta:
+  #       - .08
+  # #      - .15
+  # #      - .15
+  #   data_source_type: OU
   # SimpleTrend:
   #   data_source_config:
   #     trend_prob:
@@ -207,11 +207,19 @@ data_source_config:
   #     dX: .01
   #     noise: .0
   #   data_source_type: SineDynamic
-data_source_type: Composite
+# data_source_type: Composite
+data_source_config:
+  filepath: /media/hemu/Data/Markets/Crypto/CME/brti_rolled.hdf5
+  group_key: min
+  price_key: price
+  feature_key: features
+  timestamp_key: timestamps
+  cache_size: 1000000
+data_source_type: HDFSourceSingle
 discrete_action_atoms: 3
 discrete_actions: true
 env_type: Synth
-experiment_id: IQN_OU.08_DDR_.001_nstep5
+experiment_id: IQN_BRTI_trans_0.0
 init_cash: 1000000
 log_freq: 10000
 lot_unit_value: 10000
@@ -283,7 +291,7 @@ required_margin: 1.0
 reward_clip: *id001
 reward_shaper_config:
   adaptation_rate: .001
-  reward_shaper: DDR
+  reward_shaper: none
   desired_portfolio:
     - 1.0
     - 0.
@@ -295,4 +303,4 @@ test_freq: 5000
 test_steps: 4096
 train_steps: 100000
 transaction_cost_abs: 0.0
-transaction_cost_rel: 0.02
+transaction_cost_rel: 0.0

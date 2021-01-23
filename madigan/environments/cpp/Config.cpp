@@ -567,7 +567,7 @@ namespace madigan {
           key == "feature_key" || key == "timestamp_key"){
         data_source_config[key] = item.second.cast<string>();
       }
-      else if ( key == "cache_size" || key == "start_time" || key == "end_time"){
+      else if (key == "cache_size" || key == "start_time" || key == "end_time"){
         data_source_config[key] = item.second.cast<int>();
       }
     }

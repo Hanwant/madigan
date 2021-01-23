@@ -57,6 +57,7 @@ namespace madigan{
     bool isDateTime() const { return dataSource_->isDateTime(); }
     std::size_t currentTime() const {return dataSource_->currentTime(); }
     const PriceVectorMap& currentPrices() const { return currentPrices_;}
+    const PriceVector& currentData() const { return dataSource_->currentData() ;}
     const LedgerMap& ledger() const { return defaultLedger_;}
     Ledger ledgerFull() const
     { return defaultPortfolio_->ledgerFull();}
@@ -72,6 +73,7 @@ namespace madigan{
 
     string dataSourceType() const { return dataSourceType_; }
     int nAssets() const { return assets_.size(); }
+    int nFeats() const { return dataSource_->nFeats(); }
     Assets assets() const { return assets_; }
     double initCash() const { return initCash_; }
     double cash() const { return defaultPortfolio_->cash(); }
@@ -154,7 +156,8 @@ namespace madigan{
     broker_->setSlippage(slippagePct_, slippageAbs_);
     defaultAccount_ = broker_->defaultAccount_;
     defaultPortfolio_ = broker_->defaultPortfolio_;
-    const auto& prices = dataSource_->getData();
+    dataSource_->getData();
+    const auto& prices = dataSource_->currentPrices();
     new (&currentPrices_) PriceVectorMap(prices.data(), prices.size());
     new (&defaultLedger_) LedgerMap(defaultPortfolio_->ledger().data(),
                                     defaultPortfolio_->ledger().size());
@@ -163,14 +166,14 @@ namespace madigan{
   void Env::setDataSource(unique_ptr<DataSourceTick> dataSource){
     dataSource_ = std::move(dataSource);
     broker_->setDataSource(dataSource_.get());
-    const auto& prices = dataSource_->getData();
+    const auto& prices = dataSource_->currentPrices();
     new (&currentPrices_) PriceVectorMap(prices.data(), prices.size());
   }
 
   void Env::setDataSource(DataSourceTick *dataSource){ // For passing from python BE CAREFUL
     dataSource_ = std::unique_ptr<DataSourceTick>(dataSource);
     broker_->setDataSource(dataSource_.get());
-    const auto& prices = dataSource_->getData();
+    const auto& prices = dataSource_->currentPrices();
     new (&currentPrices_) PriceVectorMap(prices.data(), prices.size());
   }
 
@@ -178,13 +181,13 @@ namespace madigan{
     dataSource_->reset();
     // reset Accounting with initCash
     initAccountants();
-    return State(currentPrices(), defaultPortfolio_->ledgerNormedFull(),
+    return State(currentData(), defaultPortfolio_->ledgerNormedFull(),
                  currentTime());
   }
 
   SRDISingle Env::step(){
     double prevEq = defaultPortfolio_->equity();
-    PriceVector newPrices = dataSource_->getData();
+    PriceVector newFeats = dataSource_->getData();
     double currentEq = defaultPortfolio_->equity();
     double reward = log(std::max(currentEq / prevEq, 0.3)); // limit to log(0.3) = -1.2
     RiskInfo risk = broker_->checkRisk();
@@ -192,7 +195,7 @@ namespace madigan{
     if (defaultPortfolio_->equity() < 0.1*initCash_){
       done = true;
     }
-    return std::make_tuple(State{newPrices, defaultPortfolio_->ledgerNormedFull(),
+    return std::make_tuple(State{newFeats, defaultPortfolio_->ledgerNormedFull(),
                                  currentTime()}, reward, done, EnvInfo<double>());
   }
 
@@ -200,7 +203,7 @@ namespace madigan{
 
     double prevEq = defaultPortfolio_->equity();
     BrokerResponseMulti response = broker_->handleTransaction(units);
-    PriceVector newPrices = dataSource_->getData();
+    PriceVector newFeats = dataSource_->getData();
     double currentEq = defaultPortfolio_->equity();
     double reward = log(std::max(currentEq / prevEq, 0.3)); // limit to log(0.3) = -1.2
 
@@ -215,7 +218,7 @@ namespace madigan{
       done = true;
     }
 
-    return std::make_tuple(State{newPrices, defaultPortfolio_->ledgerNormedFull(),
+    return std::make_tuple(State{newFeats, defaultPortfolio_->ledgerNormedFull(),
                                  currentTime()}, reward, done, EnvInfoMulti(response));
   }
 
@@ -223,7 +226,7 @@ namespace madigan{
 
     double prevEq = broker_->defaultPortfolio_->equity();
     BrokerResponseSingle response = broker_->handleTransaction(assetIdx, units);
-    PriceVector newPrices = dataSource_->getData();
+    PriceVector newFeats = dataSource_->getData();
     double currentEq = broker_->defaultPortfolio_->equity();
     double reward = log(std::max(currentEq / prevEq, 0.01));
 
@@ -238,7 +241,7 @@ namespace madigan{
       done = true;
     }
 
-    return std::make_tuple(State{newPrices, defaultPortfolio_->ledgerNormedFull(),
+    return std::make_tuple(State{newFeats, defaultPortfolio_->ledgerNormedFull(),
                                  currentTime()}, reward, done, EnvInfoSingle(response));
   }
 

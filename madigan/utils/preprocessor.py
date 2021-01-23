@@ -10,7 +10,7 @@ from ..utils.data import State
 # from ..environments.cpp import State as StateA
 
 
-def make_preprocessor(config, n_assets):
+def make_preprocessor(config, n_feats):
     """
     Choices for config.preprocessor_type:
     StackerDiscrete (== WindowedStacker):  maintains a fixed size window of obs
@@ -20,17 +20,17 @@ def make_preprocessor(config, n_assets):
     """
     if config.preprocessor_type in ("WindowedStacker", "StackerDiscrete",
                                     "StackerDiscreteReturns"):
-        return StackerDiscrete.from_config(config, n_assets)
+        return StackerDiscrete.from_config(config, n_feats)
     if config.preprocessor_type in ("StackerDiscretePairs"):
-        return StackerDiscretePairs.from_config(config, n_assets)
+        return StackerDiscretePairs.from_config(config, n_feats)
     if config.preprocessor_type in ("MultiStackerDiscrete"):
-        return MultiStackerDiscrete.from_config(config, n_assets)
+        return MultiStackerDiscrete.from_config(config, n_feats)
     if config.preprocessor_type in ("StackerContinuous"):
-        return StackerContinuous.from_config(config, n_assets)
+        return StackerContinuous.from_config(config, n_feats)
     if config.preprocessor_type in ("RollerDiscrete"):
-        return RollerDiscrete.from_config(config, n_assets)
-    if config.preprocessor_type in ("CustomA", n_assets):
-        return CustomA.from_config(config, n_assets)
+        return RollerDiscrete.from_config(config, n_feats)
+    if config.preprocessor_type in ("CustomA", n_feats):
+        return CustomA.from_config(config, n_feats)
     raise NotImplementedError(
         f"{config['preprocessor_type']} is not implemented ")
 
@@ -105,8 +105,8 @@ class PreProcessor(ABC):
         pass
 
     @classmethod
-    def from_config(cls, config, n_assets):
-        return make_preprocessor(config, n_assets)
+    def from_config(cls, config, n_feats):
+        return make_preprocessor(config, n_feats)
 
     @abstractmethod
     def initialize_history(self):
@@ -116,7 +116,7 @@ class PreProcessor(ABC):
 class StackerDiscrete(PreProcessor):
     def __init__(self,
                  window_len: int,
-                 n_assets: int,
+                 n_features: int,
                  norm: bool = True,
                  norm_type: str = 'standard_normal'):
         self.k = window_len
@@ -126,18 +126,18 @@ class StackerDiscrete(PreProcessor):
         self.price_buffer = deque(maxlen=self.k)
         self.portfolio_buffer = deque(maxlen=self.k)
         self.time_buffer = deque(maxlen=self.k)
-        self._feature_output_shape = (self.k, n_assets)
+        self._feature_output_shape = (self.k, n_features)
 
     @property
     def feature_output_shape(self):
         return self._feature_output_shape
 
     @classmethod
-    def from_config(cls, config, n_assets):
+    def from_config(cls, config, n_feats):
         pconf = config.preprocessor_config
         norm = pconf.norm if 'norm' in pconf.keys() else False
         norm_type = pconf.norm_type if 'norm_type' in pconf.keys() else None
-        return cls(pconf.window_length, n_assets, norm, norm_type)
+        return cls(pconf.window_length, n_feats, norm, norm_type)
 
     def __len__(self):
         return len(self.price_buffer)
@@ -176,7 +176,7 @@ class MultiStackerDiscrete(PreProcessor):
     def __init__(self,
                  window_len: int,
                  dilations: List[int],
-                 n_assets: int,
+                 n_feats: int,
                  norm: bool = True,
                  norm_type: str = 'standard_normal'):
         self.k = window_len
@@ -194,18 +194,18 @@ class MultiStackerDiscrete(PreProcessor):
             self.price_buffers[dilation] = deque(maxlen=self.k)
             self.portfolio_buffers[dilation] = deque(maxlen=self.k)
             self.time_buffers[dilation] = deque(maxlen=self.k)
-        self._feature_output_shape = (self.k, n_assets * len(self.dilations))
+        self._feature_output_shape = (self.k, n_feats * len(self.dilations))
 
     @property
     def feature_output_shape(self):
         return self._feature_output_shape
 
     @classmethod
-    def from_config(cls, config, n_assets):
+    def from_config(cls, config, n_feats):
         pconf = config.preprocessor_config
         norm = pconf.norm if 'norm' in pconf.keys() else False
         norm_type = pconf.norm_type if 'norm_type' in pconf.keys() else None
-        return cls(pconf.window_length, pconf.dilations, n_assets, norm,
+        return cls(pconf.window_length, pconf.dilations, n_feats, norm,
                    norm_type)
 
     def __len__(self):
@@ -264,11 +264,11 @@ class MultiStackerDiscrete(PreProcessor):
 class StackerDiscretePairs(StackerDiscrete):
     def __init__(self,
                  window_len: int,
-                 n_assets: int,
+                 n_feats: int,
                  norm: bool = True,
                  norm_type: str = 'standard_normal'):
-        assert n_assets == 2
-        super().__init__(window_len, n_assets, norm, norm_type)
+        assert n_feats == 2
+        super().__init__(window_len, n_feats, norm, norm_type)
 
         self._feature_output_shape = (self.k, 1)
         # self._feature_output_shape = (self.k, 2)
@@ -346,7 +346,7 @@ class RollerDiscrete(PreProcessor):
         self.feature_output_shape = (window_len, n_feats)
 
     @classmethod
-    def from_config(cls, config, n_assets):
+    def from_config(cls, config, n_feats):
         window_len = config.preprocessor_config.window_length
         timeframes = config.preprocessor_config.timeframes
         return cls(timeframes, window_len)
@@ -426,8 +426,8 @@ class AutoEncoder(PreProcessor):
         pass
 
     @classmethod
-    def from_config(cls, config, n_assets):
-        return make_preprocessor(config, n_assets)
+    def from_config(cls, config, n_feats):
+        return make_preprocessor(config, n_feats)
 
     @abstractmethod
     def initialize_history(self):
