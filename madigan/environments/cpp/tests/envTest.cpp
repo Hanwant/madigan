@@ -390,7 +390,7 @@ void testHDFSourceSingle(){
             << dataSource2.boundsIdx().second << "\n";
 
   assert(dataSource2.boundsIdx().first == 1);
-  assert(dataSource2.boundsIdx().second == 8);
+  assert(dataSource2.boundsIdx().second == 7);
 
   // If startTime or endTime is outside of range of dataset
   // raise exception

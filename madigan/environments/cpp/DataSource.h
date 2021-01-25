@@ -58,6 +58,7 @@ namespace madigan{
     virtual void reset()=0;
     virtual std::size_t currentTime() const =0;
     virtual bool isDateTime() const { return false; }
+    virtual bool dataEnd() const { return false; }
   protected:
     Assets assets_;
   };
@@ -74,6 +75,7 @@ namespace madigan{
     virtual void reset()=0;
     virtual std::size_t currentTime() const =0;
     virtual bool isDateTime() const { return false; }
+    virtual bool dataEnd() const { return false; }
   protected:
     Assets assets_;
   };
@@ -121,6 +123,7 @@ namespace madigan{
     std::size_t currentTime() const{return timestamp_;}
     bool isDateTime() const override { return true; }
     std::pair<size_t, size_t> boundsIdx() const {return boundsIdx_; }
+    bool dataEnd() const override { return currentIdx_ == boundsIdx_.second; }
 
   private:
     void init();

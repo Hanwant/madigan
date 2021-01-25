@@ -140,8 +140,11 @@ namespace madigan{
   template<typename T>
   struct EnvInfo{
     BrokerResponse<T> brokerResponse;
+    bool dataEnd=false;
     EnvInfo(){};
     EnvInfo(BrokerResponse<T> brokerResp): brokerResponse(brokerResp){};
+    EnvInfo(BrokerResponse<T> brokerResp,
+            bool dataEnd ): brokerResponse(brokerResp), dataEnd(dataEnd){};
     virtual ~EnvInfo(){};
   };
 

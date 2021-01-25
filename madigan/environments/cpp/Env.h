@@ -195,8 +195,11 @@ namespace madigan{
     if (defaultPortfolio_->equity() < 0.1*initCash_){
       done = true;
     }
+    EnvInfoSingle envInfo;
+    envInfo.dataEnd = dataSource_->dataEnd();
+
     return std::make_tuple(State{newFeats, defaultPortfolio_->ledgerNormedFull(),
-                                 currentTime()}, reward, done, EnvInfo<double>());
+                                 currentTime()}, reward, done, envInfo);
   }
 
   SRDIMulti Env::step(const AmountVector& units){
@@ -218,8 +221,11 @@ namespace madigan{
       done = true;
     }
 
+    EnvInfoMulti envInfo(response);
+    envInfo.dataEnd = dataSource_->dataEnd();
+
     return std::make_tuple(State{newFeats, defaultPortfolio_->ledgerNormedFull(),
-                                 currentTime()}, reward, done, EnvInfoMulti(response));
+                                 currentTime()}, reward, done, envInfo);
   }
 
   SRDISingle Env::step(int assetIdx, double units){
@@ -241,8 +247,11 @@ namespace madigan{
       done = true;
     }
 
+    EnvInfoSingle envInfo(response);
+    envInfo.dataEnd = dataSource_->dataEnd();
+
     return std::make_tuple(State{newFeats, defaultPortfolio_->ledgerNormedFull(),
-                                 currentTime()}, reward, done, EnvInfoSingle(response));
+                                 currentTime()}, reward, done, envInfo);
   }
 
 } // namespace madigan

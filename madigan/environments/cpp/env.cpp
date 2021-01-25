@@ -60,7 +60,8 @@ void declareEnvInfo(py::module& m, const string& className){
   py::class_<Class>(m, className.c_str())
     .def(py::init<> (), "default empty constructor")
     .def(py::init<BrokerResponse<T>> (), py::arg("brokerResponse"))
-    .def_readonly("brokerResponse", &Class::brokerResponse);
+    .def_readonly("brokerResponse", &Class::brokerResponse)
+    .def_readonly("dataEnd", &Class::dataEnd);
 }
 
 
@@ -427,6 +428,8 @@ PYBIND11_MODULE(env, m){
                            "get the current cache Idx for location traversed"
                            "into the the cache",
                            py::return_value_policy::move)
+    .def("dataEnd", &HDFSourceSingle::dataEnd, "return True if the timeseries data"
+         "has reached its end, following which it will reset to the beginning.")
     .def("getData", (PriceVector& (HDFSourceSingle::*) ()) &HDFSourceSingle::getData,
          "Get Next data points",
          py::return_value_policy::reference)

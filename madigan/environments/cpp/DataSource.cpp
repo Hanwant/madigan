@@ -118,7 +118,7 @@ namespace madigan{
     return missing;
   }
 
-  template<class T>  // T expected to be an EigenVector
+  template<class T>  // T could be Eigen::Vector or vector<numeric>
   T loadVectorFromHDF(string fname, string groupKey, string vectorKey,
                       std::size_t start=0, std::size_t  size=-1){
     H5Easy::File file(fname, HighFive::File::ReadOnly);
@@ -248,10 +248,10 @@ namespace madigan{
       timestampKey = std::any_cast<string>(params["timestamp_key"]);
       priceKey= std::any_cast<string>(params["price_key"]);
       featureKey= std::any_cast<string>(params["feature_key"]);
-      cacheSize = (std::size_t) std::any_cast<int>(params["cache_size"]);
+      cacheSize = (std::size_t) std::any_cast<long long int>(params["cache_size"]);
       if (checkKeysPresent(params, {"start_time", "end_time"}).size()==0){
-        startTime = std::any_cast<std::size_t>(params["start_time"]);
-        endTime = std::any_cast<std::size_t>(params["end_time"]);
+        startTime = (std::size_t) std::any_cast<long long int>(params["start_time"]);
+        endTime = (std::size_t) std::any_cast<long long int>(params["end_time"]);
       }
       // Main Init
       init();
@@ -311,7 +311,7 @@ namespace madigan{
     getTimeBounds();
     findBounds();
 
-    fullDataSetLen_ = boundsIdx_.second - boundsIdx_.first;
+    fullDataSetLen_ = boundsIdx_.second - boundsIdx_.first + 1;
     currentIdx_ = boundsIdx_.first;
     nFeats_ = dims[1];
     cacheSize = min(cacheSize, fullDataSetLen_);
@@ -342,9 +342,9 @@ namespace madigan{
                                                  startTime);
     size_t endIdx = binarySearchSortedHDFArray(filepath, groupKey+'/'+timestampKey,
                                                endTime);
-    if (endIdx - startIdx < 1){
+    if (endIdx - startIdx < 2){
       stringstream msg;
-      msg << "dset size only 1!\n";
+      msg << "dset size only " << endIdx - startIdx << " !\n";
       msg << "with startIdx, startTime: " << startIdx << ", " << startTime << "\n";
       msg << "and endIdx, endTime: " << endIdx << ", " << endTime << "\n";
       throw std::length_error(msg.str());
@@ -362,14 +362,14 @@ namespace madigan{
     dataset.select({endIdx}, {1}).read(&buff);
     if (buff == endTime || endIdx == dims[0] - 1){
       boundsIdx_.second = endIdx;
-    }else boundsIdx_.second = (buff < endTime)? (endIdx+1): endIdx;
+    }else boundsIdx_.second = (buff > endTime)? (endIdx-1): endIdx;
   }
 
   void HDFSourceSingle::loadData(){
     if (currentIdx_ == boundsIdx_.second ){
       currentIdx_ = boundsIdx_.first;
     }
-    currentCacheSize_ = min(cacheSize, boundsIdx_.second - currentIdx_);
+    currentCacheSize_ = min(cacheSize, boundsIdx_.second - currentIdx_ + 1);
     prices_ = loadVectorFromHDF<PriceVector>(filepath, groupKey, priceKey,
                                              currentIdx_, currentCacheSize_);
     data_ = loadMatrixFromHDF<PriceMatrix>(filepath, groupKey, featureKey,
@@ -390,8 +390,8 @@ namespace madigan{
     // restart from beginning after hitting end
     currentIdx_++;
     currentCacheIdx_++;
-    if (currentCacheIdx_ == cacheSize || currentIdx_ == fullDataSetLen_){
-      if (cacheSize >= fullDataSetLen_){
+    if (currentCacheIdx_ == currentCacheSize_ || currentIdx_ > boundsIdx_.second){
+      if (currentCacheSize_ >= fullDataSetLen_){
         currentIdx_ = boundsIdx_.first;
         currentCacheIdx_ = 0;
       }else{
