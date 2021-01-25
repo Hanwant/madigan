@@ -132,7 +132,7 @@ namespace madigan{
     void loadDimsInfo();
     void loadData();
     void loadFromFile();
-    void iterDataSource();
+    void iterCache();
     void getTimeBounds();
     void findBounds();
 

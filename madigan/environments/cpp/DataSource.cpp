@@ -311,7 +311,7 @@ namespace madigan{
     getTimeBounds();
     findBounds();
 
-    fullDataSetLen_ = boundsIdx_.second - boundsIdx_.first + 1;
+    fullDataSetLen_ = boundsIdx_.second - boundsIdx_.first;
     currentIdx_ = boundsIdx_.first;
     nFeats_ = dims[1];
     cacheSize = min(cacheSize, fullDataSetLen_);
@@ -362,14 +362,14 @@ namespace madigan{
     dataset.select({endIdx}, {1}).read(&buff);
     if (buff == endTime || endIdx == dims[0] - 1){
       boundsIdx_.second = endIdx;
-    }else boundsIdx_.second = (buff > endTime)? (endIdx-1): endIdx;
+    }else boundsIdx_.second = (buff > endTime)? (endIdx-1): endIdx; // end not included
   }
 
   void HDFSourceSingle::loadData(){
-    if (currentIdx_ == boundsIdx_.second ){
+    if (currentIdx_ >= boundsIdx_.second-1 ){
       currentIdx_ = boundsIdx_.first;
     }
-    currentCacheSize_ = min(cacheSize, boundsIdx_.second - currentIdx_ + 1);
+    currentCacheSize_ = min(cacheSize, boundsIdx_.second - currentIdx_);
     prices_ = loadVectorFromHDF<PriceVector>(filepath, groupKey, priceKey,
                                              currentIdx_, currentCacheSize_);
     data_ = loadMatrixFromHDF<PriceMatrix>(filepath, groupKey, featureKey,
@@ -379,18 +379,21 @@ namespace madigan{
   }
 
   const PriceVector& HDFSourceSingle::getData(){
+    iterCache();
     currentPrices_(0) = prices_(currentCacheIdx_);
     currentData_ = data_.row(currentCacheIdx_);
     timestamp_ = timestamps_(currentCacheIdx_);
-    iterDataSource();
+    currentIdx_++;
+    currentCacheIdx_++;
     return currentData_;
   }
 
-  void HDFSourceSingle::iterDataSource(){
-    // restart from beginning after hitting end
-    currentIdx_++;
-    currentCacheIdx_++;
-    if (currentCacheIdx_ == currentCacheSize_ || currentIdx_ > boundsIdx_.second){
+  void HDFSourceSingle::iterCache(){
+    // replenishes cache if required
+    // Cycles data back to beginning if reached end
+    // currentIdx_++;
+    // currentCacheIdx_++;
+    if (currentCacheIdx_ == currentCacheSize_ || currentIdx_ == boundsIdx_.second){
       if (currentCacheSize_ >= fullDataSetLen_){
         currentIdx_ = boundsIdx_.first;
         currentCacheIdx_ = 0;

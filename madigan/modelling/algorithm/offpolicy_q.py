@@ -130,17 +130,17 @@ class OffPolicyQ(Agent):
 
             _next_state, reward, done, info = self._env.step(transaction)
 
-            if info.dataEnd:
+            if info.dataEnd:  # always False for synths
                 state = self.reset_state()
                 print('reached data end')
                 continue
 
-            inf = info.brokerResponse
-            rew = reward
+            # rew = reward
 
+            info = info.brokerResponse
             curr_val = self._env.positionValues
-            mar_diff = (inf.transactionUnits * inf.transactionPrice +
-                        inf.transactionCost)
+            mar_diff = (info.transactionUnits * info.transactionPrice +
+                        info.transactionCost)
             reward = (curr_val - prev_val - mar_diff) / prev_eq
             reward += 1
             if (reward < 0.).any():
@@ -151,7 +151,7 @@ class OffPolicyQ(Agent):
             if self.reduce_rewards:
                 reward = reward.sum(keepdims=True)
 
-            running_cost += np.sum(inf.transactionCost)
+            running_cost += np.sum(info.transactionCost)
 
 
             # if DEBUG:

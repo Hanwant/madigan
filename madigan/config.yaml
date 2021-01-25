@@ -31,7 +31,7 @@ agent_config:
   prioritized_replay: true
   proximal_portfolio_penalty: 0.0
   replay_min_size: 20000
-  replay_size: 300000
+  replay_size: 200000
   reward_clip: &id001 !!python/tuple
   - -1.0
   - 1.0
@@ -209,24 +209,28 @@ basepath: /media/hemu/Data/madigan/experiments/
   #   data_source_type: SineDynamic
 # data_source_type: Composite
 data_source_config:
-  filepath: /media/hemu/Data/Markets/Crypto/CME/brti_rolled.hdf5
-  group_key: min
+  filepath: /media/hemu/Data/Markets/FX/nzdjpy.hdf5
+  group_key: hl_sampled_15min_1day
   price_key: price
   feature_key: features
   timestamp_key: timestamps
-  cache_size: 1000000
+  cache_size: 70000
+  start_time: 2012-01-03
+  end_time: 2017-01-01
 data_source_config_test:
-  filepath: /media/hemu/Data/Markets/Crypto/CME/brti_rolled.hdf5
-  group_key: min
+  filepath: /media/hemu/Data/Markets/FX/nzdjpy.hdf5
+  group_key: hl_sampled_15min_1day
   price_key: price
   feature_key: features
   timestamp_key: timestamps
   cache_size: 10000
+  start_time: 2017-01-01
+  end_time: 2018-03-16
 data_source_type: HDFSourceSingle
 discrete_action_atoms: 3
 discrete_actions: true
 env_type: Synth
-experiment_id: IQN_BRTI_trans_0.0
+experiment_id: IQN_nzdjpy_ret_hl_samp_15min1day_lev_50_trans_0.0_rb_200k
 init_cash: 1000000
 log_freq: 10000
 lot_unit_value: 10000
@@ -237,14 +241,14 @@ model_config:
   action_atoms: 3
   actor_model_class: ConvPolicyDeterministic
   channels:
-  - 32
-  - 32
+  - 64
+  - 64
   compression_factor: 4
   critic_model_class: ConvCriticQ
   curl_latent_size: 64
   curl_lr: 0.001
   curl_momentum_update: 0.001
-  d_model: 512
+  d_model: 1024
   dilations:
   - 1
   - 1
@@ -294,7 +298,7 @@ preprocessor_config:
     - 5
   window_length: 64
 preprocessor_type: StackerDiscrete
-required_margin: 1.0
+required_margin: .02
 reward_clip: *id001
 reward_shaper_config:
   adaptation_rate: .001

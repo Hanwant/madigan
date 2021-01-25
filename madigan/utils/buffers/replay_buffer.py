@@ -153,6 +153,9 @@ class ReplayBuffer:
         self.current_idx = 0
         self._nstep_buffer.clear()
 
+    def clear_nstep(self):
+        self._nstep_buffer.clear()
+
     def __getitem__(self, item):
         if isinstance(item, int):
             return self._buffer[item]

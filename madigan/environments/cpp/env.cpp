@@ -435,6 +435,9 @@ PYBIND11_MODULE(env, m){
          py::return_value_policy::reference)
     .def("currentPrices", (PriceVector& (HDFSourceSingle::*) ()) &HDFSourceSingle::currentPrices,
          "Get current prices",
+         py::return_value_policy::reference)
+    .def("currentData", (PriceVector& (HDFSourceSingle::*) ()) &HDFSourceSingle::currentData,
+         "Get current data",
          py::return_value_policy::reference);
 
   _Portfolio.def(py::init<string, Assets, double> (),
