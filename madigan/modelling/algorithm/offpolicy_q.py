@@ -79,6 +79,7 @@ class OffPolicyQ(Agent):
         pass
 
     def reset_state(self) -> State:
+        self.buffer.clear_nstep()
         state = self._env.reset()
         self._preprocessor.reset_state()
         self._preprocessor.stream_state(state)
@@ -128,6 +129,12 @@ class OffPolicyQ(Agent):
             prev_val = self._env.positionValues
 
             _next_state, reward, done, info = self._env.step(transaction)
+
+            if info.dataEnd:
+                state = self.reset_state()
+                print('reached data end')
+                continue
+
             inf = info.brokerResponse
             rew = reward
 
@@ -145,6 +152,7 @@ class OffPolicyQ(Agent):
                 reward = reward.sum(keepdims=True)
 
             running_cost += np.sum(inf.transactionCost)
+
 
             # if DEBUG:
             #     debug_metrics = {
@@ -400,8 +408,8 @@ class OffPolicyQRecurrent(Agent):
 
             running_cost += np.sum(info.brokerResponse.transactionCost)
             running_reward += reward
-            if done:
-                reward = -.1
+            # if done:
+            #     reward = -.1
             sarsd = SARSDR(state, action, reward, next_state, done)
             self.buffer.add(sarsd)
 
