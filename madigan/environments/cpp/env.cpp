@@ -967,6 +967,8 @@ PYBIND11_MODULE(env, m){
                            "number of assets")
     .def_property_readonly("assets", &Env::assets,
                            "Returns list of Asset objects")
+    .def("dataEnd", &Env::dataEnd,
+         "Returns whether the dataSource has reached its end")
     .def("equity_", (double(Env::*)(string) const) &Env::equity,
          "returns net equity")
     .def("cash_", (double(Env::*)(string) const) &Env::cash,

@@ -388,6 +388,8 @@ class IQN(DQN):
             tst_metrics.append({**_tst_metrics, **get_env_info(self._env)})
             if done:
                 break
+            if self._env.dataEnd():
+                break
             i += 1
         return list_2_dict(tst_metrics)
 

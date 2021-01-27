@@ -34,6 +34,7 @@ class ConvNet(QNetworkBase):
                  act_fn: str = 'silu',
                  noisy_net: bool = False,
                  noisy_net_sigma: float = 0.5,
+                 dropout: float = None,
                  **extra):
         """
         input_shape: (window_length, n_features)
@@ -55,6 +56,9 @@ class ConvNet(QNetworkBase):
         self.act = ACT_FN_DICT[act_fn]()
         self.noisy_net = noisy_net
         self.noisy_net_sigma = noisy_net_sigma
+        self.dropout = nn.Dropout(dropout) if dropout is not None else None
+        if self.dropout is not None:
+            print("Using dropout: ", dropout)
         self.convnet_state_encoder = ConvNetStateEncoder(
             input_shape,
             account_info_len,
@@ -93,6 +97,8 @@ class ConvNet(QNetworkBase):
         assert state is not None or state_emb is not None
         if state_emb is None:
             state_emb = self.convnet_state_encoder(state)  # (bs, d_model)
+        if self.dropout is not None:
+            state_emb = self.dropout(state_emb)
         qvals = self.output_head(state_emb)  # (bs, n_assets*action_atoms)
         return qvals
 

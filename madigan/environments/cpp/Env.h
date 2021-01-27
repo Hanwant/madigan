@@ -55,6 +55,7 @@ namespace madigan{
     const Portfolio*  portfolio() const { return defaultPortfolio_; }
     // const Portfolio*  portfolio(string accID) const { return defaultAccount_->portfolioBook_.at(accID); }
     bool isDateTime() const { return dataSource_->isDateTime(); }
+    bool dataEnd() const { return dataSource_->dataEnd(); }
     std::size_t currentTime() const {return dataSource_->currentTime(); }
     const PriceVectorMap& currentPrices() const { return currentPrices_;}
     const PriceVector& currentData() const { return dataSource_->currentData() ;}

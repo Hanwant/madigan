@@ -549,6 +549,37 @@ namespace madigan{
     PriceVector currentData_;
   };
 
+  class CointPair: public DataSourceTick{
+  public:
+    CointPair();
+    CointPair(double theta, double phi, double noise);
+    CointPair(Config config);
+    CointPair(pybind11::dict config);
+    ~CointPair(){}
+    const PriceVector& getData();
+    const pybind11::array_t<double> getData_np() ;
+    const PriceVector& currentData() const{ return currentData_;}
+    const PriceVector& currentPrices() const{ return currentData_;}
+    int nFeats() const { return nAssets(); }
+    void reset();
+    std::size_t currentTime() const { return timestamp_; }
+
+  protected:
+    virtual void initParams(double theta, double phi, double noise);
+
+  protected:
+    const double dT{1.};
+    double theta;
+    double phi;
+    double mean;
+    double noise;
+    std::size_t timestamp_;
+    std::default_random_engine generator;
+    std::normal_distribution<double> randomWalkDistribution;
+    std::normal_distribution<double> ouNoiseDistribution;
+    PriceVector currentData_;
+  };
+
   class SimpleTrend: public DataSourceTick{
   public:
     SimpleTrend();

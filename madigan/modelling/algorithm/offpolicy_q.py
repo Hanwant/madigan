@@ -132,7 +132,7 @@ class OffPolicyQ(Agent):
 
             if info.dataEnd:  # always False for synths
                 state = self.reset_state()
-                print('reached data end')
+                # print('reached data end')
                 continue
 
             # rew = reward
@@ -475,6 +475,8 @@ class OffPolicyQRecurrent(Agent):
             # _tst_metrics['info'] = info
             tst_metrics.append({**_tst_metrics, **get_env_info(self._env)})
             if done:
+                break
+            if self._env.dataEnd():
                 break
             i += 1
         return list_2_dict(tst_metrics)

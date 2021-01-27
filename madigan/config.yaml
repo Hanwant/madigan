@@ -230,7 +230,7 @@ data_source_type: HDFSourceSingle
 discrete_action_atoms: 3
 discrete_actions: true
 env_type: Synth
-experiment_id: IQN_nzdjpy_ret_hl_samp_15min1day_lev_50_trans_0.0_rb_200k
+experiment_id: IQN_nzdjpy_DDR_hl_samp_15min1day_lev_50_trans_0.0_rb_200k
 init_cash: 1000000
 log_freq: 10000
 lot_unit_value: 10000
@@ -302,7 +302,7 @@ required_margin: .02
 reward_clip: *id001
 reward_shaper_config:
   adaptation_rate: .001
-  reward_shaper: none
+  reward_shaper: DDR
   desired_portfolio:
     - 1.0
     - 0.

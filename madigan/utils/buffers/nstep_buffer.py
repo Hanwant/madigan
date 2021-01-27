@@ -71,9 +71,9 @@ class _DSR:
         # as this will be called when popping from the nstep buffer
         # this is an appropriate place to update params
         self.update_parameters(self.nstep_buffer[0].reward)
-        self.i += 1
-        if self.i % 100 == 0:
-            print(rewards, rewards / len(self.nstep_buffer))
+        # self.i += 1
+        # if self.i % 100 == 0:
+        #     print(rewards, rewards / len(self.nstep_buffer))
         return np.clip(rewards, -1., 1.)  # clip to (-1, 1)
 
     def calculate_dsr(self, raw_return):
@@ -135,9 +135,9 @@ class _DDR:
         # as this will be called when popping from the nstep buffer
         # this is an appropriate place to update params
         self.update_parameters(self.nstep_buffer[0].reward)
-        self.i += 1
-        if self.i % 100 == 0:
-            print(rewards)
+        # self.i += 1
+        # if self.i % 100 == 0:
+        #     print(rewards)
         return np.clip(rewards, -1., 1)  # clip to (-1, 1)
 
     def calculate_ddr(self, raw_return):
@@ -164,8 +164,8 @@ class DDR(_DDR):
         return self.__main_func__()
 
 
-global PRINT_I
-PRINT_I = 0
+# global PRINT_I
+# PRINT_I = 0
 
 
 def cosine_similarity(p: np.ndarray, q: np.ndarray):
@@ -188,16 +188,16 @@ def cosine_port_shaper(nstep_buffer, discounts, desired_portfolio,
          cosine_similarity(dat.next_state.portfolio[-1], desired_portfolio))
         for dat, discount in zip(nstep_buffer, discounts)
     ])
-    global PRINT_I
-    if PRINT_I > 100:
-        cosine_reward = sum([
-            cosine_similarity(dat.next_state.portfolio, desired_portfolio)
-            for dat in nstep_buffer
-        ])
-        normal_reward = sum([dat.reward for dat in nstep_buffer])
-        print(normal_reward, cosine_reward, cosine_reward * cosine_temp)
-        PRINT_I = 0
-    PRINT_I += 1
+    # global PRINT_I
+    # if PRINT_I > 100:
+    #     cosine_reward = sum([
+    #         cosine_similarity(dat.next_state.portfolio, desired_portfolio)
+    #         for dat in nstep_buffer
+    #     ])
+    #     normal_reward = sum([dat.reward for dat in nstep_buffer])
+    #     print(normal_reward, cosine_reward, cosine_reward * cosine_temp)
+    #     PRINT_I = 0
+    # PRINT_I += 1
     return rewards
 
 
@@ -223,12 +223,12 @@ def sharpe_shaper(nstep_buffer, discounts, benchmark=0.):
     denom = np.sqrt((diffs**2).sum(0) / (len(diffs) - 1))
     # if denom == 0.:  # prevent div by 0.
     #     return 0.
-    global PRINT_I
-    PRINT_I += 1
-    if PRINT_I > 100:
-        print(num, denom,
-              .1 * num / denom)  #, .1 * (num / denom))  # *.1 for scaling
-        PRINT_I = 0
+    # global PRINT_I
+    # PRINT_I += 1
+    # if PRINT_I > 100:
+    #     print(num, denom,
+    #           .1 * num / denom)  #, .1 * (num / denom))  # *.1 for scaling
+    #     PRINT_I = 0
     # returns num/denom where denom != 0. else fills that entry with 0.
     # potentially expensive as it creates zeros vector each time!
     # make one big global one and then index into it?
@@ -261,11 +261,11 @@ def sortino_shaperA(nstep_buffer, discounts, benchmark=0., exp=2):
     denom_zero_case = np.where(num == 0., 0., 1.)
     normal_case = np.clip(.1 * (num / denom), -1., 1.)
     out = np.where(denom != 0., normal_case, denom_zero_case)
-    global PRINT_I
-    PRINT_I += 1
-    if PRINT_I > 100:
-        print(num, denom, 10. * out, out)
-        PRINT_I = 0
+    # global PRINT_I
+    # PRINT_I += 1
+    # if PRINT_I > 100:
+    #     print(num, denom, 10. * out, out)
+    #     PRINT_I = 0
     return out
 
 
@@ -301,11 +301,11 @@ def sortino_shaperB(nstep_buffer, discounts, benchmark=0., exp=2):
     # downside_idx = np.where(diffs < 0.)[0]
     # diffs[downside_idx] = -((-diffs[downside_idx])**exp)
     diffs = np.where(diffs < 0., -(-diffs)**(1 / exp), diffs)  # scale neg rew
-    global PRINT_I
-    PRINT_I += 1
-    if PRINT_I > 100:
-        print(raw_sum, diffs.sum(0))
-        PRINT_I = 0
+    # global PRINT_I
+    # PRINT_I += 1
+    # if PRINT_I > 100:
+    #     print(raw_sum, diffs.sum(0))
+    #     PRINT_I = 0
     return np.clip(diffs.sum(0), -1., 1.)
 
 
