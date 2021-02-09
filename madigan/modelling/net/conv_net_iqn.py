@@ -107,6 +107,7 @@ class ConvNetIQN(QNetworkBase):
                  nTau=32,
                  noisy_net: bool = False,
                  noisy_net_sigma: float = 0.5,
+                 dropout: float = None,
                  **extra):
         """
         input_shape: (window_length, n_features)
@@ -125,6 +126,9 @@ class ConvNetIQN(QNetworkBase):
         self.action_atoms = output_shape[1]
         self.d_model = d_model
         self.act = ACT_FN_DICT[act_fn]()
+        self.dropout = nn.Dropout(dropout) if dropout is not None else None
+        if self.dropout is not None:
+            print("Using dropout: ", dropout)
         self.convnet_state_encoder = ConvNetStateEncoder(
             input_shape,
             self.account_info_len,
@@ -151,7 +155,7 @@ class ConvNetIQN(QNetworkBase):
             self.output_head = NormalHeadIQN(d_model, output_shape,
                                              noisy_net=noisy_net,
                                              noisy_net_sigma=noisy_net_sigma)
-        self.noisy_candidates = [self.tau_embed_layer, self.output_head]
+        # self.noisy_candidates = [self.tau_embed_layer, self.output_head]
 
     def get_state_emb(self, state: State):
         """
@@ -178,5 +182,7 @@ class ConvNetIQN(QNetworkBase):
                              device=state_emb.device)
         tau_emb = self.tau_embed_layer(tau)
         state_emb = state_emb.unsqueeze(1) * tau_emb  # (bs, nTau, d_model)
+        if self.dropout is not None:
+            state_emb = self.dropout(state_emb)
         qvals = self.output_head(state_emb)
         return qvals  # (bs, nTau, n_assets, action_atoms)

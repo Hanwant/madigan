@@ -339,7 +339,8 @@ class Trainer:
             ipdb.set_trace()
 
         finally:
-            test_metrics.append((i, self.agent.test_episode()))
+            # test_metrics.append((i, self.agent.test_episode()))
+            test_metrics.append((i, self.test_episode()))
             self.agent.save_state()
             self.save_logs(train_metrics, test_metrics)
             self.logger.info("saving buffer")
