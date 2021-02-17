@@ -198,9 +198,9 @@ class DDPG(OffPolicyActorCritic):
         current_port = self.env.ledgerNormedFull
         assert abs(current_port.sum() - 1.) < 1e-8
         # assert abs(desired_port.sum() - 1.) < 1e-8
-        if not abs(desired_port.sum() - 1.) < 1e-5:
-            import ipdb
-            ipdb.set_trace()
+        # if not abs(desired_port.sum() - 1.) < 1e-5:
+        #     import ipdb
+        #     ipdb.set_trace()
         amounts = (desired_port - current_port) * self.env.equity
         # amounts = ((desired_port - current_port) * self.env.equity
         #            ).clip(-max_amount, max_amount)
