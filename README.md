@@ -1,55 +1,55 @@
 # Madigan
 
 ## Aims
-This repository contains a framework for conducting experiments within the realm 
-of systematic trading. With a focus on statistical arbitrage, the eventual goal
-is to create autonomous systems for making trading decisions and executing them.
+This repository contains a framework for conducting experiments exploring the use of
+reinforcement learning in trading finanicla markets. With a focus on statistical arbitrage,
+the eventual goal is to create autonomous systems for making trading decisions and executing them.
 To this end, robust software is needed to allow for the process of implementing,
 validating and deploying ideas, along without the necessary hardware to allow for
 running experiments.
 
 ## Approach
 Hypotheses are to be tested and results aggregated in a directed manner. <br>
-Current approach consists of formalizing the trading problem/context in the frame
-of reinforcement learning. An agent makes decisions in interacting with
-an environment via a defined action space , seeking to
+Current approach consists of formalizing the trading problem/context in the 
+Markov decision process (MDP) framework. An agent makes decisions in interacting with
+an environment via a defined action space, seeking to
 maximize rewards given by the environment. <br>
 <br>
 ***agent -> trader<br>
 environment -> 'market', broker, exchange, participants <br>
 action space -> buy/sell/desired portfolio <br>
-reward -> equity returns / sharpe, transaction costs***<br>
+reward -> equity returns / sharpe / sortino, transaction costs***<br>
 <br>
 
 
 ### Main Components
 - #### Environment
 A suitable formalization and implementation of an environment is required to
-create autonomous systems. Should serve the roles of Broker & Exchange.
+create autonomous systems. Should serve the roles of Broker/Exchange and data source.
+- Written in C++ with bindings to python - gives peace of mind with respect to speed.
+- Currently contains bare minimum functionality for accounting and provides an interface where desired 
+number of transaction units can be specified. Order semantics pending.
 - #### Objective Function
 Objective function and reward shaping for rl should reflect the objectives of a trader. I.e risk-adjusted returns, margin constraints, transaction costs etc
+Currently Implemented:
+- Raw Log returns
+- Naive sharpe and sortino aggregations
+- Differential sharpe and sortino updates (DSR & DDR)
+- Proximal Portfolio penalty
 - #### Input Space
 The input space refers to the representation of data which is presented to any
 model or agent. This may be a matrix with dimensions corresponding to time, asset
 , features etc. Or it could be a flat vector containing the corresponding
 compressed information.
+- Currently the main 
 - #### RL Algorithms
-Rl algorithms should be as simple as possible, whilst advanced methods should still
-be considered and tested.
+Rl algorithms should be as simple as possible while performing the tasks,
+and advanced methods should be continuously considered and tested.
 - #### Function Approximation
 Given an RL algorithm, a suitable model must be placed as the core agent.
 Neural Networks are good general function approximators, and despite high degrees of
 freedom, can often generalize well, are composable and provide opportunity for customization.
 
-
-## Timeline
-### November
-Validate methods on synthetic data and create a taxonomy of models and 
-hyper-parameters.
-### December
-Apply methods to real data - financial time series of varying sources. 
-### January
-Polish.
 
 
 ## Progress - Detailed Components
@@ -81,10 +81,11 @@ training progress (loss, rewards) as well as inidividual test runs. For NN class
 - [X] Train agents to trade Sine Waves 
 - [X] Train agents to trade OU Process
 - [X] Train agents to trade trending series
-- [ ] Train agents to trade noisier trending series
-- [ ] Compose many different series and test multi asset allocation
-- [ ] Train on synthetic series with multi asset stat arb opportunities
-- [ ] Train on groups of assets.
+- [X] Train agents to trade noisier trending series
+- [X] Compose many different series and test multi asset allocation
+- [X] Train on synthetic series with multi asset stat arb opportunities
+- [X] Train on groups of synthetic series.
+- [X] HDFDataSource for market data
 - [ ] Order semantics (I.e Market vs Limit/Timed/Stop etc). 
 - [ ] Wrap Broker, Account, Portfolio into a backtesting co-ordinator (event driven)
 - [ ] Perform backtests and classify agents into a taxonomy (I.e risk profile, 
