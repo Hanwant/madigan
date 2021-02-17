@@ -5,6 +5,7 @@ Code Associated with the paper [Reinforcement Learning for Trading in Financial 
 This repository contains a framework for conducting experiments exploring the use of
 reinforcement learning in trading financial markets. With a focus on statistical arbitrage,
 the eventual goal is to create autonomous systems for making trading decisions and executing them.
+The process will be much like scientific inquiry whereby hypotheses will be succesively tested in a directed manner.
 To this end, robust software is needed to allow for the process of implementing,
 validating and deploying ideas, along without the necessary hardware to allow for
 running experiments.
@@ -25,8 +26,7 @@ reward -> equity returns / sharpe / sortino, transaction costs***<br>
 
 ### Main Components
 #### Environment
-  A suitable formalization and implementation of an environment is required to
-  create autonomous systems. Should serve the roles of Broker/Exchange and data source.
+  Should serve the main roles of Broker/Exchange, data source and subsequently pre-processors.
 - Written in C++ with bindings to python - gives peace of mind with respect to speed.
 - Currently contains bare minimum functionality for accounting and provides an interface where desired 
     number of transaction units can be specified. Order semantics pending.
@@ -36,7 +36,7 @@ Currently Implemented:
   - Raw Log returns
   - Naive sharpe and sortino aggregations
   - Differential sharpe and sortino updates (DSR & DDR)
-  - Proximal Portfolio penalty
+  - Proximal Portfolio Constraint (PPC, see paper)
 #### Input Space
 The input space refers to the representation of data which is presented to any
 model or agent. This may be a matrix with dimensions corresponding to time, asset
@@ -44,14 +44,15 @@ model or agent. This may be a matrix with dimensions corresponding to time, asse
 compressed information. Raw data is obtained from a dataSource which is the source of data
 returned by the environment through env.step() and available via env.dataSource. This data is sent to the preprocessor which does its job.
   - Currently the default preprocessor just concatenates a sliding window of observations.
-  - Sevaral different normalization schemes present. When using CNNs, log transform is enough.
+  - Several different normalization schemes available. When using CNNs on raw price, log transform is often enough.
 #### RL Algorithms
 Rl algorithms should be as simple as possible while performing the tasks,
-and advanced methods should be continuously considered and tested. Currently implemented:
+and advanced methods should be incrementally integrated. This neccesiates a modular design of Agent classes. Currently implemented:
 - Deep Q learning (DQN) + Rainbow components: Noisy Nets, PER, Dueling, Double
 - Implicit Quantile Networks (IQN)
 - Deep Deterministic Policy Gradient (DDPG) (work in progress in terms of translating model output to transactions, works for long/short only but numerically unstable if allowing both)
-- Contastive Unsupervised Representation Loss (CURL)
+- Contrastive Unsupervised Representation Loss (CURL)
+<br>
 Partially implemented / In Progress:
 - RQDN - Recurrent DQN as a base for recent improvements in recurrent rl such as agent 57
 - Soft Actor Critic (SAC) - need to fix bugs
@@ -63,20 +64,20 @@ Currently Implemented:
 - Convolutional Neural Networks (CNNs)
 
 ## Usage
-Given a config file conf.yaml
+Given a config file conf.yaml, from the project base directory:
   ```bash
   python madigan/train.py /path/to/conf.yaml -nsteps 1000000
   ```
   or with location of conf assumed to be madigan/config.yaml
   <br>
   ```bash
-  bash train.sh 1000000
+  bash madigan/train.sh 1000000
   ```
-The second option allows editing just one config file and letting the script copy over the current version to the same path as the datapath specified in the config - autoimatically crearing the necessary directories. 
+The second option allows editing just one config file and letting the script copy over that config to the the datapath specified in the config - automatically creating the necessary directories. 
 
 
 ### DashBoard
-The dashboard is really handy when evaluating experimental results. As it is written using pyqt5 and pyqtgraph, it is native and cross-platform. When using for the first time, the app will prompt for the folder where all experiment logs are kept (determined by savepath/datapath in your config file). This can be changed by going to the Settings tab then -> Set Experiments Folder.
+The dashboard is really handy when evaluating experimental results. As it is written using pyqt5 and pyqtgraph, it is native and cross-platform. When using for the first time, the app will prompt for the folder where all experiment logs are kept (determined by savepath/datapath in your config file), with sub-folder in that folder assumed to be the experiment name and containing the log data. This can be changed by going to the Settings tab then -> Set Experiments Folder.
 From the base directory:
 ```bash
 python madigan/run_dash.py
@@ -131,7 +132,7 @@ Requirements:
     - Matplotlib
     <br>
     
-Install c++ componenets as shared library via: <br>
+Install c++ components as shared library via: <br>
 (from project base directory)
   ```bash
   cd madigan/environments/cpp
