@@ -81,21 +81,21 @@ basepath: /media/hemu/Data/madigan/experiments/
   #     dX: .01
   #     noise: .01
   #   data_source_type: SineAdder
-  # OU:
-  #   data_source_config:
-  #     mean:
-  #       - 10.
-  # #      - 5.
-  # #      - 1.
-  #     phi:
-  #       - .04
-  # #      - .02
-  # #      - .01
-  #     theta:
-  #       - .08
-  # #      - .15
-  # #      - .15
-  #   data_source_type: OU
+  OU:
+    data_source_config:
+      mean:
+        - 10.
+  #      - 5.
+  #      - 1.
+      phi:
+        - .04
+  #      - .02
+  #      - .01
+      theta:
+        - .08
+  #      - .15
+  #      - .15
+    data_source_type: OU
   # SimpleTrend:
   #   data_source_config:
   #     trend_prob:
@@ -207,26 +207,26 @@ basepath: /media/hemu/Data/madigan/experiments/
   #     dX: .01
   #     noise: .0
   #   data_source_type: SineDynamic
-# data_source_type: Composite
-data_source_config:
-  filepath: /media/hemu/Data/Markets/FX/nzdjpy.hdf5
-  group_key: hl_sampled_15min_1day
-  price_key: price
-  feature_key: features
-  timestamp_key: timestamps
-  cache_size: 70000
-  start_time: 2012-01-03
-  end_time: 2017-01-01
-data_source_config_test:
-  filepath: /media/hemu/Data/Markets/FX/nzdjpy.hdf5
-  group_key: hl_sampled_15min_1day
-  price_key: price
-  feature_key: features
-  timestamp_key: timestamps
-  cache_size: 10000
-  start_time: 2017-01-01
-  end_time: 2018-03-16
-data_source_type: HDFSourceSingle
+data_source_type: Composite
+# data_source_config:
+#   filepath: /media/hemu/Data/Markets/FX/nzdjpy.hdf5
+#   group_key: hl_sampled_15min_1day
+#   price_key: price
+#   feature_key: features
+#   timestamp_key: timestamps
+#   cache_size: 70000
+#   start_time: 2012-01-03
+#   end_time: 2017-01-01
+# data_source_config_test:
+#   filepath: /media/hemu/Data/Markets/FX/nzdjpy.hdf5
+#   group_key: hl_sampled_15min_1day
+#   price_key: price
+#   feature_key: features
+#   timestamp_key: timestamps
+#   cache_size: 10000
+#   start_time: 2017-01-01
+#   end_time: 2018-03-16
+# data_source_type: HDFSourceSingle
 discrete_action_atoms: 3
 discrete_actions: true
 env_type: Synth
