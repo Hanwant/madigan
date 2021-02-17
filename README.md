@@ -11,7 +11,6 @@ validating and deploying ideas, along without the necessary hardware to allow fo
 running experiments.
 
 ## Approach
-Hypotheses are to be tested and results aggregated in a directed manner. <br>
 Current approach consists of formalizing the trading problem/context in the 
 Markov decision process (MDP) framework. An agent makes decisions in interacting with
 an environment via a defined action space, seeking to
@@ -45,7 +44,7 @@ compressed information. Raw data is obtained from a dataSource which is the sour
 returned by the environment through env.step() and available via env.dataSource. This data is sent to the preprocessor which does its job.
   - Currently the default preprocessor just concatenates a sliding window of observations.
   - Several different normalization schemes available. When using CNNs on raw price, log transform is often enough.
-#### RL Algorithms
+#### RL Algorithm (Agent)
 Rl algorithms should be as simple as possible while performing the tasks,
 and advanced methods should be incrementally integrated. This neccesiates a modular design of Agent classes. Currently implemented:
 - Deep Q learning (DQN) + Rainbow components: Noisy Nets, PER, Dueling, Double
