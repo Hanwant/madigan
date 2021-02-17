@@ -1,5 +1,5 @@
 # Madigan
-Code Associated with the paper [Reinforcement Learning for Trading in Financial Markets: Theory and Applications](https://github.com/Hanwant/madigan/blob/main/media/rl_trading.pdf)
+Code Associated with the paper [Reinforcement Learning for Trading in Financial Markets: Theory and Applications](https://github.com/Hanwant/madigan/raw/main/media/rl_trading.pdf)
 
 ## Aims
 This repository contains a framework for conducting experiments exploring the use of
