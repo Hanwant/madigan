@@ -1,0 +1,159 @@
+agent_config:
+  action_atoms: 3
+  ae_temp: 0.5
+  batch_size: 32
+  controller_action_repeats: 64
+  discount: 0.99
+  discrete_action_atoms: 3
+  double_dqn: true
+  dueling: true
+  entropy_temp: 0.2
+  episode_length: 80
+  episode_overlap: 40
+  burn_in_steps: 40
+  store_hidden: true
+  eps: 1.0
+  eps_decay: 0.999999
+  eps_min: 0.1
+  expl_noise_sd: 0.01
+  greedy_eps_testing: 0.0
+  iqn: true
+  k_huber: 1
+  learn_entropy_temp: false
+  nTau1: 32
+  nTau2: 8
+  noisy_net: true
+  noisy_net_sigma: 0.5
+  nstep_return: 5
+  per_alpha: 0.6
+  per_beta: 0.4
+  per_beta_steps: 100000
+  prioritized_replay: true
+  proximal_portfolio_penalty: 0.0
+  replay_min_size: 20000
+  replay_size: 300000
+  reward_clip: &id001 !!python/tuple
+  - -1.0
+  - 1.0
+  risk_distortion: none
+  risk_distortion_param: .71
+  reduce_rewards: true
+  target_entropy_ratio: 0.98
+  tau_embed_size: 64
+  tau_soft_update: 0.0001
+  train_freq: 4
+  transaction_thresh: 0.02
+  unit_size_proportion_avM: 0.05
+agent_configs:
+  A: /home/hemu/madigan/experiments/IQN_OU_Triple_Decreasing_unit.005_Noisy_NoReShap_Replay300_NoPool_AdaptiveAvg/config.yaml
+  B: /home/hemu/madigan/experiments/IQN_OU_Triple_Decreasing_PER_Test/config.yaml
+agent_type: IQN
+basepath: /media/hemu/Data/madigan/experiments/
+data_source_config:
+  filepath: /media/hemu/Data/Markets/FX/daily_fx.hdf5
+  group_key: USD_INR
+  price_key: price
+  feature_key: features
+  timestamp_key: timestamps
+  cache_size: 100000
+  start_time: 1980-01-02
+  end_time: 2015-01-01
+data_source_config_test:
+  filepath: /media/hemu/Data/Markets/FX/daily_fx.hdf5
+  group_key: USD_INR
+  price_key: price
+  feature_key: features
+  timestamp_key: timestamps
+  cache_size: 10000
+  start_time: 2015-01-01
+  end_time: 2020-10-01
+data_source_type: HDFSourceSingle
+discrete_action_atoms: 3
+discrete_actions: true
+env_type: Synth
+experiment_id: IQN_USDINR_daily_price_only_ret_lev_20_unit.05_trans.001_dropout.4
+init_cash: 1000000
+log_freq: 10000
+lot_unit_value: 10000
+maintenance_margin: 0.25
+min_tf: 64
+model_config:
+  act_fn: gelu
+  action_atoms: 3
+  actor_model_class: ConvPolicyDeterministic
+  channels:
+  - 64
+  - 64
+  compression_factor: 4
+  critic_model_class: ConvCriticQ
+  curl_latent_size: 64
+  curl_lr: 0.001
+  curl_momentum_update: 0.001
+  d_model: 1024
+  dilations:
+  - 1
+  - 1
+  discrete_action_atoms: 3
+  discrete_actions: true
+  dropout: 0.4
+  dueling: true
+  iqn: true
+  kernels:
+  - 5
+  - 5
+  lot_unit_value: 10000
+  min_tf: 64
+  model_class: ConvNet
+  nTau1: 32
+  nTau2: 8
+  n_layers: 4
+  noisy_net: false
+  noisy_net_sigma: 0.5
+  preserve_window_len: true
+  random_crop_ratio: 0.7
+  strides:
+  - 1
+  - 1
+  tau_embed_size: 64
+model_save_freq: 64000
+n_assets: 1
+optim_config:
+  betas: !!python/tuple
+  - 0.9
+  - 0.999
+  eps: 1.0e-08
+  lr: 0.001
+  lr_actor: 0.001
+  lr_critic: 0.001
+  momentum: 0.9
+  type: Adam
+  weight_decay: 0
+parent_id: ''
+preprocessor_config:
+  norm: false
+  norm_type: log
+  preprocessor_type: StackerDiscrete
+  timeframes:
+    - 64
+  dilations:
+    - 1
+    - 5
+  window_length: 64
+preprocessor_type: StackerDiscrete
+required_margin: .05
+reward_clip: *id001
+reward_shaper_config:
+  adaptation_rate: .001
+  reward_shaper: none
+  desired_portfolio:
+    - 1.0
+    - 0.
+  cosine_temp: .01
+  window: 1000
+slippage_abs: 0.0
+slippage_rel: 0.0
+test_freq: 5000
+test_steps: 4096
+train_steps: 100000
+transaction_cost_abs: 0.0
+transaction_cost_rel: 0.001
