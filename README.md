@@ -142,8 +142,9 @@ Install c++ componenets as shared library via: <br>
 Install main python library via: <br>
   ```bash
   python setup.py install
-  ```<br>
-  or<br>
+  ```
+  or
+  <br>
   ```bash
   pip install .
   ```
