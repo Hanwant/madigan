@@ -49,7 +49,7 @@ agent_configs:
   B: /home/hemu/madigan/experiments/IQN_OU_Triple_Decreasing_PER_Test/config.yaml
 agent_type: IQN
 basepath: /media/hemu/Data/madigan/experiments/
-# data_source_config:
+data_source_config:
   # OUPair: 
   #   data_source_config:
   #     phi: 0.04
@@ -230,7 +230,7 @@ data_source_type: Composite
 discrete_action_atoms: 3
 discrete_actions: true
 env_type: Synth
-experiment_id: IQN_nzdjpy_DDR_hl_samp_15min1day_lev_50_trans_0.0_rb_200k
+experiment_id: IQN_OU_Rainbow_default
 init_cash: 1000000
 log_freq: 10000
 lot_unit_value: 10000
