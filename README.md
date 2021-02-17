@@ -63,6 +63,7 @@ Currently Implemented:
 - Convolutional Neural Networks (CNNs)
 
 ## Usage
+See the default config file at madigan/config.yaml for a template <br>
 Given a config file conf.yaml, from the project base directory:
   ```bash
   python madigan/train.py /path/to/conf.yaml -nsteps 1000000
