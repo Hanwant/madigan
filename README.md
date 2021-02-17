@@ -3,7 +3,7 @@ Code Associated with the paper [Reinforcement Learning for Trading in Financial 
 
 ## Aims
 This repository contains a framework for conducting experiments exploring the use of
-reinforcement learning in trading finanicla markets. With a focus on statistical arbitrage,
+reinforcement learning in trading financial markets. With a focus on statistical arbitrage,
 the eventual goal is to create autonomous systems for making trading decisions and executing them.
 To this end, robust software is needed to allow for the process of implementing,
 validating and deploying ideas, along without the necessary hardware to allow for
@@ -17,27 +17,27 @@ an environment via a defined action space, seeking to
 maximize rewards given by the environment. <br>
 <br>
 ***agent -> trader<br>
-environment -> 'market', broker, exchange, participants <br>
-action space -> buy/sell/desired portfolio <br>
+environment -> 'market', broker, exchange, data, participants <br>
+action space -> buy/sell/hold, desired portfolio <br>
 reward -> equity returns / sharpe / sortino, transaction costs***<br>
 <br>
 
 
 ### Main Components
-- #### Environment
-A suitable formalization and implementation of an environment is required to
-create autonomous systems. Should serve the roles of Broker/Exchange and data source.
-  - Written in C++ with bindings to python - gives peace of mind with respect to speed.
-  - Currently contains bare minimum functionality for accounting and provides an interface where desired 
-      number of transaction units can be specified. Order semantics pending.
-- #### Objective Function
+#### Environment
+  A suitable formalization and implementation of an environment is required to
+  create autonomous systems. Should serve the roles of Broker/Exchange and data source.
+- Written in C++ with bindings to python - gives peace of mind with respect to speed.
+- Currently contains bare minimum functionality for accounting and provides an interface where desired 
+    number of transaction units can be specified. Order semantics pending.
+#### Objective Function
 Objective function and reward shaping for rl should reflect the objectives of a trader. I.e risk-adjusted returns, margin constraints, transaction costs etc
 Currently Implemented:
   - Raw Log returns
   - Naive sharpe and sortino aggregations
   - Differential sharpe and sortino updates (DSR & DDR)
   - Proximal Portfolio penalty
-- #### Input Space
+#### Input Space
 The input space refers to the representation of data which is presented to any
 model or agent. This may be a matrix with dimensions corresponding to time, asset
 , features etc. Or it could be a flat vector containing the corresponding
@@ -45,7 +45,7 @@ compressed information. Raw data is obtained from a dataSource which is the sour
 returned by the environment through env.step() and available via env.dataSource. This data is sent to the preprocessor which does its job.
   - Currently the default preprocessor just concatenates a sliding window of observations.
   - Sevaral different normalization schemes present. When using CNNs, log transform is enough.
-- #### RL Algorithms
+#### RL Algorithms
 Rl algorithms should be as simple as possible while performing the tasks,
 and advanced methods should be continuously considered and tested. Currently implemented:
 - Deep Q learning (DQN) + Rainbow components: Noisy Nets, PER, Dueling, Double
@@ -55,7 +55,7 @@ and advanced methods should be continuously considered and tested. Currently imp
 Partially implemented / In Progress:
 - RQDN - Recurrent DQN as a base for recent improvements in recurrent rl such as agent 57
 - Soft Actor Critic (SAC) - need to fix bugs
-- #### Function Approximation
+#### Function Approximation
 Given an RL algorithm, a suitable model must be placed as the core agent.
 Neural Networks are good general function approximators, and despite high degrees of
 freedom, can often generalize well, are composable and provide opportunity for customization.
@@ -141,6 +141,7 @@ Install c++ componenets as shared library via: <br>
   make test
   ``` 
 Install main python library via: <br>
+(from project base directory)
   ```bash
   python setup.py install
   ```
