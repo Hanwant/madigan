@@ -11,3 +11,5 @@ tornado==6.0.4
 pandas_market_calendars==1.4.2
 PyQt5==5.15.0
 pyzmq==19.0.2
+# -e git+git://github.com/Hanwant/rollers.git#egg=rollers
+git+git://github.com/Hanwant/rollers@master#egg=rollers

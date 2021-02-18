@@ -130,6 +130,7 @@ Requirements:
     - PyQt5 
     - pyqtgraph
     - Matplotlib
+    - [Rollers](https://github.com/Hanwant/rollers)
     <br>
     
 Install c++ components as shared library via: <br>
