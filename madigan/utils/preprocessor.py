@@ -1,3 +1,18 @@
+"""
+Contains preprocessors which ingest raw data from the environment before
+it gets to the agent and replay buffer.
+The base PreProcessor class outlines the required interface which
+uses an initilize_history() method to ensure that the preprocessor
+has accumulated enough data to yield a processed state to the agent and buffer.
+
+Main attributes and methods:
+- current_data()
+- stream_state()
+- initilize_history()
+- __len__()
+
+"""
+
 from abc import ABC, abstractmethod
 from typing import List
 from collections import deque
@@ -96,21 +111,33 @@ class PreProcessor(ABC):
     def __init__(self):
         pass
 
+    @property
+    def feature_output_shape(self):
+        """ Returns the output shape for features in state.price """
+
     @abstractmethod
     def stream(self, data):
-        pass
+        """ Ingests either a State or SRDI """
+
+    @abstractmethod
+    def stream_state(self, state: State):
+        """ Ingests either data given as dataclass State """
 
     @abstractmethod
     def current_data(self):
-        pass
+        """ Performs normalization (if indicated) and returns current data.
+        """
 
     @classmethod
     def from_config(cls, config, n_feats):
         return make_preprocessor(config, n_feats)
 
     @abstractmethod
-    def initialize_history(self):
-        pass
+    def initialize_history(self, env):
+        """ Iterates over the env using empty actions until
+        it has filled it's internal buffers which may be specified by a
+        window_length
+        """
 
 
 class StackerDiscrete(PreProcessor):
@@ -343,7 +370,11 @@ class RollerDiscrete(PreProcessor):
         self.time_buffer = deque(maxlen=self.k)
         n_feats = 8 * len(
             self.timeframes) + 1  # 8 from roller, 1 for close price
-        self.feature_output_shape = (window_len, n_feats)
+        self._feature_output_shape = (window_len, n_feats)
+
+    @property
+    def feature_output_shape(self) -> tuple:
+        return self._feature_output_shape
 
     @classmethod
     def from_config(cls, config, n_feats):
@@ -398,7 +429,7 @@ class RollerDiscrete(PreProcessor):
 class CustomA(StackerDiscrete):
     def __init__(self, *args, **kw):
         super().__init__(*args, **kw)
-        self.feature_output_shape = (self.k - 1, 2)
+        self._feature_output_shape = (self.k - 1, 2)
 
     def current_data(self):
         price = np.array(self.price_buffer, copy=True).squeeze()
@@ -422,6 +453,10 @@ class AutoEncoder(PreProcessor):
         pass
 
     @abstractmethod
+    def stream_state(self, data):
+        pass
+
+    @abstractmethod
     def current_data(self):
         pass
 
@@ -438,7 +473,9 @@ class AutoEncoder(PreProcessor):
                    '(n)->(n)',
                    nopython=True)
 def _expanding_mean(arr, ma):
-    """ expanding/running mean - equiv to pd.expanding().mean()"""
+    """
+    Utility to calculate expanding/running mean
+    equiv to pd.expanding().mean()"""
     n = arr.shape[0]
     # ma = np.empty(n)
     w = 1

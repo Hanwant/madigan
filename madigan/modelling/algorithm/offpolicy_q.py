@@ -1,3 +1,15 @@
+"""
+Serves as a base class for OffPolicy Q-Learning agents. So that derivatives
+such as DQN or RDQN can inherit common functionality.
+Main functionality implemented:
+- init() - some initialisation expected to be common to all such agents
+- step() - main training loop
+- explore() - part of main training loop
+- reset_state() - part of main training loop
+- initialize_buffer() - part of main training loop
+- test_episode()
+
+"""
 import pickle
 from typing import Tuple, Union
 from abc import abstractmethod

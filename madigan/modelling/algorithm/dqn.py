@@ -20,7 +20,6 @@ from ...utils.preprocessor import make_preprocessor
 from ...utils.config import Config
 from ...utils.data import State, SARSD
 
-# p = type('params', (object, ), params)
 
 
 class DQN(OffPolicyQ):

@@ -16,7 +16,6 @@ import numpy as np
 import numba as nb
 from ..data import SARSD
 
-import warnings
 
 EPS = np.finfo(np.float32).eps
 
@@ -61,10 +60,12 @@ class _DSR:
         return self.__main_func__()
 
     def __main_func__(self):
+        # unvectorized
         # rewards = sum([
         #     discount * self.calculate_dsr(dat.reward)
         #     for dat, discount in zip(self.nstep_buffer, self.discounts)
         # ]) / len(self.nstep_buffer)
+        # vectorized
         rewards = np.array([dat.reward for dat in self.nstep_buffer])
         rewards = (self.discounts[:len(rewards)] *
                    self.calculate_dsr(rewards)).sum(0) / len(rewards)
@@ -110,7 +111,7 @@ class _DDR:
     def __call__(self):
         """ Called JUST ONCE to determine shape of rewards.
         Afterwards this implementation is replaced by __main_func__
-        By Patching in DDR class to this instance
+        By Patching in DDR class to this instance, same as DSR.
         """
         reward = self.nstep_buffer[0].reward
         if isinstance(reward, float):
@@ -125,10 +126,12 @@ class _DDR:
         return self.__main_func__()
 
     def __main_func__(self):
+        # unvectorized
         # rewards = sum([
         #     discount * self.calculate_ddr(dat.reward)
         #     for dat, discount in zip(self.nstep_buffer, self.discounts)
         # ]) / len(self.nstep_buffer)
+        # vectorized
         rewards = np.array([dat.reward for dat in self.nstep_buffer])
         rewards = (self.discounts[:len(rewards)] *
                    self.calculate_ddr(rewards)).sum(0) / len(rewards)
@@ -160,27 +163,27 @@ class _DDR:
 
 
 class DDR(_DDR):
+    """ After the first time a _DSR instance is called,
+    This class gets patched in."""
     def __call__(self):
         return self.__main_func__()
 
 
-# global PRINT_I
-# PRINT_I = 0
-
 
 def cosine_similarity(p: np.ndarray, q: np.ndarray):
+    """ Standard cosine similarity distance metric """
     norm_p = np.sqrt((p**2).sum(-1))
     norm_q = np.sqrt((q**2).sum(-1))
     return ((p * q).sum(-1) / (norm_p * norm_q)).mean()
 
 
+# global PRINT_I
+# PRINT_I = 0
 def cosine_port_shaper(nstep_buffer, discounts, desired_portfolio,
                        cosine_temp):
     """
     rewards next_state.portfolio depending on it's distance from
     a desired portfolio, measured using cosine similarity.
-    must be tuned to prevent exploiting rewards by getting to target
-    port and staying there. - soft actor critic would help
     """
     rewards = sum([
         discount *
@@ -203,7 +206,7 @@ def cosine_port_shaper(nstep_buffer, discounts, desired_portfolio,
 
 def sharpe_shaper(nstep_buffer, discounts, benchmark=0.):
     """
-    Sharpe return aggregation. Use numpy ufuncs to generalize to
+    Sharpe return aggregation. Uses numpy ufuncs to generalize to
     reward vectors.
     """
     if len(nstep_buffer) == 1:  # Heuristic for if there is only 1 value
@@ -312,10 +315,14 @@ def sortino_shaperB(nstep_buffer, discounts, benchmark=0., exp=2):
 class NStepBuffer:
     """
     Utility class to prevent code duplicaiton.
-    It must however be co-ordinated by a class using it (I.e ReplayBuffer)
+    It must however be co-ordinated by the class using it (I.e ReplayBuffer)
     It doesn't have access to the main replay buffer and doesn't care if the
-    numbers of sampels in its buffer is > nstep. It is the containers
-    responsibility to flush and add the processesd samples to a main buffer.
+    numbers of samples in its buffer is > nstep. Thus, it is the container's
+    responsibility to flush and add the processed samples to the main buffer.
+
+    self._buffer can be extended and cleared but must not be replaced by
+    a different memory location as the reward aggregation functions hold
+    a reference to it.
     """
     def __init__(self, nstep, discount, reward_shaper_config):
         self.nstep = nstep

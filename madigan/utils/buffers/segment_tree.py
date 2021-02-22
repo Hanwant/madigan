@@ -1,3 +1,6 @@
+"""
+For use in prioritized replay buffer
+"""
 import operator
 
 

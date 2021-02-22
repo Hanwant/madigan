@@ -1,3 +1,7 @@
+"""
+Basic implementation of priorituzed replay buffer.
+Leverages the SegmentTree classes.
+"""
 import numpy as np
 import torch
 

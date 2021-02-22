@@ -1,3 +1,22 @@
+"""
+Defines base class 'Agent' for all types of agents.
+Hence, outlines the common interface which all agents should have.
+Constructors:
+- from_config(config) should be the main entry point into instantiation
+
+Attributes of all agents:
+- action_space: ActionSpace class
+- env: Env class
+- preprocessor: PreProcessor class
+
+Methods:
+- get_action(state) -> ndarray: returns actions in response to state
+- step(n) -> dict:   performs n environment interaction steps and yields logs
+- train_step(state) -> dict: performs one training step
+- explore(state) -> Tuple[ndarray, ndarray]: performs an exploration step while training.
+- test_episode() -> dict: Performs a test episode and returns logs
+
+"""
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import List, Tuple, Union
@@ -104,10 +123,13 @@ class Agent(ABC):
         """
 
     @abstractmethod
-    def explore(self, state):
+    def explore(self, state) -> Tuple[np.ndarray, np.ndarray]:
         """
         For interacting with the environment in training phase
         I.e may implement an eps-greedy exploration policy
+        With action corresponding to raw model outputs
+        and transaction as actions tranlated to transaction units,
+        Returns action, transaction
         """
 
     @abstractmethod

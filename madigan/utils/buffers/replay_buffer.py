@@ -1,3 +1,11 @@
+"""
+Implements a basic replay buffer which stores transitions using n-step returns
+and n-step offset for the next_state. Uses the SARSD and State dataclasses
+as data units.
+
+N-step aggregation is handled by the NStepBuffer class which also takes take of
+any specified aggregation scheme such as sharpe, sortino, dsr, ddr etc.
+"""
 import pickle
 import math
 from collections import deque
@@ -10,9 +18,6 @@ import torch
 from .nstep_buffer import NStepBuffer
 from .segment_tree import SumTree, MinTree
 from ..data import SARSD, SARSDR, State, StateRecurrent
-
-# DQNTYPES refers to agents which share the same obs types
-# this includes DDPG as it doesn't store logp
 
 
 class ReplayBuffer:
